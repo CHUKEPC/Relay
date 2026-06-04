@@ -39,6 +39,8 @@ export function GeneralSection(): JSX.Element {
   const update = useSettings((s) => s.update)
 
   const onNumber = (key: NumberRowDef['key'], min: number, max: number) => (e: ChangeEvent<HTMLInputElement>) => {
+    // Don't coerce an empty field to 0 (Number('') === 0) — let the user clear and retype.
+    if (e.target.value.trim() === '') return
     const raw = Number(e.target.value)
     if (Number.isNaN(raw)) return
     const clamped = Math.min(max, Math.max(min, Math.round(raw)))

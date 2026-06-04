@@ -1,6 +1,7 @@
 import '../lib/monaco'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { useEffect, useRef, useState } from 'react'
+import { makeId } from '@shared/id'
 
 export interface CodeEditorProps {
   value: string
@@ -21,6 +22,10 @@ function currentTheme(): 'relay-dark' | 'relay-light' {
 export function CodeEditor({ value, language = 'json', onChange, readOnly = false, minimal = false, wordWrap = false }: CodeEditorProps) {
   const [theme, setTheme] = useState(currentTheme)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  // A unique model URI per instance — without `path`, every <Editor> resolves to
+  // the SAME default model (Uri.parse("")) and they share/dispose one another's text.
+  const pathRef = useRef<string>()
+  if (!pathRef.current) pathRef.current = `inmemory://relay/${makeId('editor')}`
 
   useEffect(() => {
     const obs = new MutationObserver(() => setTheme(currentTheme()))
@@ -31,6 +36,7 @@ export function CodeEditor({ value, language = 'json', onChange, readOnly = fals
   return (
     <div className="monaco-host">
       <Editor
+        path={pathRef.current}
         value={value}
         language={language}
         theme={theme}

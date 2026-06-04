@@ -146,6 +146,11 @@ export const useAi = create<AiState>((set, get) => ({
     const provider = get().activeProvider()
     if (!provider) return
 
+    // Abort any still-running stream from a previous, now-superseded send() so the
+    // old backend request stops (and stops billing) instead of running to the end.
+    const prevStream = get().currentStreamId
+    if (prevStream) void window.api.aiCancel(prevStream)
+
     // A new run invalidates any in-flight loop; `cancelled()` lets the loop bail
     // out after cancel()/clearThread()/another send().
     const runGen = get().runGen + 1
@@ -189,6 +194,8 @@ export const useAi = create<AiState>((set, get) => ({
         let errored = false
 
         const unsubscribe = window.api.onAiStream(streamId, (evt) => {
+          // Ignore late events for a stream the user already stopped/superseded.
+          if (cancelled()) return
           if (evt.type === 'text') {
             collectedText += evt.text
             patchAssistant((m) => ({ ...m, content: m.content + evt.text }))
@@ -223,7 +230,14 @@ export const useAi = create<AiState>((set, get) => ({
             approved = await new Promise<boolean>((resolve) => set({ pendingConfirm: { title: d.title, detail: d.detail, resolve } }))
           }
           if (cancelled()) break
-          const result = approved ? await executeTool(call.name, call.arguments) : 'User rejected this action.'
+          let result: string
+          try {
+            result = approved ? await executeTool(call.name, call.arguments) : 'User rejected this action.'
+          } catch (err) {
+            // Never let a tool throw escape as an unhandled rejection, and always
+            // emit a tool result so the assistant tool_use has a matching reply.
+            result = `Tool error: ${err instanceof Error ? err.message : String(err)}`
+          }
           providerMessages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: result })
           patchAssistant((m) => ({ ...m, content: `${m.content}${m.content ? '\n\n' : ''}_🔧 ${call.name}: ${approved ? 'выполнено' : 'отклонено'}_` }))
         }

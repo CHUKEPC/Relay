@@ -117,6 +117,10 @@ export async function sendActiveRequest(): Promise<void> {
   const result = await window.api.sendRequest(spec, { requestId })
   useResponse.getState().setResult(tab.id, requestId, result)
 
+  // If a newer request superseded this tab while we awaited, stop here — don't add
+  // a phantom history entry, mutate variables, or run tests for a hidden response.
+  if (useResponse.getState().get(tab.id).requestId !== requestId) return
+
   // 4) history
   useHistory.getState().add(
     {

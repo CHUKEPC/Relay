@@ -19,6 +19,13 @@ let unloadWired = false
 
 /** Load all persisted documents from main and hydrate the stores. */
 export async function bootstrap(): Promise<void> {
+  // Wire the unload flush FIRST — before any await — so a rejected storageLoad
+  // can't skip past it and lose the unload-time flush for the whole session.
+  if (!unloadWired) {
+    unloadWired = true
+    window.addEventListener('beforeunload', flushPersist)
+  }
+
   const [collections, environments, globals, history, tabs, settings, providers] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
@@ -48,11 +55,4 @@ export async function bootstrap(): Promise<void> {
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 
   watchSystemTheme()
-
-  // Flush any debounced writes before the window unloads so the last edit (made
-  // within the debounce window) isn't lost on quit.
-  if (!unloadWired) {
-    unloadWired = true
-    window.addEventListener('beforeunload', flushPersist)
-  }
 }

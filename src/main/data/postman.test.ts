@@ -30,6 +30,25 @@ describe('Postman import', () => {
     expect(req.query.map((q: any) => `${q.key}=${q.value}`)).toEqual(['a=1'])
   })
 
+  it('recovers active raw query params even when query[] holds only disabled entries', () => {
+    const col = importPostmanCollection({
+      info: { name: 'C' },
+      item: [
+        {
+          name: 'r',
+          request: {
+            method: 'GET',
+            url: { raw: 'https://api/x?a=1&debug=1', host: ['api'], path: ['x'], query: [{ key: 'debug', value: '1', disabled: true }] }
+          }
+        }
+      ]
+    })
+    const req = firstRequest(col)
+    expect(req.url).toBe('https://api/x')
+    expect(req.query.find((q: any) => q.key === 'a')?.value).toBe('1') // recovered from raw
+    expect(req.query.filter((q: any) => q.key === 'debug').length).toBe(1) // not duplicated
+  })
+
   it('reconstructs protocol/port/path when raw is missing', () => {
     const col = importPostmanCollection({
       info: { name: 'C' },

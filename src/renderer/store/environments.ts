@@ -88,14 +88,17 @@ export const useEnvironments = create<EnvState>((set, get) => ({
   },
 
   setEnvVars: (id, variables) => {
-    const environments = get().env.environments.map((e) => (e.id === id ? { ...e, variables } : e))
+    // withIds so vars created by scripts / the AI tool / the runner also get a
+    // stable id (UI keys/secret-reveal must be by identity, not array index).
+    const next = withIds(variables)
+    const environments = get().env.environments.map((e) => (e.id === id ? { ...e, variables: next } : e))
     const env = { ...get().env, environments }
     set({ env })
     persist('environments', env)
   },
 
   setGlobalVars: (variables) => {
-    const globals = { ...get().globals, variables }
+    const globals = { ...get().globals, variables: withIds(variables) }
     set({ globals })
     persist('globals', globals)
   },

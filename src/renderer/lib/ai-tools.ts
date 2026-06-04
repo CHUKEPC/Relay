@@ -2,7 +2,8 @@ import type { KV, ToolSpec } from '@shared/types'
 import { useTabs } from '../store/tabs'
 import { useEnvironments } from '../store/environments'
 import { useResponse } from '../store/response'
-import { sendActiveRequest } from './request-runner'
+import { sendActiveRequest, currentSecretValues } from './request-runner'
+import { redactSecrets, maskHeaderValue } from './ai-context'
 import { splitUrl } from './url'
 
 /** Tools the assistant may call. Mutating/sending tools require confirmation. */
@@ -70,8 +71,6 @@ export function describeToolCall(name: string, args: any): { title: string; deta
   }
 }
 
-const SECRET_RE = /^(authorization|cookie|x-api-key|api-key)$/i
-
 export async function executeTool(name: string, rawArgs: string): Promise<string> {
   let args: any = {}
   try {
@@ -86,10 +85,13 @@ export async function executeTool(name: string, rawArgs: string): Promise<string
     case 'get_current_request': {
       if (!tab) return 'No request open.'
       const r = tab.request
+      const secrets = currentSecretValues()
       return JSON.stringify({
         method: r.method,
-        url: r.url,
-        headers: r.headers.filter((h) => h.enabled).map((h) => ({ key: h.key, value: SECRET_RE.test(h.key) ? '•••' : h.value })),
+        url: redactSecrets(r.url, secrets),
+        headers: r.headers
+          .filter((h) => h.enabled)
+          .map((h) => ({ key: h.key, value: redactSecrets(maskHeaderValue(h.key, h.value), secrets) })),
         bodyType: r.body.type,
         authType: r.auth.type
       })
@@ -98,7 +100,13 @@ export async function executeTool(name: string, rawArgs: string): Promise<string
       if (!tab) return 'No request open.'
       const res = useResponse.getState().get(tab.id).result
       if (!res) return 'No response yet.'
-      return JSON.stringify({ status: res.status, timeMs: res.timings.totalMs, sizeBytes: res.body.sizeBytes, bodyPreview: (res.body.text ?? '').slice(0, 2000) })
+      const secrets = currentSecretValues()
+      return JSON.stringify({
+        status: res.status,
+        timeMs: res.timings.totalMs,
+        sizeBytes: res.body.sizeBytes,
+        bodyPreview: redactSecrets((res.body.text ?? '').slice(0, 2000), secrets)
+      })
     }
     case 'update_current_request': {
       const patch: any = {}

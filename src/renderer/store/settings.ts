@@ -47,8 +47,11 @@ export const useSettings = create<SettingsState>((set, get) => ({
   resolvedTheme: 'dark',
 
   hydrate: (doc) => {
-    const resolved = applyTheme(doc.theme, doc.accentHue)
-    set({ settings: { ...doc, version: STORAGE_VERSION }, resolvedTheme: resolved })
+    // Merge over defaults so a settings.json from an older version that lacks newer
+    // keys doesn't yield `undefined` (which flips controlled inputs to uncontrolled).
+    const merged = { ...defaultSettingsDoc(), ...doc, version: STORAGE_VERSION }
+    const resolved = applyTheme(merged.theme, merged.accentHue)
+    set({ settings: merged, resolvedTheme: resolved })
   },
 
   setTheme: (theme) => {

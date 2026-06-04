@@ -96,7 +96,9 @@ function CodeArtifact({ lang, code }: { lang: string; code: string }) {
   const apply = () => {
     if (lang === 'http') {
       const p = parseHttpBlock(code)
-      if (!p.url && !p.method && !p.headers && !p.body) {
+      // Require a request line (method or URL) — otherwise parseHttpBlock would
+      // happily turn arbitrary prose into a "body" and overwrite the request.
+      if (!p.url && !p.method) {
         showToast('Не удалось разобрать ```http блок')
         return
       }

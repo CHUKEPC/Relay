@@ -102,7 +102,7 @@ function operationToRequest(doc: any, path: string, method: string, op: any, war
             : firstType.includes('html')
               ? 'html'
               : 'text'
-        const text = typeof sample === 'string' ? sample : JSON.stringify(sample, null, 2)
+        const text = typeof sample === 'string' ? sample : sample == null ? '' : JSON.stringify(sample, null, 2)
         body = { type: 'raw', language, text }
         headers.push({ key: 'Content-Type', value: firstType, enabled: true })
         warnings.push(`Imported "${method.toUpperCase()} ${path}" body as raw (${firstType}).`)

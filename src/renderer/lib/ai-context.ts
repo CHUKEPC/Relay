@@ -17,7 +17,7 @@ export const SYSTEM_PROMPT = [
 // X-Access-Token, Api-Secret are masked too — err on the side of masking.
 const SECRET_HEADER_RE = /(authorization|cookie|auth|token|secret|api[-_]?key|password|credential)/i
 
-function maskHeaderValue(key: string, value: string): string {
+export function maskHeaderValue(key: string, value: string): string {
   if (SECRET_HEADER_RE.test(key)) {
     // keep a hint of the scheme (e.g. "Bearer") but mask the credential
     const m = value.match(/^(\w+)\s+/)
@@ -27,7 +27,7 @@ function maskHeaderValue(key: string, value: string): string {
 }
 
 /** Redact the literal values of secret variables wherever they appear (URL/body/headers). */
-function redactSecrets(text: string | undefined, secrets: string[]): string | undefined {
+export function redactSecrets(text: string | undefined, secrets: string[]): string | undefined {
   if (!text || !secrets.length) return text
   let out = text
   for (const s of secrets) {
@@ -95,8 +95,16 @@ export function buildContextSnapshot(input: SnapshotInput): AiContextSnapshot {
       statusText: response.statusText,
       timeMs: response.timings.totalMs,
       sizeBytes: response.body.sizeBytes,
-      headers: response.headers.slice(0, 12).map(([key, value]) => ({ key, value })),
-      bodyPreview: response.body.text ? truncate(response.body.text) : response.body.isBinary ? '<binary response>' : undefined
+      // Servers can echo credentials in response headers/body (token endpoints,
+      // debug/echo routes) — redact them too, not just the request side.
+      headers: response.headers
+        .slice(0, 12)
+        .map(([key, value]) => ({ key, value: redactSecrets(maskHeaderValue(key, value), secrets) ?? '' })),
+      bodyPreview: response.body.text
+        ? redactSecrets(truncate(response.body.text), secrets)
+        : response.body.isBinary
+          ? '<binary response>'
+          : undefined
     }
   }
 

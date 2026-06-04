@@ -97,8 +97,15 @@ export class StorageManager {
 }
 
 export function registerStorageHandlers(storage: StorageManager): void {
-  ipcMain.handle(IPC.storage.load, async (_e, key: StorageKey) => storage.get(key))
+  // Reject unknown keys: `fileFor` joins the key into a path, so an unvalidated
+  // key from the renderer (`../foo`) would read/write outside the data dir.
+  const isKnownKey = (key: string): boolean => Object.prototype.hasOwnProperty.call(SEEDS, key)
+  ipcMain.handle(IPC.storage.load, async (_e, key: StorageKey) => {
+    if (!isKnownKey(key)) throw new Error(`Unknown storage key: ${key}`)
+    return storage.get(key)
+  })
   ipcMain.handle(IPC.storage.save, async (_e, key: StorageKey, value: unknown) => {
+    if (!isKnownKey(key)) throw new Error(`Unknown storage key: ${key}`)
     storage.set(key, value as StorageMap[StorageKey])
   })
 

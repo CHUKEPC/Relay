@@ -56,8 +56,15 @@ function urlToString(url: any): { raw: string; query: KV[]; pathVars: KV[] } {
   if (typeof url.raw === 'string') {
     const qi = url.raw.indexOf('?')
     base = qi >= 0 ? url.raw.slice(0, qi) : url.raw
-    // Recover params from raw if the structured `query` array was absent.
-    if (qi >= 0 && query.length === 0) query.push(...parseQueryString(url.raw.slice(qi + 1)))
+    // Merge any raw query params not already represented in the structured array
+    // (Postman lets raw carry params never synced into query[], incl. when query[]
+    // holds only disabled entries) so active params aren't silently dropped.
+    if (qi >= 0) {
+      const seen = new Set(query.map((q) => q.key))
+      for (const kv of parseQueryString(url.raw.slice(qi + 1))) {
+        if (!seen.has(kv.key)) query.push(kv)
+      }
+    }
   } else {
     const protocol = url.protocol ? `${url.protocol}://` : ''
     const host = Array.isArray(url.host) ? url.host.join('.') : url.host ?? ''

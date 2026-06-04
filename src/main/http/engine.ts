@@ -40,6 +40,9 @@ const ABSOLUTE_MAX_REDIRECTS = 50
 /** HTTP status codes that represent a redirect. */
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
+/** User headers that may carry credentials — stripped on cross-origin redirects. */
+const CREDENTIAL_HEADER_RE = /(authorization|api[-_]?key|token|secret|credential|password|auth|cookie)/i
+
 /**
  * Content-type fragments we treat as text (decoded to `text`). Anything else is
  * exposed as base64 with `isBinary: true`.
@@ -615,10 +618,11 @@ export async function runRequest(
             setHeaderCI(headers, 'Cookie', merged)
           }
         } else {
-          // Cross-origin redirect: never forward credentials (matches browsers/Postman).
-          deleteHeaderCI(headers, 'authorization')
-          deleteHeaderCI(headers, 'cookie')
-          deleteHeaderCI(headers, 'proxy-authorization')
+          // Cross-origin redirect: never forward credentials (matches browsers/Postman),
+          // including custom credential headers (X-Api-Key, X-Auth-Token, ...).
+          for (const k of Object.keys(headers)) {
+            if (CREDENTIAL_HEADER_RE.test(k)) delete headers[k]
+          }
           cookieJar.clear()
           userCookie = undefined
         }
