@@ -61,9 +61,15 @@ export const useTabs = create<TabsState>((set, get) => {
     },
 
     closeTab: (id) => {
-      const tabs = get().doc.tabs.filter((t) => t.id !== id)
+      const prev = get().doc.tabs
+      const idx = prev.findIndex((t) => t.id === id)
+      const tabs = prev.filter((t) => t.id !== id)
       let activeTabId = get().doc.activeTabId
-      if (activeTabId === id) activeTabId = tabs.length ? tabs[tabs.length - 1].id : null
+      if (activeTabId === id) {
+        // Activate the neighbour: the tab that shifts into the closed slot, else
+        // the one to its left — not always the last tab.
+        activeTabId = tabs.length ? (tabs[idx] ?? tabs[idx - 1] ?? tabs[tabs.length - 1]).id : null
+      }
       commit({ tabs, activeTabId })
     },
 

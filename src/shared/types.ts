@@ -63,6 +63,9 @@ export type Auth =
       scope?: string
       username?: string
       password?: string
+      /** authorization_code grant: the code obtained from the redirect */
+      code?: string
+      redirectUri?: string
     }
   | { type: 'digest'; username: string; password: string; algorithm?: 'MD5' | 'SHA-256' }
 
@@ -419,6 +422,8 @@ export interface ScriptRunRequest {
   response?: ResponseResult
   environment: Record<string, string>
   globals: Record<string, string>
+  /** collection-scoped variables (read-only via pm.variables) */
+  collection?: Record<string, string>
 }
 
 export interface ScriptRunResult {
@@ -461,6 +466,9 @@ export interface OAuthTokenRequest {
   username?: string
   password?: string
   authUrl?: string
+  /** authorization_code grant */
+  code?: string
+  redirectUri?: string
 }
 
 export interface OAuthTokenResult {

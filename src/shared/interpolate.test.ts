@@ -43,6 +43,30 @@ describe('variable interpolation', () => {
     expect(interpolate('{{a}}', nested)).toBe('final')
   })
 
+  it('leaves a self-referential variable literal instead of duplicating it', () => {
+    const s: VariableScope = { environment: { a: 'x {{a}} y' } }
+    const r = resolveString('{{a}}', s)
+    expect(r.value).toBe('x {{a}} y')
+    expect(r.unresolved).toContain('a')
+  })
+
+  it('detects mutual reference cycles', () => {
+    const s: VariableScope = { environment: { a: '{{b}}', b: '{{a}}' } }
+    const r = resolveString('{{a}}', s)
+    expect(r.unresolved.length).toBeGreaterThan(0)
+  })
+
+  it('resolves a chain deeper than the old 5-level limit', () => {
+    const s: VariableScope = { environment: { a: '{{b}}', b: '{{c}}', c: '{{d}}', d: '{{e}}', e: '{{f}}', f: 'DONE' } }
+    expect(interpolate('{{a}}', s)).toBe('DONE')
+  })
+
+  it('reports the fully resolved value for a nested token', () => {
+    const s: VariableScope = { environment: { a: '{{b}}', b: 'final' } }
+    const r = resolveString('{{a}}', s)
+    expect(r.tokens.find((t) => t.name === 'a')?.value).toBe('final')
+  })
+
   it('extracts token names', () => {
     expect(extractTokens('{{a}}/{{b}}')).toEqual(['a', 'b'])
   })

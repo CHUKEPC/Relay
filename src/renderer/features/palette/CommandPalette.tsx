@@ -81,8 +81,14 @@ export function CommandPalette() {
   const flat = filtered.flatMap((g) => g.items)
   const clampedSel = Math.min(sel, Math.max(0, flat.length - 1))
 
+  // Hold the latest derived nav state in a ref so the keydown listener can be
+  // subscribed ONCE (deps []) instead of re-attaching on every render/keystroke.
+  const navRef = useRef({ flat, clampedSel, close })
+  navRef.current = { flat, clampedSel, close }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const { flat, clampedSel, close } = navRef.current
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setSel((s) => Math.min(s + 1, flat.length - 1))
@@ -102,7 +108,7 @@ export function CommandPalette() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [flat, clampedSel])
+  }, [])
 
   let runningIndex = -1
   return (

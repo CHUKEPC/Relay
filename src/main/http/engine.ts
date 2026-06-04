@@ -11,6 +11,7 @@
  */
 import { basename } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { gunzipSync, brotliDecompressSync, inflateSync, inflateRawSync } from 'node:zlib'
 import { request as undiciRequest, Agent } from 'undici'
 import type { Dispatcher } from 'undici'
 import { Cookie } from 'tough-cookie'
@@ -148,6 +149,90 @@ function findHeader(headers: Record<string, string>, name: string): string | und
     if (k.toLowerCase() === lower) return headers[k]
   }
   return undefined
+}
+
+/** Case-insensitive header set (replaces any existing casing of `name`). */
+function setHeaderCI(headers: Record<string, string>, name: string, value: string): void {
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === name.toLowerCase()) {
+      headers[k] = value
+      return
+    }
+  }
+  headers[name] = value
+}
+
+/** Case-insensitive header delete (removes every casing of `name`). */
+function deleteHeaderCI(headers: Record<string, string>, name: string): void {
+  for (const k of Object.keys(headers)) {
+    if (k.toLowerCase() === name.toLowerCase()) delete headers[k]
+  }
+}
+
+/** Same scheme + host (origin) — used to decide whether to forward credentials. */
+function sameOrigin(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a)
+    const ub = new URL(b)
+    return ua.protocol === ub.protocol && ua.host === ub.host
+  } catch {
+    return false
+  }
+}
+
+/** Accumulate Set-Cookie values (name=value) into a simple per-request jar. */
+function addSetCookies(jar: Map<string, string>, lines: string[]): void {
+  for (const line of lines) {
+    const c = Cookie.parse(line)
+    if (c && c.key) jar.set(c.key, c.value)
+  }
+}
+
+/** Serialize the jar into a Cookie request header value. */
+function jarHeader(jar: Map<string, string>): string {
+  return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
+}
+
+/**
+ * Decompress a response body per Content-Encoding. `undici.request` does NOT
+ * auto-decode, so without this gzip/br/deflate bodies would be returned as raw
+ * compressed bytes (garbage text + wrong size).
+ *
+ * Returns `decoded: true` ONLY when every listed encoding was fully removed; on
+ * an unknown encoding or a decode failure it returns the ORIGINAL bytes with
+ * `decoded: false`, so the caller leaves Content-Encoding/Length headers intact
+ * and body/headers stay consistent (never a half-decoded body with stripped
+ * headers).
+ */
+function decodeContentEncoding(buf: Buffer, encoding: string | undefined): { buf: Buffer; decoded: boolean } {
+  if (!encoding || buf.length === 0) return { buf, decoded: false }
+  // A comma-separated list applies encodings in order; decode in reverse.
+  const encodings = encoding
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  let out = buf
+  for (let i = encodings.length - 1; i >= 0; i--) {
+    const enc = encodings[i]
+    try {
+      if (enc === 'gzip' || enc === 'x-gzip') out = gunzipSync(out)
+      else if (enc === 'br') out = brotliDecompressSync(out)
+      else if (enc === 'deflate') {
+        try {
+          out = inflateSync(out)
+        } catch {
+          out = inflateRawSync(out)
+        }
+      } else if (enc === 'identity') {
+        /* no-op */
+      } else {
+        return { buf, decoded: false } // unknown encoding — return original untouched
+      }
+    } catch {
+      return { buf, decoded: false } // corrupt/partial data — return original untouched
+    }
+  }
+  return { buf: out, decoded: out !== buf }
 }
 
 /**
@@ -458,7 +543,11 @@ export async function runRequest(
     if (externalSignal.aborted) controller.abort()
     else externalSignal.addEventListener('abort', onExternalAbort, { once: true })
   }
-  if (timeoutMs > 0) {
+  // The timeout is a per-hop budget (re-armed before each request below), matching
+  // Postman — a legitimate redirect chain isn't aborted by one global deadline.
+  const armTimeout = (): void => {
+    if (timeoutMs <= 0) return
+    if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timedOut = true
       controller.abort()
@@ -472,6 +561,11 @@ export async function runRequest(
   }
 
   const redirects: RedirectHop[] = []
+  // Per-request cookie jar so a login -> redirect flow keeps its session cookies.
+  const cookieJar = new Map<string, string>()
+  // The user's original Cookie header — cleared once we cross to another origin so
+  // it can never be re-attached to a different host on a later same-origin hop.
+  let userCookie = findHeader(headers, 'cookie')
   let currentUrl = initialUrl
   let method = (spec.method || 'GET').toUpperCase()
   let ttfbMs: number | undefined
@@ -481,6 +575,7 @@ export async function runRequest(
     // We use undici.request (which does NOT auto-follow) so every hop is
     // observable and recorded into `redirects`.
     for (let hop = 0; ; hop++) {
+      armTimeout()
       const res = await undiciRequest(currentUrl, {
         method: method as Dispatcher.HttpMethod,
         headers,
@@ -500,8 +595,8 @@ export async function runRequest(
       const locationStr = Array.isArray(location) ? location[0] : location
 
       if (followRedirects && isRedirect && locationStr && hop < maxRedirects) {
-        // Drain the redirect body so the socket can be reused, then follow.
-        res.body.dump?.()
+        // Drain the redirect body (awaited) so the socket is freed before the next hop.
+        await res.body.dump?.()
         let nextUrl: string
         try {
           nextUrl = new URL(locationStr, currentUrl).toString()
@@ -511,15 +606,30 @@ export async function runRequest(
         }
         redirects.push({ from: currentUrl, to: nextUrl, status })
 
+        // Carry cookies set on this hop so login -> redirect sessions survive.
+        addSetCookies(cookieJar, extractSetCookie(res.headers))
+
+        if (sameOrigin(currentUrl, nextUrl)) {
+          if (cookieJar.size) {
+            const merged = userCookie ? `${userCookie}; ${jarHeader(cookieJar)}` : jarHeader(cookieJar)
+            setHeaderCI(headers, 'Cookie', merged)
+          }
+        } else {
+          // Cross-origin redirect: never forward credentials (matches browsers/Postman).
+          deleteHeaderCI(headers, 'authorization')
+          deleteHeaderCI(headers, 'cookie')
+          deleteHeaderCI(headers, 'proxy-authorization')
+          cookieJar.clear()
+          userCookie = undefined
+        }
+
         // Per RFC 7231: 303 (and commonly 301/302) downgrade to GET and drop
         // the body. 307/308 preserve method and body.
         if (status === 303 || ((status === 301 || status === 302) && method !== 'GET' && method !== 'HEAD')) {
           method = 'GET'
           encoded = { body: undefined }
-          delete headers['Content-Type']
-          delete headers['content-type']
-          delete headers['Content-Length']
-          delete headers['content-length']
+          deleteHeaderCI(headers, 'content-type')
+          deleteHeaderCI(headers, 'content-length')
         }
         currentUrl = nextUrl
         continue
@@ -561,7 +671,7 @@ async function finalizeResponse(
   ttfbMs: number | undefined
 ): Promise<ResponseResult> {
   const arrayBuf = await res.body.arrayBuffer()
-  const buf = Buffer.from(arrayBuf)
+  const rawBuf = Buffer.from(arrayBuf)
   const totalMs = Date.now() - startedAt
 
   const headers = normalizeResponseHeaders(res.headers)
@@ -570,6 +680,22 @@ async function finalizeResponse(
 
   const rawContentType = res.headers['content-type']
   const contentType = (Array.isArray(rawContentType) ? rawContentType[0] : rawContentType) ?? ''
+
+  // undici.request does not decompress; decode per Content-Encoding so text and
+  // sizeBytes reflect the actual payload.
+  const rawEncoding = res.headers['content-encoding']
+  const contentEncoding = Array.isArray(rawEncoding) ? rawEncoding[0] : rawEncoding
+  const { buf, decoded } = decodeContentEncoding(rawBuf, contentEncoding)
+
+  // Only when we FULLY decoded: keep headers consistent with the body we expose —
+  // drop the now-inaccurate Content-Encoding and correct Content-Length.
+  if (decoded) {
+    for (let i = headers.length - 1; i >= 0; i--) {
+      const name = headers[i][0].toLowerCase()
+      if (name === 'content-encoding') headers.splice(i, 1)
+      else if (name === 'content-length') headers[i][1] = String(buf.length)
+    }
+  }
 
   const isBinary = buf.length > 0 && !TEXTY_CONTENT_TYPE_RE.test(contentType)
 

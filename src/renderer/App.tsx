@@ -10,7 +10,7 @@ import { useCollections } from './store/collections'
 import { useResponse } from './store/response'
 import { useAi } from './store/ai'
 import { bootstrap } from './store/bootstrap'
-import { sendActiveRequest, currentScope } from './lib/request-runner'
+import { sendActiveRequest, currentScope, currentSecretValues } from './lib/request-runner'
 import { buildContextSnapshot } from './lib/ai-context'
 import { interpolate } from '@shared/interpolate'
 import { Sidebar } from './features/sidebar/Sidebar'
@@ -90,8 +90,14 @@ export function App() {
           useTabs.getState().closeTab(tab.id)
         }
       } else if (e.key === 'Escape') {
-        if (useUi.getState().settingsOpen) useUi.getState().closeSettings()
-        if (useUi.getState().paletteOpen) useUi.getState().setPaletteOpen(false)
+        // Close only the topmost overlay (palette sits above settings), not both.
+        if (useUi.getState().paletteOpen) {
+          e.preventDefault()
+          useUi.getState().setPaletteOpen(false)
+        } else if (useUi.getState().settingsOpen) {
+          e.preventDefault()
+          useUi.getState().closeSettings()
+        }
       }
     }
     window.addEventListener('keydown', onKey)
@@ -306,7 +312,7 @@ function Workspace() {
               : { height: `${respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
           }
         >
-          {activeTabId && <ResponsePanel tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />}
+          {activeTabId && <ResponsePanel key={activeTabId} tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />}
         </div>
       </div>
     </div>
@@ -327,7 +333,8 @@ function askAiAboutResponse() {
     resolvedUrl: interpolate(req.url, scope),
     response: result,
     envName: env?.name,
-    envVarNames: env?.variables.filter((v) => v.enabled).map((v) => v.key)
+    envVarNames: env?.variables.filter((v) => v.enabled).map((v) => v.key),
+    secretValues: currentSecretValues()
   })
   const label = { label: `${req.method} ${req.url.replace(/\{\{[^}]+\}\}/g, '')}${result ? ` · ${result.status}` : ''}`, icon: 'doc' }
   void useAi.getState().send('Объясни этот ответ: статус, структуру полей и есть ли проблемы.', snapshot, label)

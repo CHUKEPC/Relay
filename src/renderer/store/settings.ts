@@ -77,9 +77,13 @@ export const useSettings = create<SettingsState>((set, get) => ({
 }))
 
 /** Re-apply theme when the OS theme changes and we're in 'system' mode. */
-export function watchSystemTheme(): void {
-  window.api.onNativeThemeChange(() => {
+let unwatchTheme: (() => void) | null = null
+export function watchSystemTheme(): () => void {
+  // Drop any previous listener so repeated calls (HMR / re-bootstrap) don't stack.
+  if (unwatchTheme) unwatchTheme()
+  unwatchTheme = window.api.onNativeThemeChange(() => {
     const { settings, hydrate } = useSettings.getState()
     if (settings.theme === 'system') hydrate(settings)
   })
+  return unwatchTheme
 }

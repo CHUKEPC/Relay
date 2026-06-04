@@ -1,5 +1,6 @@
 import type { Auth, KV, RequestBody, RequestModel, RequestSettings, RequestSpec, VariableScope } from '@shared/types'
 import { resolveString } from '@shared/interpolate'
+import { escapeRegExp } from '@shared/regex'
 
 function res(input: string, scope: VariableScope, unresolved: Set<string>): string {
   const r = resolveString(input ?? '', scope)
@@ -57,7 +58,7 @@ export function applyPathVariables(url: string, pathVars: KV[], scope: VariableS
   for (const pv of pathVars) {
     if (!pv.enabled || !pv.key) continue
     const value = res(pv.value, scope, unresolved)
-    out = out.replace(new RegExp(`:${pv.key}(?=/|$|\\?)`, 'g'), encodeURIComponent(value))
+    out = out.replace(new RegExp(`:${escapeRegExp(pv.key)}(?=/|$|\\?)`, 'g'), () => encodeURIComponent(value))
   }
   return out
 }

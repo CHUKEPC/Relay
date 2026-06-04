@@ -204,9 +204,14 @@ export function defaultHistory(): HistoryDoc {
 
 export function defaultTabs(): TabsDoc {
   const seed = defaultCollections()
-  const products = seed.collections[0].children.find((c) => c.id === 'fld_products') as CollectionFolderNode
-  const listProducts = products.children.find((c) => c.id === 'req_list_products')!
-  const request = (listProducts as { request: RequestModel }).request
+  const products = seed.collections[0]?.children.find((c) => c.id === 'fld_products') as CollectionFolderNode | undefined
+  const listProducts = products?.children.find((c) => c.id === 'req_list_products')
+  const request = listProducts && listProducts.type === 'request' ? listProducts.request : undefined
+  // If the seed structure ever changes, fall back to an empty tab set rather than
+  // crashing app boot (bootstrap opens a fresh tab when there are none).
+  if (!request) {
+    return { version: STORAGE_VERSION, activeTabId: null, tabs: [] }
+  }
   return {
     version: STORAGE_VERSION,
     activeTabId: 'tab_seed',

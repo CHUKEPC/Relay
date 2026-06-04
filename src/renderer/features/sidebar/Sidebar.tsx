@@ -22,7 +22,15 @@ export function Sidebar() {
       <div className="side-nav">
         <div className="seg">
           {NAV.map((t) => (
-            <button key={t.id} className={sideTab === t.id ? 'on' : ''} onClick={() => setSideTab(t.id)} title={t.label}>
+            <button
+              key={t.id}
+              className={sideTab === t.id ? 'on' : ''}
+              onClick={() => {
+                setSideTab(t.id)
+                setQuery('') // don't carry one tab's search into another
+              }}
+              title={t.label}
+            >
               <Icon name={t.icon} size={14} />
             </button>
           ))}

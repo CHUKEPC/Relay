@@ -15,7 +15,8 @@ export const useHistory = create<HistoryState>((set, get) => ({
   doc: emptyHistory(),
   hydrate: (doc) => set({ doc: { ...doc, version: STORAGE_VERSION } }),
   add: (entry, maxHistory) => {
-    const entries = [entry, ...get().doc.entries].slice(0, Math.max(1, maxHistory))
+    // Respect maxHistory === 0 (history disabled) instead of forcing a floor of 1.
+    const entries = [entry, ...get().doc.entries].slice(0, Math.max(0, maxHistory))
     const doc = { version: STORAGE_VERSION, entries }
     set({ doc })
     persist('history', doc)

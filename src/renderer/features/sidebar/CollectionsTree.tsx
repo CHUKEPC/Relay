@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { CollectionNode } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useCollections, emptyRequest } from '@renderer/store/collections'
@@ -215,6 +215,14 @@ function TreeNode({
 
 function RenameInput({ initial, onCommit }: { initial: string; onCommit: (v: string) => void }) {
   const [value, setValue] = useState(initial)
+  // Commit exactly once — Enter/Escape commit then blur, and onBlur must not
+  // re-commit (which would override an Escape-cancel with the typed value).
+  const done = useRef(false)
+  const commit = (v: string) => {
+    if (done.current) return
+    done.current = true
+    onCommit(v)
+  }
   return (
     <input
       className="inline-edit"
@@ -222,10 +230,17 @@ function RenameInput({ initial, onCommit }: { initial: string; onCommit: (v: str
       value={value}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onCommit(value)}
+      onBlur={() => commit(value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') onCommit(value)
-        if (e.key === 'Escape') onCommit(initial)
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit(value)
+          ;(e.target as HTMLInputElement).blur()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          commit(initial)
+          ;(e.target as HTMLInputElement).blur()
+        }
       }}
     />
   )

@@ -32,4 +32,15 @@ describe('cURL parser', () => {
       expect(request.body.items.find((i) => i.key === 'name')?.value).toBe('demo')
     }
   })
+
+  it('moves -G data into the query string instead of dropping it', () => {
+    const { request } = parseCurl('curl -G https://x.test --data "a=1" --data "b=2"')
+    expect(request.method).toBe('GET')
+    expect(request.body.type).toBe('none')
+    expect(request.query.map((q) => `${q.key}=${q.value}`)).toEqual(['a=1', 'b=2'])
+  })
+
+  it('does not throw on malformed percent-escapes in data', () => {
+    expect(() => parseCurl("curl https://x.test -d 'a=100%'")).not.toThrow()
+  })
 })

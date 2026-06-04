@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { Modal } from '@renderer/components/primitives'
 import { useActiveRequest } from '@renderer/lib/hooks'
@@ -8,13 +8,17 @@ export function CodeGenModal({ open, onOpenChange }: { open: boolean; onOpenChan
   const req = useActiveRequest()
   const [target, setTarget] = useState<CodeTarget>('curl')
   const [copied, setCopied] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const code = useMemo(() => (req ? generateCode(target, req) : ''), [req, target])
+
+  useEffect(() => () => clearTimeout(copyTimer.current), [])
 
   const copy = () => {
     void navigator.clipboard.writeText(code)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => setCopied(false), 1200)
   }
 
   return (

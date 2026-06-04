@@ -11,7 +11,7 @@ function statusColor(s: number): string {
 }
 
 function timeAgo(at: number): string {
-  const diff = Math.floor((Date.now() - at) / 1000)
+  const diff = Math.max(0, Math.floor((Date.now() - at) / 1000))
   if (diff < 60) return `${diff} сек назад`
   if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
   if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`

@@ -53,6 +53,15 @@ function splitHeader(raw: string): KV | null {
   return { key, value, enabled: true }
 }
 
+/** decodeURIComponent that never throws on malformed `%` escapes. */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
 export interface CurlParseResult {
   request: RequestModel
   warnings: string[]
@@ -71,6 +80,7 @@ export function parseCurl(input: string, name = 'Imported request'): CurlParseRe
   const formParts: { key: string; value: string; isFile: boolean }[] = []
   let auth: Auth = { type: 'none' }
   let isGetForm = false
+  const getQuery: KV[] = []
   let rawBodyMode: 'data' | 'urlencoded' | 'form' | null = null
 
   const next = (idx: number): string => tokens[idx + 1] ?? ''
@@ -155,7 +165,7 @@ export function parseCurl(input: string, name = 'Imported request'): CurlParseRe
     if (ct.includes('x-www-form-urlencoded') || (/^[\w.%-]+=[^&]*(&[\w.%-]+=[^&]*)*$/.test(joined) && !ct.includes('json'))) {
       const items = joined.split('&').map((pair) => {
         const eq = pair.indexOf('=')
-        return { key: eq >= 0 ? decodeURIComponent(pair.slice(0, eq)) : pair, value: eq >= 0 ? decodeURIComponent(pair.slice(eq + 1)) : '', enabled: true }
+        return { key: eq >= 0 ? safeDecode(pair.slice(0, eq)) : pair, value: eq >= 0 ? safeDecode(pair.slice(eq + 1)) : '', enabled: true }
       })
       body = { type: 'urlencoded', items }
     } else {
@@ -164,8 +174,21 @@ export function parseCurl(input: string, name = 'Imported request'): CurlParseRe
     }
   }
 
-  // GET with --data → query string
+  // GET with --data/-d/--data-urlencode (`curl -G`): move the data into the query
+  // string instead of dropping it.
   if (isGetForm && (dataParts.length || urlencodedParts.length)) {
+    for (const part of dataParts) {
+      for (const pair of part.split('&')) {
+        if (!pair) continue
+        const eq = pair.indexOf('=')
+        getQuery.push({
+          key: eq >= 0 ? safeDecode(pair.slice(0, eq)) : safeDecode(pair),
+          value: eq >= 0 ? safeDecode(pair.slice(eq + 1)) : '',
+          enabled: true
+        })
+      }
+    }
+    for (const p of urlencodedParts) getQuery.push({ key: p.key, value: p.value, enabled: true })
     body = { type: 'none' }
   }
 
@@ -183,7 +206,7 @@ export function parseCurl(input: string, name = 'Imported request'): CurlParseRe
     name,
     method,
     url,
-    query: [],
+    query: getQuery,
     headers,
     pathVariables: [],
     body,

@@ -84,30 +84,46 @@ export interface ResolveStringResult {
 }
 
 /**
- * Resolve all `{{var}}` tokens in `input`. Supports up to `maxDepth` levels of
- * nested resolution (a variable whose value itself contains `{{...}}`).
+ * Resolve all `{{var}}` tokens in `input`. Supports nested resolution (a variable
+ * whose value itself contains `{{...}}`) up to `maxDepth` levels, while detecting
+ * reference cycles (a self- or mutually-referential variable is left literal and
+ * reported as unresolved instead of being expanded into garbage).
  */
-export function resolveString(input: string, scope: VariableScope, maxDepth = 5): ResolveStringResult {
+export function resolveString(input: string, scope: VariableScope, maxDepth = 10): ResolveStringResult {
   const tokens: ResolvedToken[] = []
   const unresolved = new Set<string>()
-  let value = input ?? ''
 
-  for (let depth = 0; depth < maxDepth; depth++) {
-    let changed = false
-    value = value.replace(TOKEN_RE, (whole, rawName: string) => {
+  // `seen` is the set of variable names currently being expanded on this branch,
+  // so a cycle (a -> a, a -> b -> a) is caught. A fresh regex per call avoids the
+  // shared-lastIndex reentrancy hazard of recursing on one global regex.
+  const expand = (str: string, seen: Set<string>, depth: number, collect: boolean): string => {
+    if (depth > maxDepth) {
+      const re = /\{\{\s*([^}]+?)\s*\}\}/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(str)) !== null) unresolved.add(m[1].trim())
+      return str
+    }
+    const re = /\{\{\s*([^}]+?)\s*\}\}/g
+    return str.replace(re, (whole, rawName: string) => {
       const name = rawName.trim()
+      if (seen.has(name)) {
+        unresolved.add(name) // cycle — leave literal
+        if (collect) tokens.push({ name, value: null, source: 'unresolved' })
+        return whole
+      }
       const t = lookup(name, scope)
-      if (depth === 0) tokens.push(t)
       if (t.value === null) {
         unresolved.add(name)
+        if (collect) tokens.push(t)
         return whole // leave literal
       }
-      changed = true
-      return t.value
+      const resolved = expand(t.value, new Set([...seen, name]), depth + 1, false)
+      if (collect) tokens.push({ name, value: resolved, source: t.source })
+      return resolved
     })
-    if (!changed) break
   }
 
+  const value = expand(input ?? '', new Set(), 0, true)
   return { value, tokens, unresolved: [...unresolved] }
 }
 

@@ -19,12 +19,14 @@ export function splitUrl(full: string): { base: string; query: KV[] } {
   return { base, query }
 }
 
-/** Build the displayed URL = base + enabled query (raw, no encoding). */
+/** Build the displayed URL = base + enabled query (raw, no encoding).
+ *  Always emits `key=value` (Postman-style) so an explicit empty value `a=`
+ *  round-trips instead of collapsing to a bare `a`. */
 export function joinUrl(base: string, query: KV[]): string {
   const enabled = query.filter((q) => q.enabled && q.key)
   if (!enabled.length) return base
   const sep = base.includes('?') ? '&' : '?'
-  return base + sep + enabled.map((q) => (q.value !== '' ? `${q.key}=${q.value}` : q.key)).join('&')
+  return base + sep + enabled.map((q) => `${q.key}=${q.value}`).join('&')
 }
 
 /** When the URL bar is edited, derive the new query while preserving any

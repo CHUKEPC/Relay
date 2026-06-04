@@ -85,7 +85,9 @@ export function registerAiHandlers(ipcMain: IpcMain, deps: AiHandlerDeps): void 
         emit({ type: 'error', error: (err as Error)?.message || 'AI request failed' })
       }
     } finally {
-      controllers.delete(payload.streamId)
+      // Only remove our own controller — if the streamId was reused, a newer
+      // chat may have replaced the map entry and must stay cancellable.
+      if (controllers.get(payload.streamId) === controller) controllers.delete(payload.streamId)
     }
   })
 

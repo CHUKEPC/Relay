@@ -1,5 +1,6 @@
 import type { FormDataField, RawLanguage, RequestBody, RequestModel } from '@shared/types'
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
+import { makeId } from '@shared/id'
 import { Icon } from '@renderer/components/Icon'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { KVTable } from '@renderer/components/KVTable'
@@ -149,7 +150,7 @@ function FormDataTable({
 }) {
   const update = (i: number, patch: Partial<FormDataField>) => onChange(items.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i))
-  const add = () => onChange([...items, { key: '', type: 'text', value: '', enabled: true }])
+  const add = () => onChange([...items, { id: makeId('fd'), key: '', type: 'text', value: '', enabled: true }])
 
   const pickFile = async (i: number) => {
     const files = await window.api.openFile({ multiple: false })
@@ -167,7 +168,7 @@ function FormDataTable({
           <span />
         </div>
         {items.map((r, i) => (
-          <div key={i} className={`kv-row ${r.enabled ? '' : 'off'}`} style={{ gridTemplateColumns: '26px 1fr 90px 1.3fr 28px' }}>
+          <div key={r.id ?? i} className={`kv-row ${r.enabled ? '' : 'off'}`} style={{ gridTemplateColumns: '26px 1fr 90px 1.3fr 28px' }}>
             <div className={`ck ${r.enabled ? 'on' : ''}`} onClick={() => update(i, { enabled: !r.enabled })}>
               {r.enabled && <Icon name="check" size={11} strokeWidth={2.4} />}
             </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { VariableDef } from '@shared/types'
+import { makeId } from '@shared/id'
 import { Icon } from '@renderer/components/Icon'
 import { Modal } from '@renderer/components/primitives'
 import { useEnvironments } from '@renderer/store/environments'
@@ -18,7 +19,7 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
   const isGlobals = target.kind === 'globals'
   const environment = !isGlobals ? env.environments.find((e) => e.id === target.id) : undefined
   const vars: VariableDef[] = isGlobals ? globals.variables : environment?.variables ?? []
-  const title = isGlobals ? 'Глобальные переменные' : environment?.name ?? 'Среда'
+  const title = isGlobals ? 'Глобальные переменные' : environment?.name || 'Среда'
 
   const commit = (next: VariableDef[]) => {
     if (isGlobals) setGlobalVars(next)
@@ -50,10 +51,12 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
 }
 
 function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: VariableDef[]) => void }) {
-  const [reveal, setReveal] = useState<Record<number, boolean>>({})
+  // Reveal state is keyed by row id (not array index) so deleting/reordering a
+  // row can't expose the wrong variable's secret value.
+  const [reveal, setReveal] = useState<Record<string, boolean>>({})
   const update = (i: number, patch: Partial<VariableDef>) => onChange(vars.map((v, idx) => (idx === i ? { ...v, ...patch } : v)))
   const remove = (i: number) => onChange(vars.filter((_, idx) => idx !== i))
-  const add = () => onChange([...vars, { key: '', value: '', enabled: true }])
+  const add = () => onChange([...vars, { id: makeId('var'), key: '', value: '', enabled: true }])
 
   return (
     <div className="kv-table">
@@ -65,7 +68,7 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
         <span />
       </div>
       {vars.map((v, i) => (
-        <div key={i} className={`kv-row ${v.enabled ? '' : 'off'}`} style={{ gridTemplateColumns: '26px 1fr 1.4fr 70px 28px' }}>
+        <div key={v.id ?? i} className={`kv-row ${v.enabled ? '' : 'off'}`} style={{ gridTemplateColumns: '26px 1fr 1.4fr 70px 28px' }}>
           <div className={`ck ${v.enabled ? 'on' : ''}`} onClick={() => update(i, { enabled: !v.enabled })}>
             {v.enabled && <Icon name="check" size={11} strokeWidth={2.4} />}
           </div>
@@ -75,7 +78,7 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
           <div className="kv-cell">
             <input
               value={v.value}
-              type={v.secret && !reveal[i] ? 'password' : 'text'}
+              type={v.secret && !reveal[v.id ?? i] ? 'password' : 'text'}
               placeholder="value"
               onChange={(e) => update(i, { value: e.target.value })}
             />
@@ -85,7 +88,7 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
               {v.secret && <Icon name="check" size={11} strokeWidth={2.4} />}
             </div>
             {v.secret && (
-              <button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setReveal((r) => ({ ...r, [i]: !r[i] }))}>
+              <button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => setReveal((r) => ({ ...r, [v.id ?? i]: !r[v.id ?? i] }))}>
                 <Icon name="eye" size={13} />
               </button>
             )}

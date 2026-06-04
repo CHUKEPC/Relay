@@ -6,7 +6,7 @@ import { useSettings } from '@renderer/store/settings'
 import { useEnvironments } from '@renderer/store/environments'
 import { useResponse } from '@renderer/store/response'
 import { useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
-import { currentScope } from '@renderer/lib/request-runner'
+import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
@@ -62,7 +62,8 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
         resolvedUrl: interpolate(req.url, scope),
         response: lastResult,
         envName: activeEnv?.name,
-        envVarNames: activeEnv?.variables.filter((v) => v.enabled).map((v) => v.key)
+        envVarNames: activeEnv?.variables.filter((v) => v.enabled).map((v) => v.key),
+        secretValues: currentSecretValues()
       })
       label = { label: `${req.method} ${shortPath(req.url)}${lastResult ? ` · ${lastResult.status}` : ''}`, icon: 'doc' }
     }

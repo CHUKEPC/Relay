@@ -34,6 +34,8 @@ export class StorageManager {
   readonly store: JsonStore
   readonly secrets: SecretStore
   private cache = new Map<StorageKey, unknown>()
+  /** Dedupes concurrent first-load/seed of the same key (avoids double-seeding). */
+  private inflight = new Map<StorageKey, Promise<unknown>>()
 
   constructor() {
     const dataDir = join(app.getPath('userData'), 'relay-data')
@@ -43,13 +45,25 @@ export class StorageManager {
 
   async get<K extends StorageKey>(key: K): Promise<StorageMap[K]> {
     if (this.cache.has(key)) return this.cache.get(key) as StorageMap[K]
-    let doc = await this.store.load(key)
-    if (!doc) {
-      doc = SEEDS[key]() as StorageMap[K]
-      this.store.save(key, doc)
+    const existing = this.inflight.get(key)
+    if (existing) return existing as Promise<StorageMap[K]>
+    const load = (async () => {
+      let doc = await this.store.load(key)
+      if (!doc) {
+        doc = SEEDS[key]() as StorageMap[K]
+        // Persist a separate copy so the cached object is never aliased by the
+        // store's pending-write buffer.
+        this.store.save(key, structuredClone(doc))
+      }
+      this.cache.set(key, doc)
+      return doc
+    })()
+    this.inflight.set(key, load)
+    try {
+      return (await load) as StorageMap[K]
+    } finally {
+      this.inflight.delete(key)
     }
-    this.cache.set(key, doc)
-    return doc as StorageMap[K]
   }
 
   set<K extends StorageKey>(key: K, value: StorageMap[K]): void {

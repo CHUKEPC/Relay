@@ -23,11 +23,25 @@ interface EnvState {
   globalScope: () => Record<string, string>
 }
 
+/** Ensure every variable has a stable id so UI keying/secret-reveal is by identity,
+ *  not array index (seeded/imported vars arrive without ids). */
+function withIds(vars: VariableDef[]): VariableDef[] {
+  return vars.map((v) => (v.id ? v : { ...v, id: makeId('var') }))
+}
+
 export const useEnvironments = create<EnvState>((set, get) => ({
   env: emptyEnvironments(),
   globals: emptyGlobals(),
 
-  hydrate: (env, globals) => set({ env: { ...env, version: STORAGE_VERSION }, globals: { ...globals, version: STORAGE_VERSION } }),
+  hydrate: (env, globals) =>
+    set({
+      env: {
+        ...env,
+        version: STORAGE_VERSION,
+        environments: env.environments.map((e) => ({ ...e, variables: withIds(e.variables) }))
+      },
+      globals: { ...globals, version: STORAGE_VERSION, variables: withIds(globals.variables) }
+    }),
 
   setActiveEnv: (id) => {
     const env = { ...get().env, activeEnvironmentId: id }

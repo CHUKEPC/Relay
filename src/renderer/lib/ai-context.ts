@@ -13,7 +13,9 @@ export const SYSTEM_PROMPT = [
   'Never reveal or guess secret values; they are masked as "•••" in the context.'
 ].join('\n')
 
-const SECRET_HEADER_RE = /^(authorization|cookie|proxy-authorization|x-api-key|api-key)$/i
+// Substring match (not anchored) so custom auth headers like X-Auth-Token,
+// X-Access-Token, Api-Secret are masked too — err on the side of masking.
+const SECRET_HEADER_RE = /(authorization|cookie|auth|token|secret|api[-_]?key|password|credential)/i
 
 function maskHeaderValue(key: string, value: string): string {
   if (SECRET_HEADER_RE.test(key)) {
@@ -22,6 +24,16 @@ function maskHeaderValue(key: string, value: string): string {
     return m ? `${m[1]} •••` : '•••'
   }
   return value
+}
+
+/** Redact the literal values of secret variables wherever they appear (URL/body/headers). */
+function redactSecrets(text: string | undefined, secrets: string[]): string | undefined {
+  if (!text || !secrets.length) return text
+  let out = text
+  for (const s of secrets) {
+    if (s && s.length >= 3) out = out.split(s).join('•••')
+  }
+  return out
 }
 
 function truncate(text: string, limit = AI_CONTEXT_BODY_LIMIT): string {
@@ -56,20 +68,23 @@ export interface SnapshotInput {
   response?: ResponseResult
   envName?: string
   envVarNames?: string[]
+  /** literal values of secret-flagged variables, redacted from the snapshot */
+  secretValues?: string[]
 }
 
 export function buildContextSnapshot(input: SnapshotInput): AiContextSnapshot {
   const { request, response } = input
+  const secrets = input.secretValues ?? []
   const snapshot: AiContextSnapshot = {
     request: {
       method: request.method,
       url: request.url,
-      resolvedUrl: input.resolvedUrl,
+      resolvedUrl: redactSecrets(input.resolvedUrl, secrets),
       headers: request.headers
         .filter((h) => h.enabled && h.key)
-        .map((h) => ({ key: h.key, value: maskHeaderValue(h.key, h.value) })),
+        .map((h) => ({ key: h.key, value: redactSecrets(maskHeaderValue(h.key, h.value), secrets) ?? '' })),
       bodyType: request.body.type,
-      bodyPreview: bodySummary(request),
+      bodyPreview: redactSecrets(bodySummary(request), secrets),
       authType: request.auth.type
     }
   }

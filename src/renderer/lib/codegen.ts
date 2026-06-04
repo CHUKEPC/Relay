@@ -76,18 +76,23 @@ function safeJson(s: string): unknown {
   }
 }
 
+/** POSIX-safe single-quoting so quotes/`$`/backticks in values can't break or inject. */
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`
+}
+
 /* ---------------- cURL ---------------- */
 function genCurl(req: RequestModel): string {
-  const lines: string[] = [`curl -X ${req.method} "${effectiveUrl(req)}"`]
-  for (const h of effectiveHeaders(req)) lines.push(`  -H "${h.key}: ${h.value}"`)
+  const lines: string[] = [`curl -X ${req.method} ${shQuote(effectiveUrl(req))}`]
+  for (const h of effectiveHeaders(req)) lines.push(`  -H ${shQuote(`${h.key}: ${h.value}`)}`)
   if (req.body.type === 'formdata') {
     for (const f of req.body.items.filter((i) => i.enabled))
-      lines.push(`  -F "${f.key}=${f.type === 'file' ? '@' + (f.filePath ?? 'file') : f.value}"`)
+      lines.push(`  -F ${shQuote(`${f.key}=${f.type === 'file' ? '@' + (f.filePath ?? 'file') : f.value}`)}`)
   } else if (req.body.type === 'binary' && req.body.filePath) {
-    lines.push(`  --data-binary "@${req.body.filePath}"`)
+    lines.push(`  --data-binary ${shQuote('@' + req.body.filePath)}`)
   } else {
     const b = bodyString(req.body)
-    if (b != null) lines.push(`  -d ${JSON.stringify(b)}`)
+    if (b != null) lines.push(`  -d ${shQuote(b)}`)
   }
   return lines.join(' \\\n')
 }
@@ -99,9 +104,10 @@ function genJsFetch(req: RequestModel): string {
     ? `{\n${headers.map((h) => `    ${JSON.stringify(h.key)}: ${JSON.stringify(h.value)}`).join(',\n')}\n  }`
     : '{}'
   let bodyLine = ''
+  // Embed the body as a string literal — inlining raw text as code breaks on
+  // {{vars}} / non-literal JSON.
   const b = bodyString(req.body)
-  if (req.body.type === 'raw' && req.body.language === 'json') bodyLine = `  body: JSON.stringify(${req.body.text || '{}'}),\n`
-  else if (b != null) bodyLine = `  body: ${JSON.stringify(b)},\n`
+  if (b != null) bodyLine = `  body: ${JSON.stringify(b)},\n`
   return `const res = await fetch(${JSON.stringify(effectiveUrl(req))}, {
   method: ${JSON.stringify(req.method)},
   headers: ${headerObj},
@@ -115,11 +121,10 @@ function genPython(req: RequestModel): string {
   const headers = effectiveHeaders(req)
   const headerDict = `{${headers.map((h) => `${JSON.stringify(h.key)}: ${JSON.stringify(h.value)}`).join(', ')}}`
   let dataArg = ''
-  if (req.body.type === 'raw' && req.body.language === 'json') dataArg = `, json=${req.body.text || '{}'}`
-  else {
-    const b = bodyString(req.body)
-    if (b != null) dataArg = `, data=${JSON.stringify(b)}`
-  }
+  // Embed the body as a string literal — inlining raw text as code breaks on
+  // {{vars}} / non-literal JSON.
+  const b = bodyString(req.body)
+  if (b != null) dataArg = `, data=${JSON.stringify(b)}`
   return `import requests
 
 response = requests.request(${JSON.stringify(req.method)}, ${JSON.stringify(effectiveUrl(req))}, headers=${headerDict}${dataArg})
@@ -138,13 +143,12 @@ function genGo(req: RequestModel): string {
   const b = bodyString(req.body)
   const bodyVar = b != null ? `strings.NewReader(${JSON.stringify(b)})` : 'nil'
   const headerLines = headers.map((h) => `\treq.Header.Set(${JSON.stringify(h.key)}, ${JSON.stringify(h.value)})`).join('\n')
+  // Only import "strings" when it's actually used, else `go build` fails.
+  const imports = ['"fmt"', '"io"', '"net/http"', ...(b != null ? ['"strings"'] : [])]
   return `package main
 
 import (
-\t"fmt"
-\t"io"
-\t"net/http"
-\t"strings"
+${imports.map((i) => `\t${i}`).join('\n')}
 )
 
 func main() {

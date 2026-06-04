@@ -15,6 +15,9 @@ export function beautify(text: string, language: RawLanguage): string {
   return text
 }
 
+// HTML void elements have no closing tag — they must not increase indentation.
+const VOID_ELEMENT_RE = /^<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b/i
+
 function formatXml(xml: string): string {
   const PADDING = '  '
   let formatted = ''
@@ -28,7 +31,7 @@ function formatXml(xml: string): string {
       pad = Math.max(0, pad - 1)
     }
     formatted += PADDING.repeat(pad) + line + '\n'
-    if (/^<[^!?][^>]*[^/]>$/.test(line) && !/^<.*<\/.*>$/.test(line)) {
+    if (/^<[^!?][^>]*[^/]>$/.test(line) && !/^<.*<\/.*>$/.test(line) && !VOID_ELEMENT_RE.test(line)) {
       pad += 1
     }
   }

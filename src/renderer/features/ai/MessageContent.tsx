@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { CodeEditorHl } from './CodeEditorHl'
 import { useTabs } from '@renderer/store/tabs'
@@ -77,21 +77,30 @@ export function MessageContent({ content }: { content: string }) {
 
 function CodeArtifact({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>()
   const patch = useTabs((s) => s.patchActive)
   const openNew = useTabs((s) => s.openNew)
   const showToast = useUi((s) => s.showToast)
 
+  useEffect(() => () => clearTimeout(copyTimer.current), [])
+
   const copy = () => {
     void navigator.clipboard.writeText(code)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => setCopied(false), 1200)
   }
 
   const isCurl = (lang === 'bash' || lang === 'sh' || lang === 'shell') && /curl\s/i.test(code)
 
   const apply = () => {
     if (lang === 'http') {
-      patch(parseHttpBlock(code))
+      const p = parseHttpBlock(code)
+      if (!p.url && !p.method && !p.headers && !p.body) {
+        showToast('Не удалось разобрать ```http блок')
+        return
+      }
+      patch(p)
       showToast('Применено к текущему запросу')
     } else if (isCurl) {
       const { request } = parseCurl(code)
@@ -101,7 +110,11 @@ function CodeArtifact({ lang, code }: { lang: string; code: string }) {
       patch({ testScript: code })
       showToast('Вставлено как тест-скрипт')
     } else if (lang === 'json') {
-      patch({ body: { type: 'raw', language: 'json', text: code } })
+      // Set the body AND a matching Content-Type, preserving other headers.
+      const cur = useTabs.getState().activeTab()?.request.headers ?? []
+      const headers = cur.filter((h) => h.key.toLowerCase() !== 'content-type')
+      headers.push({ key: 'Content-Type', value: 'application/json', enabled: true })
+      patch({ body: { type: 'raw', language: 'json', text: code }, headers })
       showToast('Применено как тело запроса')
     }
   }

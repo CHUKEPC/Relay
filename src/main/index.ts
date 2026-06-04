@@ -116,7 +116,15 @@ app.whenReady().then(async () => {
     if (flushing) return
     e.preventDefault()
     flushing = true
-    storage.flush().finally(() => app.exit(0))
+    // Never hang the quit: force-exit if the flush stalls (disk full/stuck fs).
+    const force = setTimeout(() => app.exit(0), 2000)
+    storage
+      .flush()
+      .catch((err) => console.error('[main] flush on quit failed:', err))
+      .finally(() => {
+        clearTimeout(force)
+        app.exit(0)
+      })
   })
 }).catch((err) => {
   // Surface startup failures rather than silently dying.

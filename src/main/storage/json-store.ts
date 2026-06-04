@@ -12,6 +12,10 @@ export class JsonStore {
   private dir: string
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
   private pending = new Map<string, unknown>()
+  /** Per-key write chain so two flushes of the same key can never interleave. */
+  private writeChains = new Map<string, Promise<void>>()
+  /** Monotonic counter for unique temp-file names (no pid-only collisions). */
+  private writeSeq = 0
   private readonly debounceMs: number
 
   constructor(dir: string, debounceMs = 300) {
@@ -58,8 +62,16 @@ export class JsonStore {
     if (!this.pending.has(key)) return
     const value = this.pending.get(key)
     this.pending.delete(key)
+    // Chain this write after any in-flight write for the same key so their
+    // writeFile/rename pairs can't interleave and corrupt the file.
+    const next = (this.writeChains.get(key) ?? Promise.resolve()).then(() => this.writeFileAtomic(key, value))
+    this.writeChains.set(key, next)
+    await next
+  }
+
+  private async writeFileAtomic(key: string, value: unknown): Promise<void> {
     const file = this.fileFor(key)
-    const tmp = `${file}.${process.pid}.tmp`
+    const tmp = `${file}.${process.pid}.${this.writeSeq++}.tmp`
     try {
       await writeFile(tmp, JSON.stringify(value, null, 2), 'utf8')
       await rename(tmp, file)

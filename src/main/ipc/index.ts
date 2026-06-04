@@ -37,10 +37,15 @@ export function registerIpc(ctx: IpcContext): void {
   // Dialogs + filesystem bridges.
   ipcMain.handle(IPC.dialog.openFile, async (_e, opts: OpenFileOptions): Promise<FilePickResult[] | null> => {
     const win = ctx.getWindow()
-    const result = await dialog.showOpenDialog(win ?? undefined!, {
-      properties: opts.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
-      filters: opts.filters
-    })
+    const result = win
+      ? await dialog.showOpenDialog(win, {
+          properties: opts.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+          filters: opts.filters
+        })
+      : await dialog.showOpenDialog({
+          properties: opts.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
+          filters: opts.filters
+        })
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths.map((filePath) => {
       let sizeBytes = 0
@@ -55,10 +60,9 @@ export function registerIpc(ctx: IpcContext): void {
 
   ipcMain.handle(IPC.dialog.saveFile, async (_e, opts: SaveFileOptions): Promise<string | null> => {
     const win = ctx.getWindow()
-    const result = await dialog.showSaveDialog(win ?? undefined!, {
-      defaultPath: opts.defaultName,
-      filters: opts.filters
-    })
+    const result = win
+      ? await dialog.showSaveDialog(win, { defaultPath: opts.defaultName, filters: opts.filters })
+      : await dialog.showSaveDialog({ defaultPath: opts.defaultName, filters: opts.filters })
     if (result.canceled || !result.filePath) return null
     const data = opts.base64 ? Buffer.from(opts.content, 'base64') : Buffer.from(opts.content, 'utf8')
     await writeFile(result.filePath, data)

@@ -19,6 +19,8 @@ export async function fetchOAuthToken(req: OAuthTokenRequest): Promise<OAuthToke
       params.set('password', req.password ?? '')
     } else {
       params.set('grant_type', 'authorization_code')
+      if (req.code) params.set('code', req.code)
+      if (req.redirectUri) params.set('redirect_uri', req.redirectUri)
     }
     if (req.scope) params.set('scope', req.scope)
     if (req.clientId) params.set('client_id', req.clientId)

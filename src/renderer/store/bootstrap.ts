@@ -4,6 +4,7 @@ import { useEnvironments } from './environments'
 import { useHistory } from './history'
 import { useTabs } from './tabs'
 import { useAi } from './ai'
+import { flushPersist } from './persist'
 import {
   defaultSettingsDoc,
   emptyCollections,
@@ -13,6 +14,8 @@ import {
   emptyProviders,
   emptyTabs
 } from './defaults'
+
+let unloadWired = false
 
 /** Load all persisted documents from main and hydrate the stores. */
 export async function bootstrap(): Promise<void> {
@@ -45,4 +48,11 @@ export async function bootstrap(): Promise<void> {
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 
   watchSystemTheme()
+
+  // Flush any debounced writes before the window unloads so the last edit (made
+  // within the debounce window) isn't lost on quit.
+  if (!unloadWired) {
+    unloadWired = true
+    window.addEventListener('beforeunload', flushPersist)
+  }
 }

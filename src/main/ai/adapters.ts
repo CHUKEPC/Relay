@@ -290,16 +290,19 @@ export function toAnthropicMessages(messages: ChatMessage[]): AnthropicConverted
       continue
     }
     if (m.role === 'tool') {
-      out.push({
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: m.toolCallId ?? '',
-            content: m.content ?? ''
-          }
-        ]
-      })
+      const block: AnthropicToolResultBlock = {
+        type: 'tool_result',
+        tool_use_id: m.toolCallId ?? '',
+        content: m.content ?? ''
+      }
+      // Anthropic requires all tool_result blocks answering one assistant turn to
+      // live in a single user message — merge consecutive tool results.
+      const prev = out[out.length - 1]
+      if (prev && prev.role === 'user' && Array.isArray(prev.content)) {
+        prev.content.push(block)
+      } else {
+        out.push({ role: 'user', content: [block] })
+      }
       continue
     }
     if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
@@ -317,8 +320,11 @@ export function toAnthropicMessages(messages: ChatMessage[]): AnthropicConverted
       out.push({ role: 'assistant', content: blocks })
       continue
     }
-    // Plain user/assistant text message.
-    out.push({ role: m.role as 'user' | 'assistant', content: m.content ?? '' })
+    // Plain user/assistant text message. Anthropic rejects empty content, so
+    // skip an empty assistant turn rather than send an invalid message.
+    const content = m.content ?? ''
+    if (m.role === 'assistant' && !content) continue
+    out.push({ role: m.role as 'user' | 'assistant', content })
   }
 
   const result: AnthropicConverted = { messages: out }
@@ -444,6 +450,12 @@ async function* streamOpenAi(
       } catch {
         continue // ignore keep-alive / malformed fragments
       }
+      // A provider error streamed mid-response (rate limit, content filter, ...).
+      const errObj = (chunk as { error?: { message?: string } }).error
+      if (errObj) {
+        yield { type: 'error', error: errObj.message || 'Provider stream error' }
+        return
+      }
       const choice = chunk.choices?.[0]
       if (!choice) continue
 
@@ -496,6 +508,7 @@ interface AnthropicEvent {
     stop_reason?: string | null
   }
   content_block?: { type?: string; id?: string; name?: string }
+  error?: { type?: string; message?: string }
 }
 
 async function* streamAnthropic(
@@ -605,6 +618,11 @@ async function* streamAnthropic(
         }
         case 'message_stop': {
           yield { type: 'done', finishReason }
+          return
+        }
+        case 'error': {
+          // A provider error streamed mid-response (overloaded, rate limit, ...).
+          yield { type: 'error', error: evt.error?.message || 'Provider stream error' }
           return
         }
         // message_start and anything else: ignore.

@@ -17,28 +17,62 @@ function headerToKV(h: any): KV {
   return { key: h.key ?? '', value: h.value ?? '', enabled: h.disabled !== true, description: h.description }
 }
 
+function parseQueryString(qs: string): KV[] {
+  if (!qs) return []
+  return qs
+    .split('&')
+    .filter(Boolean)
+    .map((pair) => {
+      const eq = pair.indexOf('=')
+      return { key: eq >= 0 ? pair.slice(0, eq) : pair, value: eq >= 0 ? pair.slice(eq + 1) : '', enabled: true }
+    })
+}
+
+/**
+ * Normalize a Postman url (string or object) into a base URL (NO query string)
+ * plus parsed query and path variables. The base must exclude the query because
+ * the model also carries `query[]`; keeping it in the URL would send/display the
+ * params twice (engine appends query[] to the URL).
+ */
 function urlToString(url: any): { raw: string; query: KV[]; pathVars: KV[] } {
-  if (typeof url === 'string') return { raw: url, query: [], pathVars: [] }
+  if (typeof url === 'string') {
+    const qi = url.indexOf('?')
+    return {
+      raw: qi >= 0 ? url.slice(0, qi) : url,
+      query: qi >= 0 ? parseQueryString(url.slice(qi + 1)) : [],
+      pathVars: []
+    }
+  }
   if (!url) return { raw: '', query: [], pathVars: [] }
-  const raw =
-    url.raw ??
-    [
-      Array.isArray(url.host) ? url.host.join('.') : url.host ?? '',
-      Array.isArray(url.path) ? '/' + url.path.join('/') : url.path ?? ''
-    ].join('')
+
   const query: KV[] = (url.query ?? []).map((q: any) => ({
     key: q.key ?? '',
     value: q.value ?? '',
     enabled: q.disabled !== true,
     description: q.description
   }))
+
+  let base: string
+  if (typeof url.raw === 'string') {
+    const qi = url.raw.indexOf('?')
+    base = qi >= 0 ? url.raw.slice(0, qi) : url.raw
+    // Recover params from raw if the structured `query` array was absent.
+    if (qi >= 0 && query.length === 0) query.push(...parseQueryString(url.raw.slice(qi + 1)))
+  } else {
+    const protocol = url.protocol ? `${url.protocol}://` : ''
+    const host = Array.isArray(url.host) ? url.host.join('.') : url.host ?? ''
+    const port = url.port ? `:${url.port}` : ''
+    const path = Array.isArray(url.path) ? '/' + url.path.join('/') : url.path ?? ''
+    base = `${protocol}${host}${port}${path}`
+  }
+
   const pathVars: KV[] = (url.variable ?? []).map((v: any) => ({
     key: v.key ?? '',
     value: v.value ?? '',
     enabled: true,
     description: v.description
   }))
-  return { raw, query, pathVars }
+  return { raw: base, query, pathVars }
 }
 
 function importAuth(a: any): Auth {

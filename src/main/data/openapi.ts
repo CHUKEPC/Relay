@@ -3,11 +3,13 @@
  * The first server URL becomes a {{base_url}} environment variable.
  */
 import { makeId } from '@shared/id'
+import { escapeRegExp } from '@shared/regex'
 import type {
   CollectionFolderNode,
   CollectionNode,
   Environment,
   KV,
+  RawLanguage,
   RequestBody,
   RequestModel
 } from '@shared/types'
@@ -53,7 +55,7 @@ function sampleFromSchema(doc: any, schema: any, depth = 0): unknown {
   }
 }
 
-function operationToRequest(doc: any, path: string, method: string, op: any): RequestModel {
+function operationToRequest(doc: any, path: string, method: string, op: any, warnings: string[]): RequestModel {
   const query: KV[] = []
   const headers: KV[] = []
   const pathVariables: KV[] = []
@@ -87,6 +89,24 @@ function operationToRequest(doc: any, path: string, method: string, op: any): Re
       const schema = resolveRef(doc, content['multipart/form-data'].schema)
       const items = Object.keys(schema?.properties ?? {}).map((k) => ({ key: k, type: 'text' as const, value: '', enabled: true }))
       body = { type: 'formdata', items }
+    } else {
+      // Any other content type (xml, text, octet-stream, ...) — import the first
+      // declared one as raw instead of silently dropping the body.
+      const firstType = Object.keys(content)[0]
+      if (firstType) {
+        const sample = sampleFromSchema(doc, content[firstType].schema)
+        const language: RawLanguage = firstType.includes('xml')
+          ? 'xml'
+          : firstType.includes('json')
+            ? 'json'
+            : firstType.includes('html')
+              ? 'html'
+              : 'text'
+        const text = typeof sample === 'string' ? sample : JSON.stringify(sample, null, 2)
+        body = { type: 'raw', language, text }
+        headers.push({ key: 'Content-Type', value: firstType, enabled: true })
+        warnings.push(`Imported "${method.toUpperCase()} ${path}" body as raw (${firstType}).`)
+      }
     }
   }
 
@@ -125,7 +145,7 @@ export function importOpenApi(doc: any): OpenApiImportResult {
     for (const method of METHODS) {
       const op = pathItem?.[method]
       if (!op) continue
-      const request = operationToRequest(doc, path, method, op)
+      const request = operationToRequest(doc, path, method, op, warnings)
       const node: CollectionNode = { id: request.id, type: 'request', request }
       const tag = Array.isArray(op.tags) && op.tags.length ? op.tags[0] : ''
       if (tag) {
@@ -156,7 +176,7 @@ export function importOpenApi(doc: any): OpenApiImportResult {
   if (server?.url) {
     let url: string = server.url
     for (const [k, v] of Object.entries<any>(server.variables ?? {})) {
-      url = url.replace(new RegExp(`\\{${k}\\}`, 'g'), v.default ?? '')
+      url = url.replace(new RegExp(`\\{${escapeRegExp(k)}\\}`, 'g'), () => v.default ?? '')
     }
     environment = {
       id: makeId('env'),

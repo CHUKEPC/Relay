@@ -17,7 +17,10 @@ export interface PendingConfirm {
 export interface UiChatMessage {
   id: string
   role: 'user' | 'assistant'
+  /** display content (may include tool-status decorations) */
   content: string
+  /** clean text for replay to the provider (no UI decorations); falls back to `content` */
+  apiContent?: string
   context?: { label: string; icon: string }
   streaming?: boolean
   error?: boolean
@@ -29,6 +32,8 @@ interface AiState {
   isStreaming: boolean
   currentStreamId: string | null
   pendingConfirm: PendingConfirm | null
+  /** generation token; bumped by cancel()/clearThread()/new send() to invalidate an in-flight loop */
+  runGen: number
   confirmTool: (approved: boolean) => void
   hydrateProviders: (doc: ProvidersDoc) => void
   setActiveProvider: (id: string) => void
@@ -63,6 +68,7 @@ export const useAi = create<AiState>((set, get) => ({
   isStreaming: false,
   currentStreamId: null,
   pendingConfirm: null,
+  runGen: 0,
 
   confirmTool: (approved) => {
     const pc = get().pendingConfirm
@@ -81,8 +87,10 @@ export const useAi = create<AiState>((set, get) => ({
   },
 
   setProviderModel: (id, model) => {
+    // Only change the provider's default model — do NOT hijack the active provider
+    // (callers that also want to activate it call setActiveProvider explicitly).
     const list = get().providers.providers.map((p) => (p.id === id ? { ...p, defaultModel: model } : p))
-    const providers = { ...get().providers, providers: list, activeProviderId: id }
+    const providers = { ...get().providers, providers: list }
     set({ providers })
     commitProviders(providers)
   },
@@ -117,7 +125,7 @@ export const useAi = create<AiState>((set, get) => ({
   clearProviderKey: async (id) => {
     const ref = `provider:${id}`
     await window.api.secretsDelete(ref)
-    get().updateProvider(id, { hasKey: false })
+    get().updateProvider(id, { hasKey: false, apiKeyRef: undefined })
   },
 
   activeProvider: () => {
@@ -127,18 +135,33 @@ export const useAi = create<AiState>((set, get) => ({
 
   isConnected: () => !!get().activeProvider()?.hasKey,
 
-  clearThread: () => set({ thread: [] }),
+  clearThread: () => {
+    const id = get().currentStreamId
+    if (id) void window.api.aiCancel(id)
+    get().pendingConfirm?.resolve(false)
+    set({ thread: [], isStreaming: false, currentStreamId: null, pendingConfirm: null, runGen: get().runGen + 1 })
+  },
 
   send: async (text, snapshot, ctxLabel) => {
     const provider = get().activeProvider()
     if (!provider) return
 
+    // A new run invalidates any in-flight loop; `cancelled()` lets the loop bail
+    // out after cancel()/clearThread()/another send().
+    const runGen = get().runGen + 1
+    set({ runGen })
+    const cancelled = (): boolean => get().runGen !== runGen
+    // Unblock a confirm dialog left open by a previous run so its send() coroutine
+    // isn't orphaned forever.
+    get().pendingConfirm?.resolve(false)
+    if (get().pendingConfirm) set({ pendingConfirm: null })
+
     const userMsg: UiChatMessage = { id: makeId('msg'), role: 'user', content: text, context: ctxLabel }
     set({ thread: [...get().thread, userMsg] })
 
     const priorTurns: ChatMessage[] = get()
-      .thread.filter((m) => !m.streaming && m.content && m.id !== userMsg.id)
-      .map((m) => ({ role: m.role, content: m.content }))
+      .thread.filter((m) => !m.streaming && (m.apiContent ?? m.content) && m.id !== userMsg.id)
+      .map((m) => ({ role: m.role, content: m.apiContent ?? m.content }))
     const systemContent = snapshot ? `${SYSTEM_PROMPT}\n\n${buildContextBlock(snapshot)}` : SYSTEM_PROMPT
     const providerMessages: ChatMessage[] = [
       { role: 'system', content: systemContent },
@@ -153,6 +176,7 @@ export const useAi = create<AiState>((set, get) => ({
       // Tool-calling loop: stream a turn; if the model requested tools, execute
       // them (with confirmation for mutating ones) and loop for the final answer.
       for (let iter = 0; iter < 5; iter++) {
+        if (cancelled()) break
         const assistantId = makeId('msg')
         set((s) => ({ thread: [...s.thread, { id: assistantId, role: 'assistant', content: '', streaming: true }] }))
         const patchAssistant = (fn: (m: UiChatMessage) => UiChatMessage) =>
@@ -184,8 +208,11 @@ export const useAi = create<AiState>((set, get) => ({
         } finally {
           unsubscribe()
         }
-        patchAssistant((m) => ({ ...m, streaming: false }))
+        // Persist the clean streamed text (no UI decorations) for cross-turn replay.
+        patchAssistant((m) => ({ ...m, streaming: false, apiContent: collectedText }))
 
+        // Stopped by the user (or superseded) — do not start another tool round.
+        if (cancelled()) break
         if (errored || toolCalls.length === 0) break
 
         providerMessages.push({ role: 'assistant', content: collectedText, toolCalls })
@@ -195,21 +222,27 @@ export const useAi = create<AiState>((set, get) => ({
             const d = describeToolCall(call.name, safeParse(call.arguments))
             approved = await new Promise<boolean>((resolve) => set({ pendingConfirm: { title: d.title, detail: d.detail, resolve } }))
           }
+          if (cancelled()) break
           const result = approved ? await executeTool(call.name, call.arguments) : 'User rejected this action.'
           providerMessages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: result })
           patchAssistant((m) => ({ ...m, content: `${m.content}${m.content ? '\n\n' : ''}_🔧 ${call.name}: ${approved ? 'выполнено' : 'отклонено'}_` }))
         }
       }
     } finally {
-      set({ isStreaming: false, currentStreamId: null })
-      set((s) => ({ thread: s.thread.map((m) => (m.streaming ? { ...m, streaming: false } : m)) }))
+      // Only clear shared streaming state if this run is still current — otherwise
+      // a newer run owns it and must not be stomped.
+      if (!cancelled()) {
+        set({ isStreaming: false, currentStreamId: null })
+        set((s) => ({ thread: s.thread.map((m) => (m.streaming ? { ...m, streaming: false } : m)) }))
+      }
     }
   },
 
   cancel: () => {
     const id = get().currentStreamId
     if (id) void window.api.aiCancel(id)
-    set({ isStreaming: false, currentStreamId: null })
+    get().pendingConfirm?.resolve(false)
+    set({ isStreaming: false, currentStreamId: null, pendingConfirm: null, runGen: get().runGen + 1 })
     set((s) => ({ thread: s.thread.map((m) => (m.streaming ? { ...m, streaming: false } : m)) }))
   }
 }))

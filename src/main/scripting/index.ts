@@ -173,15 +173,36 @@ function json(v: unknown): string {
   }
 }
 
-export function runScript(payload: ScriptRunRequest): ScriptRunResult {
+/**
+ * Coerce a script-supplied variable value to the string we persist. Objects are
+ * JSON-serialized (not lossily turned into "[object Object]"); null/undefined
+ * become an empty string instead of the literals "null"/"undefined".
+ */
+function coerceVar(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') {
+    try {
+      return JSON.stringify(v)
+    } catch {
+      return String(v)
+    }
+  }
+  return String(v)
+}
+
+export async function runScript(payload: ScriptRunRequest): Promise<ScriptRunResult> {
   const logs: ScriptConsoleLine[] = []
   const tests: ScriptTestResult[] = []
+  const pendingTests: Promise<void>[] = []
   const envUpdates: Record<string, string | null> = {}
   const globalUpdates: Record<string, string | null> = {}
 
   const env = { ...payload.environment }
   const globals = { ...payload.globals }
-  const merged = () => ({ ...globals, ...env })
+  const collection = { ...(payload.collection ?? {}) }
+  // Precedence mirrors the interpolation resolver: collection > environment > global.
+  const merged = () => ({ ...globals, ...env, ...collection })
 
   const reqState = {
     url: payload.request.url,
@@ -238,8 +259,9 @@ export function runScript(payload: ScriptRunRequest): ScriptRunResult {
     environment: {
       get: (k: string) => env[k],
       set: (k: string, v: unknown) => {
-        env[k] = String(v)
-        envUpdates[k] = String(v)
+        const s = coerceVar(v)
+        env[k] = s
+        envUpdates[k] = s
       },
       unset: (k: string) => {
         delete env[k]
@@ -250,8 +272,9 @@ export function runScript(payload: ScriptRunRequest): ScriptRunResult {
     globals: {
       get: (k: string) => globals[k],
       set: (k: string, v: unknown) => {
-        globals[k] = String(v)
-        globalUpdates[k] = String(v)
+        const s = coerceVar(v)
+        globals[k] = s
+        globalUpdates[k] = s
       },
       unset: (k: string) => {
         delete globals[k]
@@ -287,10 +310,25 @@ export function runScript(payload: ScriptRunRequest): ScriptRunResult {
       }
     },
     response: responseObj,
-    test: (name: string, fn: () => void) => {
+    test: (name: string, fn: () => void | Promise<void>) => {
       try {
-        fn()
-        tests.push({ name, passed: true })
+        const r = fn() as unknown
+        if (r && typeof (r as PromiseLike<unknown>).then === 'function') {
+          // Async test body: record the verdict when it settles (awaited below),
+          // instead of falsely passing and leaking an unhandled rejection.
+          pendingTests.push(
+            Promise.resolve(r).then(
+              () => {
+                tests.push({ name, passed: true })
+              },
+              (err) => {
+                tests.push({ name, passed: false, error: err instanceof Error ? err.message : String(err) })
+              }
+            )
+          )
+        } else {
+          tests.push({ name, passed: true })
+        }
       } catch (err) {
         tests.push({ name, passed: false, error: err instanceof Error ? err.message : String(err) })
       }
@@ -315,6 +353,18 @@ export function runScript(payload: ScriptRunRequest): ScriptRunResult {
       globalUpdates,
       error: err instanceof Error ? err.message : String(err)
     }
+  }
+
+  // Settle any async pm.test(...) bodies, bounded so a non-resolving test can't hang.
+  if (pendingTests.length) {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      Promise.allSettled(pendingTests),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 3000)
+      })
+    ])
+    if (timer) clearTimeout(timer)
   }
 
   const requestPatch =

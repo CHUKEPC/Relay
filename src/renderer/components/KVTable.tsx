@@ -1,4 +1,5 @@
 import type { KV, VariableScope } from '@shared/types'
+import { makeId } from '@shared/id'
 import { Icon } from './Icon'
 import { HighlightedInput } from './HighlightedInput'
 
@@ -33,7 +34,9 @@ export function KVTable({
 
   const update = (i: number, patch: Partial<KV>) => onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i))
-  const add = () => onChange([...rows, { key: '', value: '', enabled: true, description: '' }])
+  // Stable id so React keys by identity, not array index (keeps focus/state on
+  // the right row when an earlier row is removed).
+  const add = () => onChange([...rows, { id: makeId('kv'), key: '', value: '', enabled: true, description: '' }])
 
   return (
     <div className="kv-area">

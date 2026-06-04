@@ -18,6 +18,14 @@ function detectKind(text: string): ImportKind {
   return 'auto'
 }
 
+function parseJsonOrThrow(text: string, label: string): any {
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`This doesn't look like valid ${label} JSON. Check the document (note: YAML is not supported).`)
+  }
+}
+
 export function importData(kind: ImportKind, text: string): ImportResult[] {
   const resolved = kind === 'auto' ? detectKind(text) : kind
   switch (resolved) {
@@ -26,12 +34,12 @@ export function importData(kind: ImportKind, text: string): ImportResult[] {
       return [{ kind: 'request', request, warnings }]
     }
     case 'postman': {
-      const obj = JSON.parse(text)
+      const obj = parseJsonOrThrow(text, 'Postman')
       const collection = importPostmanCollection(obj)
       return [{ kind: 'collection', collection, warnings: [] }]
     }
     case 'openapi': {
-      const obj = JSON.parse(text)
+      const obj = parseJsonOrThrow(text, 'OpenAPI')
       const { collection, environment, warnings } = importOpenApi(obj)
       const results: ImportResult[] = [{ kind: 'collection', collection, warnings }]
       if (environment) results.push({ kind: 'environment', environment, warnings: [] })
@@ -45,7 +53,7 @@ export function importData(kind: ImportKind, text: string): ImportResult[] {
 export function registerDataHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(IPC.data.import, async (_e, kind: ImportKind, text: string) => importData(kind, text))
   ipcMain.handle(IPC.data.export, async (_e, collectionJson: string) => {
-    const node = JSON.parse(collectionJson)
+    const node = parseJsonOrThrow(collectionJson, 'collection')
     return JSON.stringify(exportPostmanCollection(node), null, 2)
   })
 }

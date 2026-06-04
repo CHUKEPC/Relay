@@ -39,6 +39,21 @@ export function ProviderDetail({
   const [saving, setSaving] = useState(false)
   const [keyHint, setKeyHint] = useState<KeyHint>(null)
   const [modelOpen, setModelOpen] = useState(false)
+  const [secretsOk, setSecretsOk] = useState<boolean | null>(null)
+
+  // Probe OS-keychain availability so the UI is honest about how the key is stored.
+  useEffect(() => {
+    let cancelled = false
+    window.api
+      .secretsAvailable()
+      .then((ok) => {
+        if (!cancelled) setSecretsOk(ok)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Reset transient field state when switching between providers.
   useEffect(() => {
@@ -185,8 +200,9 @@ export function ProviderDetail({
           </div>
         )}
         <div className="hint">
-          Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к
-          провайдеру.
+          {secretsOk === false
+            ? '⚠ OS-хранилище ключей недоступно — ключ сохраняется локально в открытом виде (base64). Настройте системный keychain, чтобы он шифровался.'
+            : 'Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к провайдеру.'}
         </div>
       </div>
 

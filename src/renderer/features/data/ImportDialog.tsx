@@ -21,6 +21,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const onFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = () => setText(String(reader.result ?? ''))
+    reader.onerror = () => setError('Не удалось прочитать файл')
     reader.readAsText(file)
   }
 
@@ -80,7 +81,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           type="file"
           accept=".json,.txt,.yaml,.yml,.curl,application/json"
           style={{ display: 'none' }}
-          onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) onFile(f)
+            e.target.value = '' // allow re-selecting the same file
+          }}
         />
         <button className="btn" style={{ marginTop: 8 }} onClick={() => fileRef.current?.click()}>
           <Icon name="upload" size={14} />

@@ -111,10 +111,13 @@ function PathVarsTable({
   const valueOf = (key: string) => pathVariables.find((p) => p.key === key)?.value ?? ''
   const set = (key: string, value: string) => {
     const exists = pathVariables.some((p) => p.key === key)
+    // Keep path-variable values even when the name isn't currently in the URL —
+    // the table only displays `detected`, but pruning here loses stored values
+    // during transient URL edits.
     const next = exists
       ? pathVariables.map((p) => (p.key === key ? { ...p, value } : p))
       : [...pathVariables, { key, value, enabled: true }]
-    onChange(next.filter((p) => detected.includes(p.key)))
+    onChange(next)
   }
   return (
     <div className="kv-area">

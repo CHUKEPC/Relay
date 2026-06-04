@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CollectionNode } from '@shared/types'
 import { Modal } from '@renderer/components/primitives'
 import { useCollections } from '@renderer/store/collections'
@@ -38,11 +38,17 @@ export function SaveDialog({
   const [name, setName] = useState(initialName)
   const [parentId, setParentId] = useState(targets[0]?.id ?? '')
 
-  // keep state fresh when reopened
-  useMemo(() => {
-    setName(initialName)
-    if (!parentId && targets[0]) setParentId(targets[0].id)
-  }, [initialName, open])
+  // Reset the name when the dialog (re)opens.
+  useEffect(() => {
+    if (open) setName(initialName)
+  }, [open, initialName])
+
+  // Keep the selected parent valid — re-seed if it no longer exists (e.g. the
+  // folder was deleted while the dialog was closed), so confirm() can't save
+  // into a non-existent parent.
+  useEffect(() => {
+    setParentId((cur) => (cur && targets.some((t) => t.id === cur) ? cur : targets[0]?.id ?? ''))
+  }, [open, targets])
 
   const confirm = () => {
     let target = parentId

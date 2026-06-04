@@ -145,7 +145,9 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       clientSecret: auth.clientSecret,
       scope: auth.scope,
       username: auth.username,
-      password: auth.password
+      password: auth.password,
+      code: auth.code,
+      redirectUri: auth.redirectUri
     })
     setBusy(false)
     if (res.ok && res.accessToken) {
@@ -188,6 +190,16 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
           </Field>
           <Field label="Password">
             <input className="input" type="password" value={auth.password ?? ''} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
+          </Field>
+        </>
+      )}
+      {auth.grant === 'authorization_code' && (
+        <>
+          <Field label="Authorization Code">
+            <input className="input mono" value={auth.code ?? ''} onChange={(e) => setAuth({ ...auth, code: e.target.value })} placeholder="код, полученный после редиректа" />
+          </Field>
+          <Field label="Redirect URI">
+            <input className="input mono" value={auth.redirectUri ?? ''} onChange={(e) => setAuth({ ...auth, redirectUri: e.target.value })} placeholder="https://app.example.com/callback" />
           </Field>
         </>
       )}

@@ -1,4 +1,4 @@
-import type { RequestModel, RequestSettings, VariableDef, VariableScope } from '@shared/types'
+import type { RequestModel, RequestSettings, RequestSpec, VariableDef, VariableScope } from '@shared/types'
 import { makeId } from '@shared/id'
 import { useTabs } from '../store/tabs'
 import { useCollections } from '../store/collections'
@@ -64,7 +64,8 @@ export async function sendActiveRequest(): Promise<void> {
         code: workingReq.preRequestScript,
         request: workingReq,
         environment: envStore.envScope(),
-        globals: envStore.globalScope()
+        globals: envStore.globalScope(),
+        collection: collections.collectionScopeFor(tab.savedRequestId)
       })
       persistVarUpdates(result.environmentUpdates, result.globalUpdates)
       if (result.requestPatch) {
@@ -87,13 +88,34 @@ export async function sendActiveRequest(): Promise<void> {
     global: useEnvironments.getState().globalScope()
   }
   const inheritedAuth = collections.inheritedAuthFor(tab.savedRequestId)
-  const { spec } = buildRequestSpec(workingReq, scope, settings, inheritedAuth)
 
   // 3) send
   const requestId = makeId('rq')
   useResponse.getState().setLoading(tab.id, requestId)
+
+  let spec: RequestSpec
+  try {
+    spec = buildRequestSpec(workingReq, scope, settings, inheritedAuth).spec
+  } catch (err) {
+    // Never leave the tab stuck on "loading" — surface a structured build error.
+    const message = err instanceof Error ? err.message : String(err)
+    useResponse.getState().setResult(tab.id, requestId, {
+      ok: false,
+      status: 0,
+      statusText: '',
+      headers: [],
+      cookies: [],
+      body: { contentType: '', isBinary: false, sizeBytes: 0 },
+      timings: { startedAt: Date.now(), totalMs: 0 },
+      redirects: [],
+      finalUrl: workingReq.url,
+      error: { kind: 'unknown', message: `Failed to build request: ${message}` }
+    })
+    return
+  }
+
   const result = await window.api.sendRequest(spec, { requestId })
-  useResponse.getState().setResult(tab.id, result)
+  useResponse.getState().setResult(tab.id, requestId, result)
 
   // 4) history
   useHistory.getState().add(
@@ -120,15 +142,16 @@ export async function sendActiveRequest(): Promise<void> {
         request: workingReq,
         response: result,
         environment: useEnvironments.getState().envScope(),
-        globals: useEnvironments.getState().globalScope()
+        globals: useEnvironments.getState().globalScope(),
+        collection: collections.collectionScopeFor(tab.savedRequestId)
       })
       persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
-      useResponse.getState().setTests(tab.id, scriptRes.tests, scriptRes.logs)
+      useResponse.getState().setTests(tab.id, requestId, scriptRes.tests, scriptRes.logs)
     } catch (err) {
       console.error('test script failed', err)
     }
   } else {
-    useResponse.getState().setTests(tab.id, [], [])
+    useResponse.getState().setTests(tab.id, requestId, [], [])
   }
 }
 
@@ -149,4 +172,13 @@ export function currentScope(): VariableScope {
     environment: envStore.envScope(),
     global: envStore.globalScope()
   }
+}
+
+/** Literal values of secret-flagged variables (env + globals), to redact from AI context. */
+export function currentSecretValues(): string[] {
+  const envStore = useEnvironments.getState()
+  const active = envStore.activeEnv()
+  return [...(active?.variables ?? []), ...envStore.globals.variables]
+    .filter((v) => v.secret && v.enabled)
+    .map((v) => v.value)
 }

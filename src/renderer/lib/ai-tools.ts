@@ -3,6 +3,7 @@ import { useTabs } from '../store/tabs'
 import { useEnvironments } from '../store/environments'
 import { useResponse } from '../store/response'
 import { sendActiveRequest } from './request-runner'
+import { splitUrl } from './url'
 
 /** Tools the assistant may call. Mutating/sending tools require confirmation. */
 export const TOOL_SPECS: ToolSpec[] = [
@@ -101,9 +102,18 @@ export async function executeTool(name: string, rawArgs: string): Promise<string
     }
     case 'update_current_request': {
       const patch: any = {}
-      if (args.method) patch.method = args.method
-      if (args.url) patch.url = args.url
-      if (Array.isArray(args.headers)) patch.headers = args.headers.map((h: KV) => ({ key: h.key, value: h.value, enabled: true }))
+      if (typeof args.method === 'string' && args.method) patch.method = args.method.toUpperCase()
+      if (typeof args.url === 'string' && args.url) {
+        // Split any query string out of the URL so it isn't sent twice (the model
+        // tends to provide a full URL while request.query is kept separately).
+        const { base, query } = splitUrl(args.url)
+        patch.url = base
+        if (query.length) patch.query = query
+      }
+      if (Array.isArray(args.headers))
+        patch.headers = args.headers
+          .filter((h: any) => h && h.key)
+          .map((h: KV) => ({ key: h.key, value: h.value ?? '', enabled: true }))
       if (typeof args.body === 'string') patch.body = { type: 'raw', language: args.bodyLanguage ?? 'json', text: args.body }
       tabs.patchActive(patch)
       return 'Request updated.'
