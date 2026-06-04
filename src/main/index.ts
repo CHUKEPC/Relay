@@ -6,10 +6,13 @@ import { StorageManager } from './storage'
 import { registerIpc } from './ipc'
 import { abortAllRequests } from './http'
 import { abortAllAiStreams } from './ai'
+import { startSandboxHost, stopScriptSandbox } from './scripting'
 
 let mainWindow: BrowserWindow | null = null
 
-const isDev = !app.isPackaged
+// `app` is undefined when this bundle is re-forked as the script sandbox
+// (ELECTRON_RUN_AS_NODE) — stay throw-safe until the role branch below.
+const isDev = !app?.isPackaged
 
 function contentSecurityPolicy(): string {
   const scriptExtra = isDev ? " 'unsafe-inline' 'unsafe-eval'" : ''
@@ -90,7 +93,12 @@ function createWindow(): void {
   })
 }
 
-app.whenReady().then(async () => {
+if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
+  // This process was re-forked as the isolated pm.* script sandbox — run the
+  // host message loop, never the Electron app.
+  startSandboxHost()
+} else {
+  app.whenReady().then(async () => {
   // Content Security Policy for all sessions.
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({
@@ -122,6 +130,7 @@ app.whenReady().then(async () => {
     if (flushing) return
     abortAllRequests()
     abortAllAiStreams()
+    stopScriptSandbox()
     e.preventDefault()
     flushing = true
     // Never hang the quit: force-exit if the flush stalls (disk full/stuck fs).
@@ -134,12 +143,13 @@ app.whenReady().then(async () => {
         app.exit(0)
       })
   })
-}).catch((err) => {
-  // Surface startup failures rather than silently dying.
-  console.error('[main] failed to start:', err)
-  app.quit()
-})
+  }).catch((err) => {
+    // Surface startup failures rather than silently dying.
+    console.error('[main] failed to start:', err)
+    app.quit()
+  })
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+}
