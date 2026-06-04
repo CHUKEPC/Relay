@@ -1,0 +1,20 @@
+node_modules/
+out/
+dist/
+release/
+.npmcache/
+.eslintcache
+*.log
+.DS_Store
+.vite/
+stats.html
+
+# Secrets & local env overrides — never commit
+.env
+.env.*
+*.local
+coverage/
+
+# Build instructions / Claude config — kept private (intentional)
+.claude
+CLAUDE.md

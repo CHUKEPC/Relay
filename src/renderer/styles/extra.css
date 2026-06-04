@@ -1,0 +1,308 @@
+/* ============================================================
+   Relay — renderer-only additions on top of the ported design.
+   (Tooltips, modals, highlighted inputs, test results, preview…)
+   ============================================================ */
+
+/* ---------- Radix tooltip ---------- */
+.rl-tooltip {
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--tx-0);
+  font-size: 11.5px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  max-width: 320px;
+  z-index: 200;
+  animation: scaleIn 0.12s var(--ease-out);
+  line-height: 1.5;
+}
+.rl-tooltip .mono {
+  color: var(--accent);
+}
+.rl-tooltip-arrow {
+  fill: var(--bg-2);
+}
+
+/* ---------- modal dialog ---------- */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: oklch(0.1 0.01 264 / 0.5);
+  backdrop-filter: blur(3px);
+  z-index: 120;
+  animation: fadeIn 0.14s;
+}
+[data-theme='light'] .modal-scrim {
+  background: oklch(0.5 0.02 264 / 0.25);
+}
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow: auto;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  z-index: 121;
+  padding: 20px;
+  animation: scaleIn 0.18s var(--ease-out);
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-bottom: 14px;
+}
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* ---------- highlighted variable input ---------- */
+.hl-input {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+.hl-input .hl-mirror,
+.hl-input input {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  white-space: pre;
+  letter-spacing: normal;
+}
+.hl-input .hl-mirror {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  color: var(--tx-0);
+  display: flex;
+  align-items: center;
+}
+.hl-input input {
+  position: relative;
+  width: 100%;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--tx-0);
+  z-index: 1;
+}
+.hl-input input::placeholder {
+  color: var(--tx-3);
+}
+.hl-mirror .tok {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
+.hl-mirror .tok.unresolved {
+  color: var(--s-4xx);
+  background: color-mix(in oklch, var(--s-4xx) 14%, transparent);
+  text-decoration: underline dotted;
+}
+.hl-mirror .ph {
+  color: var(--tx-3);
+}
+
+/* ---------- request settings / generic rows reused ---------- */
+.req-settings {
+  padding: 16px 14px;
+  max-width: 560px;
+}
+
+/* ---------- test results ---------- */
+.test-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.test-badge {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+.test-badge.pass {
+  color: var(--s-2xx);
+  background: color-mix(in oklch, var(--s-2xx) 14%, transparent);
+}
+.test-badge.fail {
+  color: var(--s-5xx);
+  background: color-mix(in oklch, var(--s-5xx) 14%, transparent);
+}
+.test-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.test-row .t-ico.pass {
+  color: var(--s-2xx);
+}
+.test-row .t-ico.fail {
+  color: var(--s-5xx);
+}
+.test-row .t-err {
+  color: var(--s-5xx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-top: 3px;
+}
+.console-line {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--tx-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-line.error {
+  color: var(--s-5xx);
+}
+.console-line.warn {
+  color: var(--s-4xx);
+}
+
+/* ---------- preview frame ---------- */
+.preview-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+.preview-image-wrap {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  height: 100%;
+  overflow: auto;
+}
+.preview-image-wrap img {
+  max-width: 100%;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+
+/* ---------- inline rename input ---------- */
+.inline-edit {
+  background: var(--bg-0);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font: inherit;
+  color: var(--tx-0);
+  width: 100%;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- code gen / textarea blocks ---------- */
+.code-block {
+  margin: 0 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  overflow: hidden;
+}
+.code-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.code-block pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  overflow: auto;
+  white-space: pre;
+  max-height: 360px;
+}
+
+/* ---------- toast ---------- */
+.toast-host {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+.toast {
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--tx-0);
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeUp 0.2s var(--ease-out);
+}
+.toast.error {
+  border-color: color-mix(in oklch, var(--s-5xx) 40%, var(--line-2));
+}
+.toast .t-ico.ok {
+  color: var(--s-2xx);
+}
+.toast .t-ico.err {
+  color: var(--s-5xx);
+}
+
+/* ---------- ai apply bar ---------- */
+.ai-apply {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.ai-apply .sug-chip {
+  cursor: pointer;
+}
+
+/* ---------- var manager table reuse ---------- */
+.var-editor {
+  padding: 6px 0;
+}
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 16px 6px;
+}
+
+/* unresolved variable url flag */
+.url-flag {
+  color: var(--s-4xx);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  margin-left: 8px;
+}

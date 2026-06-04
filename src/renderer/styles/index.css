@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Generic helpers used across the ported design components. */
+.grow {
+  flex: 1;
+}
+.nodrag {
+  -webkit-app-region: no-drag;
+}
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+/* Monaco fills its container. */
+.monaco-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Hide Monaco's focus outline (we provide our own container border). */
+.monaco-editor .overflow-guard {
+  border-radius: inherit;
+}
