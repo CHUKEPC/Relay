@@ -6,6 +6,7 @@ import { useEnvironments } from '../store/environments'
 import { useSettings } from '../store/settings'
 import { useResponse } from '../store/response'
 import { useHistory } from '../store/history'
+import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
 
 function settingsToRequestSettings(): RequestSettings {
@@ -68,6 +69,9 @@ export async function sendActiveRequest(): Promise<void> {
         collection: collections.collectionScopeFor(tab.savedRequestId)
       })
       persistVarUpdates(result.environmentUpdates, result.globalUpdates)
+      // Pre-request scripts have no results pane — surface a failure so it isn't
+      // silently dropped (e.g. a sandbox timeout that skipped an auth header).
+      if (result.error) useUi.getState().showToast(`Pre-request скрипт: ${result.error}`, 'error')
       if (result.requestPatch) {
         workingReq = {
           ...workingReq,

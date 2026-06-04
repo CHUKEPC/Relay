@@ -3,17 +3,22 @@
  *
  * Pre-request / test scripts can come from an imported (untrusted) collection and
  * run on every send, and `node:vm` is not a security boundary on its own (host
- * objects leak the host `Function`). So each run is executed in an ISOLATED CHILD
- * PROCESS: the app re-forks its own bundle with `RELAY_SCRIPT_SANDBOX=1` (routed
- * to `startSandboxHost`, NOT the Electron app), `ELECTRON_RUN_AS_NODE=1` (run the
- * Electron binary as plain Node), and `--disallow-code-generation-from-strings`
- * (blocks eval/`new Function` — the only vm escape vector). The script is thus
- * confined to the `pm.*`/`console` surface, cannot reach the main process or its
- * decrypted secrets, and a CPU-bound runaway is killed by the parent.
+ * objects leak the host `Function`). So each run is executed in its OWN ISOLATED
+ * CHILD PROCESS: the app re-forks its own bundle with `RELAY_SCRIPT_SANDBOX=1`
+ * (routed to `startSandboxHost`, NOT the Electron app), `ELECTRON_RUN_AS_NODE=1`
+ * (run the Electron binary as plain Node), and
+ * `--disallow-code-generation-from-strings` (blocks eval/`new Function` — the only
+ * vm escape vector). The script is confined to the `pm.*`/`console` surface,
+ * cannot reach the main process or its decrypted secrets, and a CPU-bound runaway
+ * is killed by the parent.
  *
- * A single long-lived child is reused (correlated by id) for speed and re-forked
- * if it hangs/crashes. If this environment can't run the child at all, runs fall
- * back to the hardened in-process vm so scripting still works.
+ * IMPORTANT: there is intentionally NO in-process fallback. Running a script in
+ * the main process (which is NOT launched with the flag) would re-open the exact
+ * vm escape this exists to close, so when a child can't be forked we FAIL CLOSED
+ * (return an error) rather than execute the script unsandboxed.
+ *
+ * One child per run: each call owns its child and listeners, so a timeout/crash
+ * only affects that one run — never a concurrent one.
  */
 import { fork, type ChildProcess } from 'node:child_process'
 import type { IpcMain } from 'electron'
@@ -40,99 +45,133 @@ function errorResult(error: string): ScriptRunResult {
 /** Wire the forked child's message loop. Called from main/index.ts when the
  *  process was re-forked with RELAY_SCRIPT_SANDBOX=1. */
 export function startSandboxHost(): void {
-  process.on('message', async (msg: { id: number; payload: ScriptRunRequest }) => {
+  // Self-test: confirm eval/new Function are actually disabled here (i.e. the
+  // --disallow-code-generation-from-strings flag took effect). If they are NOT,
+  // the only barrier left is the in-vm codeGeneration option, which the threat
+  // model treats as insufficient (host objects leak the host Function) — so we
+  // FAIL CLOSED and refuse to execute the script at all rather than run it under
+  // weak isolation.
+  let codegenBlocked = false
+  try {
+    // eslint-disable-next-line no-new-func
+    Function('return 1')()
+  } catch {
+    codegenBlocked = true
+  }
+  process.on('message', async (msg: { payload: ScriptRunRequest }) => {
     let result: ScriptRunResult
-    try {
-      result = await runSandbox(msg.payload)
-    } catch (err) {
-      result = errorResult(err instanceof Error ? err.message : String(err))
+    if (!codegenBlocked) {
+      result = errorResult('Script sandbox isolation is unavailable on this platform')
+    } else {
+      try {
+        result = await runSandbox(msg.payload)
+      } catch (err) {
+        result = errorResult(err instanceof Error ? err.message : String(err))
+      }
     }
-    process.send?.({ id: msg.id, result })
+    try {
+      process.send?.({ result, codegenBlocked })
+    } catch {
+      /* parent went away — nothing to do */
+    }
   })
 }
 
 /* ============================================================
- * App side — manage the isolated child process.
+ * App side — one isolated child per run; fail closed.
  * ============================================================ */
 
-let child: ChildProcess | null = null
-let childUsable = true
-let seq = 0
-const pending = new Map<number, { resolve: (r: ScriptRunResult) => void; payload: ScriptRunRequest }>()
+/** Live sandbox children, so they can all be reaped on app shutdown. */
+const liveChildren = new Set<ChildProcess>()
+let warnedNoFlag = false
 
-function ensureChild(): ChildProcess | null {
-  if (!childUsable) return null
-  if (child && child.connected) return child
-  try {
-    child = fork(__filename, [], {
-      env: { ...process.env, RELAY_SCRIPT_SANDBOX: '1', ELECTRON_RUN_AS_NODE: '1' },
-      execArgv: ['--disallow-code-generation-from-strings']
-    })
-  } catch {
-    childUsable = false
-    child = null
-    return null
+// Cap concurrent sandbox children so a collection run / rapid sends can't spawn
+// dozens of heavyweight Electron-as-Node processes at once.
+const MAX_CONCURRENT_SANDBOXES = 4
+let activeCount = 0
+const slotWaiters: Array<() => void> = []
+
+function acquireSlot(): Promise<void> {
+  if (activeCount < MAX_CONCURRENT_SANDBOXES) {
+    activeCount++
+    return Promise.resolve()
   }
-  let proven = false
-  child.on('message', (msg: { id: number; result: ScriptRunResult }) => {
-    proven = true
-    const entry = pending.get(msg.id)
-    if (entry) {
-      pending.delete(msg.id)
-      entry.resolve(msg.result)
-    }
-  })
-  const onGone = (): void => {
-    child = null
-    const stranded = [...pending.values()]
-    pending.clear()
-    if (!proven) {
-      // The child never returned a result → this environment can't run it.
-      // Degrade to the hardened in-process vm for these and all future runs.
-      childUsable = false
-      for (const e of stranded) void runSandbox(e.payload).then(e.resolve, () => e.resolve(errorResult('Script failed')))
-    } else {
-      // A proven child died (crash or timeout-kill): do NOT re-run in-process
-      // (it may be a hung/hostile script that would freeze main). Surface an
-      // error; the next call re-forks a fresh child.
-      for (const e of stranded) e.resolve(errorResult('Script sandbox stopped'))
-    }
-  }
-  child.once('exit', onGone)
-  child.once('error', onGone)
-  return child
+  return new Promise<void>((resolve) => slotWaiters.push(resolve))
 }
 
-/** Kill the sandbox child (call on app shutdown, or when a script hangs). */
+function releaseSlot(): void {
+  const next = slotWaiters.shift()
+  if (next) next() // hand our slot to the next waiter (activeCount unchanged)
+  else activeCount--
+}
+
+/** Kill all sandbox children (call on app shutdown). */
 export function stopScriptSandbox(): void {
-  if (child) child.kill('SIGKILL')
+  for (const c of liveChildren) {
+    try {
+      c.kill('SIGKILL')
+    } catch {
+      /* already gone */
+    }
+  }
+  liveChildren.clear()
 }
 
-export function runScript(payload: ScriptRunRequest): Promise<ScriptRunResult> {
-  const proc = ensureChild()
-  if (!proc) return runSandbox(payload) // no isolated child available → hardened in-process vm
-  const id = ++seq
+function runOne(payload: ScriptRunRequest): Promise<ScriptRunResult> {
   return new Promise<ScriptRunResult>((resolve) => {
+    let proc: ChildProcess
+    try {
+      proc = fork(__filename, [], {
+        env: { ...process.env, RELAY_SCRIPT_SANDBOX: '1', ELECTRON_RUN_AS_NODE: '1' },
+        execArgv: ['--disallow-code-generation-from-strings']
+      })
+    } catch {
+      // Fail closed — never run a script in-process (that re-opens the vm escape).
+      resolve(errorResult('Script sandbox unavailable'))
+      return
+    }
+    liveChildren.add(proc)
+
     let settled = false
     const finish = (r: ScriptRunResult): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      pending.delete(id)
+      liveChildren.delete(proc)
+      try {
+        proc.kill('SIGKILL')
+      } catch {
+        /* already gone */
+      }
       resolve(r)
     }
-    const timer = setTimeout(() => {
-      finish(errorResult('Script execution timed out'))
-      stopScriptSandbox() // a CPU-blocked child can't be unstuck; it re-forks next call
-    }, HARD_TIMEOUT_MS)
-    pending.set(id, { resolve: finish, payload })
+    const timer = setTimeout(() => finish(errorResult('Script execution timed out')), HARD_TIMEOUT_MS)
+
+    proc.once('message', (msg: { result?: ScriptRunResult; codegenBlocked?: boolean }) => {
+      if (msg?.codegenBlocked === false && !warnedNoFlag) {
+        warnedNoFlag = true
+        console.warn('[scripting] sandbox child is NOT enforcing code-generation restrictions')
+      }
+      finish(msg?.result ?? errorResult('Script sandbox returned no result'))
+    })
+    proc.once('error', () => finish(errorResult('Script sandbox unavailable')))
+    proc.once('exit', () => finish(errorResult('Script sandbox stopped')))
+
     try {
-      proc.send({ id, payload })
+      proc.send({ payload })
     } catch {
-      // Couldn't hand off → run in-process so the script still executes.
-      void runSandbox(payload).then(finish, () => finish(errorResult('Script failed')))
+      finish(errorResult('Script sandbox unavailable'))
     }
   })
+}
+
+export async function runScript(payload: ScriptRunRequest): Promise<ScriptRunResult> {
+  await acquireSlot()
+  try {
+    return await runOne(payload)
+  } finally {
+    releaseSlot()
+  }
 }
 
 export function registerScriptHandlers(ipcMain: IpcMain): void {

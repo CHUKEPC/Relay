@@ -1,7 +1,7 @@
 /**
- * The pure `pm.*` sandbox runner. NO electron / IPC / worker concerns here so it
- * stays unit-testable. It is executed inside an isolated CHILD PROCESS (see
- * `./worker.ts` + `./index.ts`) that is launched with
+ * The pure `pm.*` sandbox runner. NO electron / IPC / child-process concerns here
+ * so it stays unit-testable. It is executed inside an isolated CHILD PROCESS (see
+ * `startSandboxHost` + `runScript` in `./index.ts`) that is launched with
  * `--disallow-code-generation-from-strings`, which blocks `eval`/`Function`
  * (the only `node:vm` escape vector) — so even a hostile imported-collection
  * script cannot reach Node APIs, the main process, or its decrypted secrets.
