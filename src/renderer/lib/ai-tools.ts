@@ -1,0 +1,138 @@
+import type { KV, ToolSpec } from '@shared/types'
+import { useTabs } from '../store/tabs'
+import { useEnvironments } from '../store/environments'
+import { useResponse } from '../store/response'
+import { sendActiveRequest } from './request-runner'
+
+/** Tools the assistant may call. Mutating/sending tools require confirmation. */
+export const TOOL_SPECS: ToolSpec[] = [
+  {
+    name: 'get_current_request',
+    description: 'Read the currently open request (method, url, headers, body, auth type). Secret values are masked.',
+    parameters: { type: 'object', properties: {} }
+  },
+  {
+    name: 'get_last_response',
+    description: 'Read a summary of the last response for the open request (status, time, size, truncated body).',
+    parameters: { type: 'object', properties: {} }
+  },
+  {
+    name: 'update_current_request',
+    description: 'Modify the currently open request. Only provided fields are changed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        method: { type: 'string' },
+        url: { type: 'string' },
+        headers: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, value: { type: 'string' } } } },
+        body: { type: 'string', description: 'raw request body' },
+        bodyLanguage: { type: 'string', enum: ['json', 'text', 'xml', 'html', 'javascript'] }
+      }
+    }
+  },
+  {
+    name: 'set_variable',
+    description: 'Set an environment or global variable.',
+    parameters: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['environment', 'global'] },
+        key: { type: 'string' },
+        value: { type: 'string' }
+      },
+      required: ['scope', 'key', 'value']
+    }
+  },
+  {
+    name: 'send_request',
+    description: 'Send the currently open request and return the response status.',
+    parameters: { type: 'object', properties: {} }
+  }
+]
+
+const MUTATING = new Set(['update_current_request', 'set_variable', 'send_request'])
+
+export function isMutating(name: string): boolean {
+  return MUTATING.has(name)
+}
+
+export function describeToolCall(name: string, args: any): { title: string; detail: string } {
+  switch (name) {
+    case 'update_current_request':
+      return { title: 'Изменить текущий запрос', detail: JSON.stringify(args, null, 2) }
+    case 'set_variable':
+      return { title: `Установить переменную (${args.scope})`, detail: `${args.key} = ${args.value}` }
+    case 'send_request':
+      return { title: 'Отправить текущий запрос', detail: 'Запрос будет выполнен.' }
+    default:
+      return { title: name, detail: JSON.stringify(args, null, 2) }
+  }
+}
+
+const SECRET_RE = /^(authorization|cookie|x-api-key|api-key)$/i
+
+export async function executeTool(name: string, rawArgs: string): Promise<string> {
+  let args: any = {}
+  try {
+    args = JSON.parse(rawArgs || '{}')
+  } catch {
+    /* ignore */
+  }
+  const tabs = useTabs.getState()
+  const tab = tabs.activeTab()
+
+  switch (name) {
+    case 'get_current_request': {
+      if (!tab) return 'No request open.'
+      const r = tab.request
+      return JSON.stringify({
+        method: r.method,
+        url: r.url,
+        headers: r.headers.filter((h) => h.enabled).map((h) => ({ key: h.key, value: SECRET_RE.test(h.key) ? '•••' : h.value })),
+        bodyType: r.body.type,
+        authType: r.auth.type
+      })
+    }
+    case 'get_last_response': {
+      if (!tab) return 'No request open.'
+      const res = useResponse.getState().get(tab.id).result
+      if (!res) return 'No response yet.'
+      return JSON.stringify({ status: res.status, timeMs: res.timings.totalMs, sizeBytes: res.body.sizeBytes, bodyPreview: (res.body.text ?? '').slice(0, 2000) })
+    }
+    case 'update_current_request': {
+      const patch: any = {}
+      if (args.method) patch.method = args.method
+      if (args.url) patch.url = args.url
+      if (Array.isArray(args.headers)) patch.headers = args.headers.map((h: KV) => ({ key: h.key, value: h.value, enabled: true }))
+      if (typeof args.body === 'string') patch.body = { type: 'raw', language: args.bodyLanguage ?? 'json', text: args.body }
+      tabs.patchActive(patch)
+      return 'Request updated.'
+    }
+    case 'set_variable': {
+      const envStore = useEnvironments.getState()
+      if (args.scope === 'global') {
+        const vars = [...envStore.globals.variables]
+        const i = vars.findIndex((v) => v.key === args.key)
+        if (i >= 0) vars[i] = { ...vars[i], value: args.value }
+        else vars.push({ key: args.key, value: args.value, enabled: true })
+        envStore.setGlobalVars(vars)
+      } else {
+        const active = envStore.activeEnv()
+        if (!active) return 'No active environment to set the variable in.'
+        const vars = [...active.variables]
+        const i = vars.findIndex((v) => v.key === args.key)
+        if (i >= 0) vars[i] = { ...vars[i], value: args.value }
+        else vars.push({ key: args.key, value: args.value, enabled: true })
+        envStore.setEnvVars(active.id, vars)
+      }
+      return `Variable ${args.key} set.`
+    }
+    case 'send_request': {
+      await sendActiveRequest()
+      const res = tab ? useResponse.getState().get(tab.id).result : undefined
+      return res ? `Sent. Status ${res.status} in ${res.timings.totalMs} ms.` : 'Sent.'
+    }
+    default:
+      return `Unknown tool: ${name}`
+  }
+}

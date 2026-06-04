@@ -1,0 +1,39 @@
+name: CI
+
+# Fast validation on every push / PR: lint, unit tests, and a production bundle.
+# Full multi-OS packaging + Releases happens in release.yml on version tags.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint · Test · Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint + type-check
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build bundle
+        run: npm run build

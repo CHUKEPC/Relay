@@ -1,0 +1,45 @@
+appId: com.relay.apiclient
+productName: Relay
+copyright: Copyright © 2026 Relay
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# No native modules are used (JSON storage), so no rebuild step is required.
+npmRebuild: false
+
+win:
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-Setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  # Local/dev builds are unsigned. For distribution configure signing + notarization.
+  identity: null
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}.${ext}
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  maintainer: Relay
+  synopsis: API client with a built-in multi-provider AI assistant

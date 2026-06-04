@@ -1,0 +1,200 @@
+import { create } from 'zustand'
+import type {
+  Auth,
+  CollectionFolderNode,
+  CollectionNode,
+  CollectionsDoc,
+  RequestModel,
+  VariableDef
+} from '@shared/types'
+import { STORAGE_VERSION } from '@shared/constants'
+import { makeId } from '@shared/id'
+import { flattenVariables } from '@shared/interpolate'
+import { emptyCollections } from './defaults'
+import { persist } from './persist'
+
+export interface Located {
+  node: CollectionNode
+  ancestors: CollectionFolderNode[]
+}
+
+function locate(nodes: CollectionNode[], id: string, ancestors: CollectionFolderNode[] = []): Located | null {
+  for (const node of nodes) {
+    if (node.id === id) return { node, ancestors }
+    if (node.type !== 'request') {
+      const found = locate(node.children, id, [...ancestors, node])
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function mapTree(nodes: CollectionNode[], fn: (n: CollectionNode) => CollectionNode | null): CollectionNode[] {
+  const out: CollectionNode[] = []
+  for (const node of nodes) {
+    const mapped = fn(node)
+    if (!mapped) continue
+    if (mapped.type !== 'request') {
+      out.push({ ...mapped, children: mapTree(mapped.children, fn) })
+    } else {
+      out.push(mapped)
+    }
+  }
+  return out
+}
+
+function insertInto(nodes: CollectionNode[], parentId: string, child: CollectionNode): CollectionNode[] {
+  return nodes.map((n) => {
+    if (n.type === 'request') return n
+    if (n.id === parentId) return { ...n, children: [...n.children, child] }
+    return { ...n, children: insertInto(n.children, parentId, child) }
+  })
+}
+
+interface CollectionsState {
+  doc: CollectionsDoc
+  hydrate: (doc: CollectionsDoc) => void
+  setAll: (collections: CollectionFolderNode[]) => void
+  addCollectionNode: (node: CollectionFolderNode) => void
+  addCollection: (name: string) => string
+  addFolder: (parentId: string, name: string) => string
+  addRequest: (parentId: string, request: RequestModel) => void
+  updateRequest: (requestId: string, request: RequestModel) => void
+  renameNode: (id: string, name: string) => void
+  removeNode: (id: string) => void
+  duplicateNode: (id: string) => void
+  updateFolderMeta: (id: string, patch: Partial<Pick<CollectionFolderNode, 'auth' | 'variables' | 'preRequestScript' | 'testScript' | 'description'>>) => void
+  getRequest: (requestId: string) => RequestModel | null
+  collectionScopeFor: (requestId: string | null) => Record<string, string>
+  inheritedAuthFor: (requestId: string | null) => Auth
+  locate: (id: string) => Located | null
+}
+
+export const useCollections = create<CollectionsState>((set, get) => {
+  const commit = (collections: CollectionFolderNode[]) => {
+    const doc = { version: STORAGE_VERSION, collections }
+    set({ doc })
+    persist('collections', doc)
+  }
+  const topLevel = () => get().doc.collections as CollectionNode[]
+
+  return {
+    doc: emptyCollections(),
+    hydrate: (doc) => set({ doc: { ...doc, version: STORAGE_VERSION } }),
+    setAll: (collections) => commit(collections),
+    addCollectionNode: (node) => commit([...get().doc.collections, node]),
+
+    addCollection: (name) => {
+      const id = makeId('col')
+      commit([...get().doc.collections, { id, type: 'collection', name, children: [] }])
+      return id
+    },
+
+    addFolder: (parentId, name) => {
+      const id = makeId('fld')
+      const folder: CollectionNode = { id, type: 'folder', name, children: [] }
+      commit(insertInto(topLevel(), parentId, folder) as CollectionFolderNode[])
+      return id
+    },
+
+    addRequest: (parentId, request) => {
+      const node: CollectionNode = { id: request.id, type: 'request', request }
+      commit(insertInto(topLevel(), parentId, node) as CollectionFolderNode[])
+    },
+
+    updateRequest: (requestId, request) => {
+      const next = mapTree(topLevel(), (n) =>
+        n.type === 'request' && n.request.id === requestId ? { ...n, request } : n
+      )
+      commit(next as CollectionFolderNode[])
+    },
+
+    renameNode: (id, name) => {
+      const next = mapTree(topLevel(), (n) => {
+        if (n.id !== id) return n
+        if (n.type === 'request') return { ...n, request: { ...n.request, name } }
+        return { ...n, name }
+      })
+      commit(next as CollectionFolderNode[])
+    },
+
+    removeNode: (id) => {
+      const next = mapTree(topLevel(), (n) => (n.id === id ? null : n))
+      commit(next as CollectionFolderNode[])
+    },
+
+    duplicateNode: (id) => {
+      const found = locate(topLevel(), id)
+      if (!found) return
+      const clone = cloneNodeWithNewIds(found.node)
+      if (found.ancestors.length === 0) {
+        // top-level collection
+        commit([...get().doc.collections, clone as CollectionFolderNode])
+      } else {
+        const parent = found.ancestors[found.ancestors.length - 1]
+        commit(insertInto(topLevel(), parent.id, clone) as CollectionFolderNode[])
+      }
+    },
+
+    updateFolderMeta: (id, patch) => {
+      const next = mapTree(topLevel(), (n) => (n.id === id && n.type !== 'request' ? { ...n, ...patch } : n))
+      commit(next as CollectionFolderNode[])
+    },
+
+    getRequest: (requestId) => {
+      if (!requestId) return null
+      const found = locate(topLevel(), requestId)
+      return found && found.node.type === 'request' ? found.node.request : null
+    },
+
+    collectionScopeFor: (requestId) => {
+      if (!requestId) return {}
+      const found = locate(topLevel(), requestId)
+      if (!found) return {}
+      // root → leaf so deeper folders override the collection
+      const merged: Record<string, string> = {}
+      for (const a of found.ancestors) Object.assign(merged, flattenVariables(a.variables))
+      return merged
+    },
+
+    inheritedAuthFor: (requestId) => {
+      if (!requestId) return { type: 'none' }
+      const found = locate(topLevel(), requestId)
+      if (!found) return { type: 'none' }
+      for (let i = found.ancestors.length - 1; i >= 0; i--) {
+        const a = found.ancestors[i].auth
+        if (a && a.type !== 'inherit') return a
+      }
+      return { type: 'none' }
+    },
+
+    locate: (id) => locate(topLevel(), id)
+  }
+})
+
+function cloneNodeWithNewIds(node: CollectionNode): CollectionNode {
+  if (node.type === 'request') {
+    const id = makeId('req')
+    return { id, type: 'request', request: { ...node.request, id, name: `${node.request.name} copy` } }
+  }
+  return {
+    ...node,
+    id: makeId(node.type === 'collection' ? 'col' : 'fld'),
+    name: `${node.name} copy`,
+    children: node.children.map(cloneNodeWithNewIds)
+  }
+}
+
+export function emptyRequest(name = 'Untitled'): RequestModel {
+  return {
+    id: makeId('req'),
+    name,
+    method: 'GET',
+    url: '',
+    query: [],
+    headers: [],
+    pathVariables: [],
+    body: { type: 'none' },
+    auth: { type: 'inherit' }
+  }
+}
