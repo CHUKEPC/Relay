@@ -4,6 +4,8 @@ import { APP_NAME } from '@shared/constants'
 import { IPC } from '@shared/ipc-contract'
 import { StorageManager } from './storage'
 import { registerIpc } from './ipc'
+import { abortAllRequests } from './http'
+import { abortAllAiStreams } from './ai'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -80,6 +82,10 @@ function createWindow(): void {
   }
 
   mainWindow.on('closed', () => {
+    // Drop any in-flight HTTP/AI work tied to this window (matters on macOS where
+    // the app stays alive after the window closes).
+    abortAllRequests()
+    abortAllAiStreams()
     mainWindow = null
   })
 }
@@ -114,6 +120,8 @@ app.whenReady().then(async () => {
   let flushing = false
   app.on('will-quit', (e) => {
     if (flushing) return
+    abortAllRequests()
+    abortAllAiStreams()
     e.preventDefault()
     flushing = true
     // Never hang the quit: force-exit if the flush stalls (disk full/stuck fs).

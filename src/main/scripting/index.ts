@@ -198,11 +198,14 @@ export async function runScript(payload: ScriptRunRequest): Promise<ScriptRunRes
   const envUpdates: Record<string, string | null> = {}
   const globalUpdates: Record<string, string | null> = {}
 
-  const env = { ...payload.environment }
-  const globals = { ...payload.globals }
-  const collection = { ...(payload.collection ?? {}) }
+  // Null-prototype maps so a variable named like an Object.prototype member
+  // ('toString', 'constructor', '__proto__', ...) resolves to undefined/false
+  // instead of an inherited function, and `in` checks only see real variables.
+  const env: Record<string, string> = Object.assign(Object.create(null), payload.environment)
+  const globals: Record<string, string> = Object.assign(Object.create(null), payload.globals)
+  const collection: Record<string, string> = Object.assign(Object.create(null), payload.collection ?? {})
   // Precedence mirrors the interpolation resolver: collection > environment > global.
-  const merged = () => ({ ...globals, ...env, ...collection })
+  const merged = (): Record<string, string> => Object.assign(Object.create(null), globals, env, collection)
 
   const reqState = {
     url: payload.request.url,
@@ -341,7 +344,11 @@ export async function runScript(payload: ScriptRunRequest): Promise<ScriptRunRes
 
   const sandboxConsole = { log: log('log'), info: log('info'), warn: log('warn'), error: log('error'), debug: log('log') }
 
-  const context = createContext({ pm, console: sandboxConsole })
+  // Disallow eval / new Function inside the sandbox realm (defense in depth).
+  // NOTE: node:vm is NOT a complete security boundary — host objects we expose
+  // still reach the host Function via their prototype chain. Untrusted scripts
+  // (e.g. imported collections) should ultimately run in an isolated worker.
+  const context = createContext({ pm, console: sandboxConsole }, { codeGeneration: { strings: false, wasm: false } })
 
   try {
     runInContext(payload.code, context, { timeout: 3000, displayErrors: true })

@@ -37,6 +37,7 @@ export function CodeEditor({ value, language = 'json', onChange, readOnly = fals
     <div className="monaco-host">
       <Editor
         path={pathRef.current}
+        saveViewState={false}
         value={value}
         language={language}
         theme={theme}

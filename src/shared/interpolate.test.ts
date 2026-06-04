@@ -61,6 +61,13 @@ describe('variable interpolation', () => {
     expect(interpolate('{{a}}', s)).toBe('DONE')
   })
 
+  it('does not treat inherited Object.prototype names as variables (no crash)', () => {
+    const s: VariableScope = { environment: { real: 'x' } }
+    const r = resolveString('{{constructor}}/{{toString}}/{{__proto__}}', s)
+    expect(r.value).toBe('{{constructor}}/{{toString}}/{{__proto__}}')
+    expect(r.unresolved).toContain('constructor')
+  })
+
   it('reports the fully resolved value for a nested token', () => {
     const s: VariableScope = { environment: { a: '{{b}}', b: 'final' } }
     const r = resolveString('{{a}}', s)

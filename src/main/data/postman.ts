@@ -7,6 +7,7 @@ import type {
   CollectionFolderNode,
   CollectionNode,
   KV,
+  OAuth2Grant,
   RequestBody,
   RequestModel
 } from '@shared/types'
@@ -94,6 +95,29 @@ function importAuth(a: any): Auth {
       const where = pick(a.apikey ?? [], 'in') || 'header'
       return { type: 'apikey', key: pick(a.apikey ?? [], 'key'), value: pick(a.apikey ?? [], 'value'), addTo: where === 'query' ? 'query' : 'header' }
     }
+    case 'oauth2': {
+      const o = a.oauth2 ?? []
+      const g = pick(o, 'grant_type')
+      const grant: OAuth2Grant =
+        g === 'password_credentials' || g === 'password'
+          ? 'password'
+          : g === 'authorization_code'
+            ? 'authorization_code'
+            : 'client_credentials'
+      return {
+        type: 'oauth2',
+        grant,
+        accessToken: pick(o, 'accessToken'),
+        headerPrefix: pick(o, 'headerPrefix') || 'Bearer',
+        tokenUrl: pick(o, 'accessTokenUrl') || undefined,
+        authUrl: pick(o, 'authUrl') || undefined,
+        clientId: pick(o, 'clientId') || undefined,
+        clientSecret: pick(o, 'clientSecret') || undefined,
+        scope: pick(o, 'scope') || undefined
+      }
+    }
+    case 'digest':
+      return { type: 'digest', username: pick(a.digest ?? [], 'username'), password: pick(a.digest ?? [], 'password') }
     case 'noauth':
       return { type: 'none' }
     default:
@@ -213,6 +237,28 @@ function exportAuth(auth?: Auth): any {
           { key: 'key', value: auth.key, type: 'string' },
           { key: 'value', value: auth.value, type: 'string' },
           { key: 'in', value: auth.addTo, type: 'string' }
+        ]
+      }
+    case 'oauth2':
+      return {
+        type: 'oauth2',
+        oauth2: [
+          { key: 'accessToken', value: auth.accessToken, type: 'string' },
+          { key: 'grant_type', value: auth.grant, type: 'string' },
+          { key: 'accessTokenUrl', value: auth.tokenUrl ?? '', type: 'string' },
+          { key: 'authUrl', value: auth.authUrl ?? '', type: 'string' },
+          { key: 'clientId', value: auth.clientId ?? '', type: 'string' },
+          { key: 'clientSecret', value: auth.clientSecret ?? '', type: 'string' },
+          { key: 'scope', value: auth.scope ?? '', type: 'string' },
+          { key: 'headerPrefix', value: auth.headerPrefix ?? 'Bearer', type: 'string' }
+        ]
+      }
+    case 'digest':
+      return {
+        type: 'digest',
+        digest: [
+          { key: 'username', value: auth.username, type: 'string' },
+          { key: 'password', value: auth.password, type: 'string' }
         ]
       }
     case 'none':

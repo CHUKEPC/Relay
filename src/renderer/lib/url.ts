@@ -6,7 +6,11 @@ export function splitUrl(full: string): { base: string; query: KV[] } {
   const qi = full.indexOf('?')
   if (qi === -1) return { base: full, query: [] }
   const base = full.slice(0, qi)
-  const qs = full.slice(qi + 1)
+  let qs = full.slice(qi + 1)
+  // A '#' fragment is client-only (never sent) — drop it so it isn't folded into,
+  // and percent-corrupt, the last query param's value.
+  const hashI = qs.indexOf('#')
+  if (hashI >= 0) qs = qs.slice(0, hashI)
   const query: KV[] = qs
     .split('&')
     .filter((p) => p.length > 0)

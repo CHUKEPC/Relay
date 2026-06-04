@@ -36,7 +36,9 @@ function sampleFromSchema(doc: any, schema: any, depth = 0): unknown {
   const type = schema.type ?? (schema.properties ? 'object' : undefined)
   switch (type) {
     case 'object': {
-      const out: Record<string, unknown> = {}
+      // Null-prototype so a schema property literally named `__proto__` is stored
+      // as an own key (and round-trips) instead of reassigning the object's prototype.
+      const out: Record<string, unknown> = Object.create(null)
       const props = schema.properties ?? {}
       for (const [k, v] of Object.entries(props)) out[k] = sampleFromSchema(doc, v, depth + 1)
       return out

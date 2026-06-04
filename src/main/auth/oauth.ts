@@ -10,6 +10,11 @@ import type { OAuthTokenRequest, OAuthTokenResult } from '@shared/types'
 
 export async function fetchOAuthToken(req: OAuthTokenRequest): Promise<OAuthTokenResult> {
   try {
+    // Token endpoint runs from the main process (no CORS, full network position) —
+    // restrict to http(s) so a config can't point it at file:// or odd schemes.
+    if (!/^https?:\/\//i.test(req.tokenUrl ?? '')) {
+      return { ok: false, error: 'Token URL must be an http(s) URL' }
+    }
     const params = new URLSearchParams()
     if (req.grant === 'client_credentials') {
       params.set('grant_type', 'client_credentials')

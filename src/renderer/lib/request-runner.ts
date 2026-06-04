@@ -178,11 +178,14 @@ export function currentScope(): VariableScope {
   }
 }
 
-/** Literal values of secret-flagged variables (env + globals), to redact from AI context. */
+/** Literal values of secret-flagged variables (collection + env + globals), to redact from AI context. */
 export function currentSecretValues(): string[] {
   const envStore = useEnvironments.getState()
   const active = envStore.activeEnv()
-  return [...(active?.variables ?? []), ...envStore.globals.variables]
+  const tab = useTabs.getState().activeTab()
+  const collectionSecrets = useCollections.getState().collectionSecretValues(tab?.savedRequestId ?? null)
+  const envGlobalSecrets = [...(active?.variables ?? []), ...envStore.globals.variables]
     .filter((v) => v.secret && v.enabled)
     .map((v) => v.value)
+  return [...envGlobalSecrets, ...collectionSecrets]
 }

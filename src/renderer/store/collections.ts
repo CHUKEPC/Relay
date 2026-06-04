@@ -66,6 +66,7 @@ interface CollectionsState {
   updateFolderMeta: (id: string, patch: Partial<Pick<CollectionFolderNode, 'auth' | 'variables' | 'preRequestScript' | 'testScript' | 'description'>>) => void
   getRequest: (requestId: string) => RequestModel | null
   collectionScopeFor: (requestId: string | null) => Record<string, string>
+  collectionSecretValues: (requestId: string | null) => string[]
   inheritedAuthFor: (requestId: string | null) => Auth
   locate: (id: string) => Located | null
 }
@@ -155,6 +156,19 @@ export const useCollections = create<CollectionsState>((set, get) => {
       const merged: Record<string, string> = {}
       for (const a of found.ancestors) Object.assign(merged, flattenVariables(a.variables))
       return merged
+    },
+
+    collectionSecretValues: (requestId) => {
+      if (!requestId) return []
+      const found = locate(topLevel(), requestId)
+      if (!found) return []
+      const out: string[] = []
+      for (const a of found.ancestors) {
+        for (const v of a.variables ?? []) {
+          if (v.secret && v.enabled && v.value) out.push(v.value)
+        }
+      }
+      return out
     },
 
     inheritedAuthFor: (requestId) => {

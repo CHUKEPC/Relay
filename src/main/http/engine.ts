@@ -625,6 +625,12 @@ export async function runRequest(
           }
           cookieJar.clear()
           userCookie = undefined
+          // Don't carry a "disable TLS verification" choice to a host the user
+          // didn't opt into — revert to secure verification across origins.
+          if (dispatcher) {
+            void dispatcher.close().catch(() => {})
+            dispatcher = undefined
+          }
         }
 
         // Per RFC 7231: 303 (and commonly 301/302) downgrade to GET and drop
@@ -701,7 +707,9 @@ async function finalizeResponse(
     }
   }
 
-  const isBinary = buf.length > 0 && !TEXTY_CONTENT_TYPE_RE.test(contentType)
+  // An empty/missing Content-Type defaults to text (servers that omit it usually
+  // return text/JSON) rather than being misclassified as binary.
+  const isBinary = buf.length > 0 && contentType !== '' && !TEXTY_CONTENT_TYPE_RE.test(contentType)
 
   const body: ResponseResult['body'] = isBinary
     ? { base64: buf.toString('base64'), contentType, isBinary: true, sizeBytes: buf.length, encoding: 'base64' }

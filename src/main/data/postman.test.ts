@@ -49,6 +49,33 @@ describe('Postman import', () => {
     expect(req.query.filter((q: any) => q.key === 'debug').length).toBe(1) // not duplicated
   })
 
+  it('imports OAuth2 auth instead of dropping it to inherit', () => {
+    const col = importPostmanCollection({
+      info: { name: 'C' },
+      item: [
+        {
+          name: 'r',
+          request: {
+            method: 'GET',
+            url: 'https://api/x',
+            auth: {
+              type: 'oauth2',
+              oauth2: [
+                { key: 'accessToken', value: 'tok123' },
+                { key: 'grant_type', value: 'client_credentials' },
+                { key: 'accessTokenUrl', value: 'https://auth/token' }
+              ]
+            }
+          }
+        }
+      ]
+    })
+    const req = firstRequest(col)
+    expect(req.auth.type).toBe('oauth2')
+    expect(req.auth.accessToken).toBe('tok123')
+    expect(req.auth.tokenUrl).toBe('https://auth/token')
+  })
+
   it('reconstructs protocol/port/path when raw is missing', () => {
     const col = importPostmanCollection({
       info: { name: 'C' },

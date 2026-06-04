@@ -39,10 +39,16 @@ function resolveProvider(
   }
 }
 
-export function registerAiHandlers(ipcMain: IpcMain, deps: AiHandlerDeps): void {
-  // Active streams keyed by streamId so `ai:cancel` can abort them.
-  const controllers = new Map<string, AbortController>()
+// Active streams keyed by streamId so `ai:cancel` (and shutdown) can abort them.
+const controllers = new Map<string, AbortController>()
 
+/** Abort every in-flight AI stream — call on window close / app quit. */
+export function abortAllAiStreams(): void {
+  for (const c of controllers.values()) c.abort()
+  controllers.clear()
+}
+
+export function registerAiHandlers(ipcMain: IpcMain, deps: AiHandlerDeps): void {
   /* ---- ai:chat — start a streaming chat ---- */
   ipcMain.handle(IPC.ai.chat, async (event: IpcMainInvokeEvent, payload: AiChatStart) => {
     const sender: WebContents = event.sender

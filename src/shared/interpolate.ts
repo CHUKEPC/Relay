@@ -65,15 +65,22 @@ function pick<T>(arr: T[]): T {
   return arr[randomInt(0, arr.length - 1)]
 }
 
+/** Own-property check — NOT `in`, which would match inherited Object.prototype
+ *  members (constructor, toString, __proto__, ...) and return a function value
+ *  that later code would try to `.replace()` on, throwing. */
+function hasOwn(obj: Record<string, string>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
 function lookup(name: string, scope: VariableScope): ResolvedToken {
   const dyn = resolveDynamic(name)
   if (dyn !== null) return { name, value: dyn, source: 'dynamic' }
-  if (scope.local && name in scope.local) return { name, value: scope.local[name], source: 'local' }
-  if (scope.collection && name in scope.collection)
+  if (scope.local && hasOwn(scope.local, name)) return { name, value: scope.local[name], source: 'local' }
+  if (scope.collection && hasOwn(scope.collection, name))
     return { name, value: scope.collection[name], source: 'collection' }
-  if (scope.environment && name in scope.environment)
+  if (scope.environment && hasOwn(scope.environment, name))
     return { name, value: scope.environment[name], source: 'environment' }
-  if (scope.global && name in scope.global) return { name, value: scope.global[name], source: 'global' }
+  if (scope.global && hasOwn(scope.global, name)) return { name, value: scope.global[name], source: 'global' }
   return { name, value: null, source: 'unresolved' }
 }
 
