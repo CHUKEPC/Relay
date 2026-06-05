@@ -6,9 +6,13 @@ import type {
   AiStreamEvent,
   ImportKind,
   OAuthTokenRequest,
+  RealtimeEvent,
   RequestSpec,
   RunOptions,
-  ScriptRunRequest
+  ScriptRunRequest,
+  SseConnectSpec,
+  StoredCookie,
+  WsConnectSpec
 } from '@shared/types'
 
 /**
@@ -59,9 +63,37 @@ const api: RelayApi = {
   /* ---- oauth ---- */
   oauthToken: (payload: OAuthTokenRequest) => ipcRenderer.invoke(IPC.oauth.token, payload),
 
+  /* ---- cookies ---- */
+  cookiesGet: () => ipcRenderer.invoke(IPC.cookies.get),
+  cookiesSet: (cookie: StoredCookie) => ipcRenderer.invoke(IPC.cookies.set, cookie),
+  cookiesDelete: (cookie: Pick<StoredCookie, 'domain' | 'path' | 'key'>) =>
+    ipcRenderer.invoke(IPC.cookies.delete, cookie),
+  cookiesClear: (domain?: string) => ipcRenderer.invoke(IPC.cookies.clear, domain),
+
+  /* ---- realtime: WebSocket + SSE ---- */
+  wsConnect: (spec: WsConnectSpec) => ipcRenderer.invoke(IPC.realtime.wsConnect, spec),
+  wsSend: (connId: string, data: string) => ipcRenderer.invoke(IPC.realtime.wsSend, connId, data),
+  wsClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.wsClose, connId),
+  sseConnect: (spec: SseConnectSpec) => ipcRenderer.invoke(IPC.realtime.sseConnect, spec),
+  sseClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.sseClose, connId),
+  onRealtime: (connId: string, cb: (event: RealtimeEvent) => void) => {
+    const channel = `${IPC.realtime.event}:${connId}`
+    const handler = (_e: unknown, event: RealtimeEvent) => cb(event)
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
+
+  /* ---- local workspaces ---- */
+  workspaceList: () => ipcRenderer.invoke(IPC.workspace.list),
+  workspaceCreate: (name: string) => ipcRenderer.invoke(IPC.workspace.create, name),
+  workspaceRename: (id: string, name: string) => ipcRenderer.invoke(IPC.workspace.rename, id, name),
+  workspaceDelete: (id: string) => ipcRenderer.invoke(IPC.workspace.delete, id),
+  workspaceSwitch: (id: string) => ipcRenderer.invoke(IPC.workspace.switch, id),
+
   /* ---- dialogs / fs ---- */
   openFile: (opts: OpenFileOptions) => ipcRenderer.invoke(IPC.dialog.openFile, opts),
   saveFile: (opts: SaveFileOptions) => ipcRenderer.invoke(IPC.dialog.saveFile, opts),
+  readTextFile: (path: string) => ipcRenderer.invoke(IPC.dialog.readFile, path),
 
   /* ---- window controls ---- */
   minimizeWindow: () => ipcRenderer.invoke(IPC.app.minimize),

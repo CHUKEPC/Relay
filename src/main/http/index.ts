@@ -14,7 +14,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import type { RequestSpec, ResponseResult, RunOptions } from '@shared/types'
 
-import { runRequest } from './engine'
+import { runRequest, type CookieJarBridge } from './engine'
 
 /**
  * In-flight requests keyed by `RunOptions.requestId`. Each entry owns the
@@ -30,7 +30,7 @@ const inFlight = new Map<string, AbortController>()
  * handlers create/track an AbortController per requestId and always clean the
  * map entry on completion (success or failure).
  */
-export function registerHttpHandlers(ipcMain: IpcMain): void {
+export function registerHttpHandlers(ipcMain: IpcMain, cookieJar?: CookieJarBridge): void {
   ipcMain.handle(
     IPC.request.send,
     async (_event: IpcMainInvokeEvent, spec: RequestSpec, opts: RunOptions): Promise<ResponseResult> => {
@@ -41,7 +41,7 @@ export function registerHttpHandlers(ipcMain: IpcMain): void {
       inFlight.set(opts.requestId, controller)
 
       try {
-        return await runRequest(spec, opts, controller.signal)
+        return await runRequest(spec, opts, controller.signal, cookieJar)
       } finally {
         // Only delete if we are still the owner (a reused id may have replaced us).
         if (inFlight.get(opts.requestId) === controller) {

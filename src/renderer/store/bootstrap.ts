@@ -4,6 +4,9 @@ import { useEnvironments } from './environments'
 import { useHistory } from './history'
 import { useTabs } from './tabs'
 import { useAi } from './ai'
+import { useResponse } from './response'
+import { useRealtime } from './realtime'
+import { useRunner } from './runner'
 import { flushPersist } from './persist'
 import {
   defaultSettingsDoc,
@@ -55,4 +58,33 @@ export async function bootstrap(): Promise<void> {
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 
   watchSystemTheme()
+}
+
+/**
+ * Re-hydrate the per-workspace stores after switching the active workspace.
+ * App-level docs (settings, providers) are unchanged across workspaces, so only
+ * the isolated data set is reloaded. The caller must have flushed pending writes
+ * and invoked `workspaceSwitch` in main first.
+ */
+export async function reloadWorkspace(): Promise<void> {
+  // Tear down volatile UI state tied to the previous workspace's tabs/collections.
+  useRealtime.getState().disconnectAll()
+  useResponse.setState({ byTab: {} })
+  // The runner's target points at the previous workspace's collection nodes.
+  useRunner.getState().close()
+  useRunner.setState({ targetId: null, targetName: '', results: [], current: null })
+
+  const [collections, environments, globals, history, tabs] = await Promise.all([
+    window.api.storageLoad('collections'),
+    window.api.storageLoad('environments'),
+    window.api.storageLoad('globals'),
+    window.api.storageLoad('history'),
+    window.api.storageLoad('tabs')
+  ])
+
+  useCollections.getState().hydrate(collections ?? emptyCollections())
+  useEnvironments.getState().hydrate(environments ?? emptyEnvironments(), globals ?? emptyGlobals())
+  useHistory.getState().hydrate(history ?? emptyHistory())
+  useTabs.getState().hydrate(tabs ?? emptyTabs())
+  if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 }

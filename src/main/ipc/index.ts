@@ -1,15 +1,27 @@
 import { statSync } from 'node:fs'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IPC, type OpenFileOptions, type SaveFileOptions } from '@shared/ipc-contract'
 import type { FilePickResult } from '@shared/types'
 import { registerHttpHandlers } from '../http'
+import { CookieManager, registerCookieHandlers } from '../http/cookies'
 import { registerAiHandlers } from '../ai'
-import { registerStorageHandlers, type StorageManager } from '../storage'
+import { registerStorageHandlers, registerWorkspaceHandlers, type StorageManager } from '../storage'
 import { registerDataHandlers } from '../data'
 import { registerScriptHandlers } from '../scripting'
 import { registerOAuthHandlers } from '../auth/oauth'
+import { registerRealtimeHandlers } from '../realtime'
+
+/** Max size of a user-picked text file the renderer may read (runner data files). */
+const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
+
+/**
+ * Paths the user has explicitly picked via a native open dialog this session.
+ * `readTextFile` only reads from this allowlist, so a compromised renderer can't
+ * read arbitrary local files (e.g. ~/.ssh/id_rsa) by passing a crafted path.
+ */
+const pickedPaths = new Set<string>()
 
 export interface IpcContext {
   storage: StorageManager
@@ -17,8 +29,16 @@ export interface IpcContext {
 }
 
 export function registerIpc(ctx: IpcContext): void {
+  // Persistent cookie jar (per workspace) — also injected into the HTTP engine.
+  const cookieJar = new CookieManager(ctx.storage)
+  void cookieJar.load()
+
   // Networking core (CORS-free) — built by the http engine module.
-  registerHttpHandlers(ipcMain)
+  registerHttpHandlers(ipcMain, cookieJar)
+  registerCookieHandlers(ipcMain, cookieJar)
+
+  // Realtime: WebSocket + SSE clients (streamed to the renderer per connection).
+  registerRealtimeHandlers(ipcMain, ctx.getWindow)
 
   // Multi-provider AI — secrets + provider config resolved from storage.
   registerAiHandlers(ipcMain, {
@@ -26,8 +46,9 @@ export function registerIpc(ctx: IpcContext): void {
     getProvider: ctx.storage.getProvider
   })
 
-  // Persistence + secrets.
+  // Persistence + secrets + local workspaces.
   registerStorageHandlers(ctx.storage)
+  registerWorkspaceHandlers(ctx.storage)
 
   // P1: import/export, scripting sandbox, OAuth 2.0 token fetch.
   registerDataHandlers(ipcMain)
@@ -54,6 +75,8 @@ export function registerIpc(ctx: IpcContext): void {
       } catch {
         /* ignore */
       }
+      // Remember picked paths so readTextFile can later read them (and only them).
+      pickedPaths.add(filePath)
       return { filePath, fileName: basename(filePath), sizeBytes }
     })
   })
@@ -67,6 +90,23 @@ export function registerIpc(ctx: IpcContext): void {
     const data = opts.base64 ? Buffer.from(opts.content, 'base64') : Buffer.from(opts.content, 'utf8')
     await writeFile(result.filePath, data)
     return result.filePath
+  })
+
+  // Read a user-picked text file (runner data files). Size-capped to avoid
+  // loading an enormous file into memory; returns UTF-8 text.
+  ipcMain.handle(IPC.dialog.readFile, async (_e, path: string): Promise<string> => {
+    if (typeof path !== 'string' || !path) throw new Error('Invalid path')
+    // Confine reads to files the user actually picked via a dialog — never an
+    // arbitrary renderer-supplied path.
+    if (!pickedPaths.has(path)) throw new Error('Path was not selected via a file dialog')
+    let size = 0
+    try {
+      size = statSync(path).size
+    } catch {
+      throw new Error('File not found')
+    }
+    if (size > MAX_READ_TEXT_BYTES) throw new Error('File is too large (max 25 MB)')
+    return readFile(path, 'utf8')
   })
 
   // App-level bridges.

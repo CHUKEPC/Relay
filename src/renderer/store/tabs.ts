@@ -4,6 +4,8 @@ import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { emptyTabs } from './defaults'
 import { emptyRequest } from './collections'
+import { useRealtime } from './realtime'
+import { useResponse } from './response'
 import { persist } from './persist'
 
 interface TabsState {
@@ -61,6 +63,14 @@ export const useTabs = create<TabsState>((set, get) => {
     },
 
     closeTab: (id) => {
+      // Tear down any live WebSocket/SSE connection + drop volatile per-tab state
+      // so closing a realtime tab doesn't leak a socket/IPC listener.
+      useRealtime.getState().disconnect(id)
+      useResponse.setState((s) => {
+        if (!(id in s.byTab)) return s
+        const { [id]: _drop, ...rest } = s.byTab
+        return { byTab: rest }
+      })
       const prev = get().doc.tabs
       const idx = prev.findIndex((t) => t.id === id)
       const tabs = prev.filter((t) => t.id !== id)

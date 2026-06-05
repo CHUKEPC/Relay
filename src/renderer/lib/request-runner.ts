@@ -9,13 +9,16 @@ import { useHistory } from '../store/history'
 import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
 
-function settingsToRequestSettings(): RequestSettings {
+export function settingsToRequestSettings(): RequestSettings {
   const s = useSettings.getState().settings
   return {
     timeoutMs: s.requestTimeoutMs,
     followRedirects: s.followRedirects,
     maxRedirects: s.maxRedirects,
-    rejectUnauthorized: s.rejectUnauthorized
+    rejectUnauthorized: s.rejectUnauthorized,
+    // Global network config threaded to the engine (proxy bypass + per-host certs).
+    proxy: s.proxy && s.proxy.enabled ? s.proxy : null,
+    clientCerts: s.clientCerts ?? []
   }
 }
 
@@ -34,7 +37,7 @@ function applyVarUpdates(existing: VariableDef[], updates: Record<string, string
   return out
 }
 
-function persistVarUpdates(envUpdates: Record<string, string | null>, globalUpdates: Record<string, string | null>): void {
+export function persistVarUpdates(envUpdates: Record<string, string | null>, globalUpdates: Record<string, string | null>): void {
   const envStore = useEnvironments.getState()
   const active = envStore.activeEnv()
   if (active && Object.keys(envUpdates).length) {
@@ -154,12 +157,12 @@ export async function sendActiveRequest(): Promise<void> {
         collection: collections.collectionScopeFor(tab.savedRequestId)
       })
       persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
-      useResponse.getState().setTests(tab.id, requestId, scriptRes.tests, scriptRes.logs)
+      useResponse.getState().setTests(tab.id, requestId, scriptRes.tests, scriptRes.logs, scriptRes.visualizer)
     } catch (err) {
       console.error('test script failed', err)
     }
   } else {
-    useResponse.getState().setTests(tab.id, requestId, [], [])
+    useResponse.getState().setTests(tab.id, requestId, [], [], null)
   }
 }
 

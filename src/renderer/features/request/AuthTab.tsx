@@ -117,7 +117,9 @@ export function AuthTab({ req }: { req: RequestModel }) {
             <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
           </Field>
           <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
-            Digest реализован по упрощённой схеме (P1). Полный challenge/response — в планах.
+            Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с
+            заголовком <span className="mono">WWW-Authenticate: Digest</span> автоматически
+            вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.
           </div>
         </>
       )}

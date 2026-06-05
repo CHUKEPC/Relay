@@ -12,18 +12,22 @@
 import { basename } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { gunzipSync, brotliDecompressSync, inflateSync, inflateRawSync } from 'node:zlib'
-import { request as undiciRequest, Agent } from 'undici'
+import { request as undiciRequest, Agent, ProxyAgent } from 'undici'
 import type { Dispatcher } from 'undici'
 import { Cookie } from 'tough-cookie'
 
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
+import { buildDigestAuthHeader, parseDigestChallenge } from '../auth/digest'
 import type {
   Auth,
+  ClientCert,
   HttpError,
   HttpErrorKind,
   KV,
+  ProxyConfig,
   RedirectHop,
   RequestBody,
+  RequestSettings,
   RequestSpec,
   ResponseCookie,
   ResponseResult,
@@ -49,6 +53,18 @@ const CREDENTIAL_HEADER_RE = /(authorization|api[-_]?key|token|secret|credential
  */
 const TEXTY_CONTENT_TYPE_RE =
   /(?:json|text\/|xml|html|javascript|ecmascript|csv|x-www-form-urlencoded|\+xml|\+json|svg|x-ndjson|graphql)/i
+
+/**
+ * Bridge to a persistent cookie jar, injected by the IPC layer so the engine
+ * stays pure/testable. Both methods are synchronous; the implementation (in
+ * `./cookies`) keeps an in-memory snapshot and persists asynchronously.
+ */
+export interface CookieJarBridge {
+  /** Cookie header value for `url` (matched by domain/path/secure/expiry), or ''. */
+  cookieHeaderFor(url: string): string
+  /** Capture `Set-Cookie` lines observed for `url` into the jar. */
+  storeFromResponse(url: string, setCookie: string[]): void
+}
 
 /* ============================================================
  * Pure helpers (exported for unit testing without network)
@@ -121,13 +137,11 @@ export function buildAuthHeaders(auth: Auth | undefined): {
     }
 
     case 'digest': {
-      // TODO(P1): full RFC 7616 digest requires a challenge/response round-trip
-      // (read WWW-Authenticate, hash with nonce/cnonce/qop). For now we attach a
-      // best-effort Basic credential so the request is at least authenticated on
-      // servers that also accept Basic; never crash.
-      const raw = `${auth.username ?? ''}:${auth.password ?? ''}`
-      const encoded = Buffer.from(raw, 'utf8').toString('base64')
-      return { headers: { Authorization: `Basic ${encoded}` } }
+      // Full RFC 7616 digest is a challenge/response round-trip handled inside
+      // runRequest: the first request is sent WITHOUT credentials, and on a 401
+      // with a `WWW-Authenticate: Digest` challenge we compute the response and
+      // retry once. So no preemptive header here.
+      return { headers: {} }
     }
 
     default:
@@ -172,6 +186,23 @@ function deleteHeaderCI(headers: Record<string, string>, name: string): void {
   }
 }
 
+/** The request-target (path + query) used in the Digest `uri` parameter. */
+function requestTarget(url: string): string {
+  try {
+    const u = new URL(url)
+    return `${u.pathname}${u.search}`
+  } catch {
+    return url
+  }
+}
+
+/** First value of a (possibly array) undici response header, case-insensitive key. */
+function firstHeader(headers: Record<string, string | string[] | undefined>, name: string): string | undefined {
+  const v = headers[name] ?? headers[name.toLowerCase()]
+  if (v === undefined) return undefined
+  return Array.isArray(v) ? v[0] : v
+}
+
 /** Same scheme + host (origin) — used to decide whether to forward credentials. */
 function sameOrigin(a: string, b: string): boolean {
   try {
@@ -194,6 +225,127 @@ function addSetCookies(jar: Map<string, string>, lines: string[]): void {
 /** Serialize the jar into a Cookie request header value. */
 function jarHeader(jar: Map<string, string>): string {
   return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
+}
+
+/**
+ * Compose the outgoing Cookie header for `url` from (1) the user's explicit
+ * Cookie header, (2) the persistent jar's matching cookies, and (for requests
+ * with no persistent jar — e.g. unit tests) (3) the transient redirect-session
+ * jar. Rebuilt every hop so the right cookies follow each origin.
+ */
+function applyCookieHeader(
+  headers: Record<string, string>,
+  url: string,
+  userCookie: string | undefined,
+  sessionJar: Map<string, string>,
+  persistentJar: CookieJarBridge | undefined
+): void {
+  const parts: string[] = []
+  if (userCookie) parts.push(userCookie)
+  if (persistentJar) {
+    const h = persistentJar.cookieHeaderFor(url)
+    if (h) parts.push(h)
+  } else {
+    const s = jarHeader(sessionJar)
+    if (s) parts.push(s)
+  }
+  if (parts.length) setHeaderCI(headers, 'Cookie', parts.join('; '))
+  else deleteHeaderCI(headers, 'cookie')
+}
+
+/* ---- proxy + client TLS ---- */
+
+/** Does `hostname` match a no-proxy bypass entry (`*`, `*.suffix`, or exact)? */
+function isProxyBypassed(hostname: string, bypass: string[] | undefined): boolean {
+  if (!bypass) return false
+  const host = hostname.toLowerCase()
+  for (const raw of bypass) {
+    const entry = raw.trim().toLowerCase()
+    if (!entry) continue
+    if (entry === '*') return true
+    if (entry.startsWith('*.')) {
+      const suffix = entry.slice(1) // ".suffix"
+      if (host === entry.slice(2) || host.endsWith(suffix)) return true
+    } else if (host === entry) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Find the client cert configured for this host (exact host:port or hostname). */
+function matchClientCert(certs: ClientCert[] | undefined, host: string, hostname: string): ClientCert | undefined {
+  if (!certs) return undefined
+  const h = host.toLowerCase()
+  const hn = hostname.toLowerCase()
+  return certs.find((c) => {
+    const target = (c.host ?? '').trim().toLowerCase()
+    return target !== '' && (target === h || target === hn)
+  })
+}
+
+/** TLS connect options passed to undici's Agent/ProxyAgent. */
+interface ConnectTls {
+  rejectUnauthorized?: boolean
+  cert?: Buffer
+  key?: Buffer
+  pfx?: Buffer
+  ca?: Buffer
+  passphrase?: string
+}
+
+/** Load the cert material (bytes) from disk into the TLS options. */
+async function loadClientCert(tls: ConnectTls, cert: ClientCert): Promise<void> {
+  if (cert.pfxPath) {
+    tls.pfx = await readFile(cert.pfxPath)
+  } else {
+    if (cert.certPath) tls.cert = await readFile(cert.certPath)
+    if (cert.keyPath) tls.key = await readFile(cert.keyPath)
+  }
+  if (cert.caPath) tls.ca = await readFile(cert.caPath)
+  if (cert.passphrase) tls.passphrase = cert.passphrase
+}
+
+/**
+ * Build the undici dispatcher for one hop: a ProxyAgent when a proxy applies to
+ * this host, else an Agent when client-cert / relaxed-TLS options are needed,
+ * else undefined (the global default dispatcher). Returns undefined when nothing
+ * special is required so the common case stays on the shared pool.
+ */
+async function makeDispatcher(
+  url: string,
+  settings: RequestSettings | undefined,
+  relaxTls: boolean
+): Promise<Dispatcher | undefined> {
+  let hostname = ''
+  let host = ''
+  try {
+    const u = new URL(url)
+    hostname = u.hostname
+    host = u.host
+  } catch {
+    /* validated upstream */
+  }
+
+  const tls: ConnectTls = {}
+  if (relaxTls) tls.rejectUnauthorized = false
+  const cert = matchClientCert(settings?.clientCerts, host, hostname)
+  if (cert) await loadClientCert(tls, cert)
+  const hasTls = Object.keys(tls).length > 0
+
+  const proxy: ProxyConfig | null | undefined = settings?.proxy
+  if (proxy && proxy.enabled && proxy.url && !isProxyBypassed(hostname, proxy.bypass)) {
+    const opts: ProxyAgent.Options = { uri: proxy.url }
+    if (hasTls) opts.requestTls = tls
+    if (proxy.auth && proxy.auth.username) {
+      const token = Buffer.from(`${proxy.auth.username}:${proxy.auth.password ?? ''}`, 'utf8').toString('base64')
+      opts.token = `Basic ${token}`
+    }
+    return new ProxyAgent(opts)
+  }
+
+  if (hasTls) return new Agent({ connect: tls })
+  return undefined
 }
 
 /**
@@ -476,7 +628,8 @@ function errorResult(error: HttpError, startedAt: number, finalUrl: string, redi
 export async function runRequest(
   spec: RequestSpec,
   opts: RunOptions,
-  externalSignal?: AbortSignal
+  externalSignal?: AbortSignal,
+  jar?: CookieJarBridge
 ): Promise<ResponseResult> {
   const startedAt = Date.now()
   void opts // requestId is used by the IPC layer; engine keeps the signature stable.
@@ -557,27 +710,61 @@ export async function runRequest(
     }, timeoutMs)
   }
 
-  // --- 5. TLS: only relax verification when explicitly disabled. ---
+  // --- 5. Per-hop dispatcher (proxy / client TLS / verification toggle). ---
+  // Relaxed TLS verification is per request but must NOT be carried across an
+  // origin the user didn't opt into; `relaxTls` is forced back on once we cross.
+  let relaxTls = !rejectUnauthorized
   let dispatcher: Dispatcher | undefined
-  if (!rejectUnauthorized) {
-    dispatcher = new Agent({ connect: { rejectUnauthorized: false } })
+  // Cache the dispatcher across hops; rebuild only when the host or TLS-relax
+  // state changes so same-origin redirects / digest replays reuse the pool.
+  let lastDispKey: string | null = null
+  const closeDispatcher = (): void => {
+    if (dispatcher) {
+      void dispatcher.close().catch(() => {})
+      dispatcher = undefined
+    }
   }
 
   const redirects: RedirectHop[] = []
-  // Per-request cookie jar so a login -> redirect flow keeps its session cookies.
+  // Per-request cookie jar so a login -> redirect flow keeps its session cookies
+  // when there is no persistent jar (e.g. unit tests). With a persistent jar,
+  // capture/attach goes through it instead.
   const cookieJar = new Map<string, string>()
   // The user's original Cookie header — cleared once we cross to another origin so
   // it can never be re-attached to a different host on a later same-origin hop.
   let userCookie = findHeader(headers, 'cookie')
+  // We rebuild the Cookie header each hop, so drop the raw user copy from headers.
+  deleteHeaderCI(headers, 'cookie')
   let currentUrl = initialUrl
   let method = (spec.method || 'GET').toUpperCase()
   let ttfbMs: number | undefined
+  // Digest auth: send unauthenticated first, then answer one 401 challenge.
+  const digestAuth = spec.auth && spec.auth.type === 'digest' ? spec.auth : null
+  let digestTried = false
 
   try {
     // --- 6. Request loop: send, optionally follow redirects manually. ---
     // We use undici.request (which does NOT auto-follow) so every hop is
     // observable and recorded into `redirects`.
     for (let hop = 0; ; hop++) {
+      // Attach cookies for this exact URL (persistent jar matches by domain/path).
+      applyCookieHeader(headers, currentUrl, userCookie, cookieJar, jar)
+      // (Re)build the dispatcher only when the host or TLS-relax state changes,
+      // so a same-origin redirect chain or digest replay reuses one keep-alive
+      // pool and doesn't re-read client-cert files from disk every hop.
+      let hopHost = ''
+      try {
+        hopHost = new URL(currentUrl).host
+      } catch {
+        /* validated upstream */
+      }
+      const dispKey = `${hopHost}|${relaxTls}`
+      if (dispKey !== lastDispKey) {
+        closeDispatcher()
+        dispatcher = await makeDispatcher(currentUrl, settings, relaxTls)
+        lastDispKey = dispKey
+      }
+
       armTimeout()
       const res = await undiciRequest(currentUrl, {
         method: method as Dispatcher.HttpMethod,
@@ -593,6 +780,34 @@ export async function runRequest(
       if (ttfbMs === undefined) ttfbMs = Date.now() - startedAt
 
       const status = res.statusCode
+      const setCookie = extractSetCookie(res.headers)
+      // Capture Set-Cookie into the persistent jar on EVERY hop (incl. the final).
+      if (jar && setCookie.length) jar.storeFromResponse(currentUrl, setCookie)
+
+      // Digest challenge/response: on the first 401 with a Digest challenge,
+      // compute the Authorization header and replay the request once.
+      if (status === 401 && digestAuth && !digestTried) {
+        const wwwAuth = firstHeader(res.headers, 'www-authenticate')
+        const challenge = wwwAuth ? parseDigestChallenge(wwwAuth) : null
+        if (challenge) {
+          await res.body.dump?.()
+          digestTried = true
+          // No body → '' (empty entity hash is correct for qop=auth-int on a GET);
+          // string body → itself; multipart/binary → undefined (can't hash here).
+          const entityBody = encoded.body === undefined ? '' : typeof encoded.body === 'string' ? encoded.body : undefined
+          const authHeader = buildDigestAuthHeader({
+            username: digestAuth.username ?? '',
+            password: digestAuth.password ?? '',
+            method,
+            uri: requestTarget(currentUrl),
+            challenge,
+            entityBody
+          })
+          setHeaderCI(headers, 'Authorization', authHeader)
+          continue // replay same URL with credentials
+        }
+      }
+
       const isRedirect = REDIRECT_STATUSES.has(status)
       const location = res.headers['location']
       const locationStr = Array.isArray(location) ? location[0] : location
@@ -609,15 +824,11 @@ export async function runRequest(
         }
         redirects.push({ from: currentUrl, to: nextUrl, status })
 
-        // Carry cookies set on this hop so login -> redirect sessions survive.
-        addSetCookies(cookieJar, extractSetCookie(res.headers))
+        // Carry cookies set on this hop so login -> redirect sessions survive
+        // even without a persistent jar.
+        addSetCookies(cookieJar, setCookie)
 
-        if (sameOrigin(currentUrl, nextUrl)) {
-          if (cookieJar.size) {
-            const merged = userCookie ? `${userCookie}; ${jarHeader(cookieJar)}` : jarHeader(cookieJar)
-            setHeaderCI(headers, 'Cookie', merged)
-          }
-        } else {
+        if (!sameOrigin(currentUrl, nextUrl)) {
           // Cross-origin redirect: never forward credentials (matches browsers/Postman),
           // including custom credential headers (X-Api-Key, X-Auth-Token, ...).
           for (const k of Object.keys(headers)) {
@@ -627,10 +838,7 @@ export async function runRequest(
           userCookie = undefined
           // Don't carry a "disable TLS verification" choice to a host the user
           // didn't opt into — revert to secure verification across origins.
-          if (dispatcher) {
-            void dispatcher.close().catch(() => {})
-            dispatcher = undefined
-          }
+          relaxTls = false
         }
 
         // Per RFC 7231: 303 (and commonly 301/302) downgrade to GET and drop
@@ -664,7 +872,7 @@ export async function runRequest(
     if (timer) clearTimeout(timer)
     if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort)
     // Close the per-request dispatcher so its sockets don't leak.
-    if (dispatcher) void dispatcher.close().catch(() => {})
+    closeDispatcher()
   }
 }
 

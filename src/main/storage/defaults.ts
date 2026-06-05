@@ -283,7 +283,9 @@ export function defaultSettings(): SettingsDoc {
     wordWrapResponse: false,
     sendAiContext: true,
     autoApplyAiTools: false,
-    defaultProviderId: 'anthropic'
+    defaultProviderId: 'anthropic',
+    proxy: { enabled: false, url: '', bypass: [] },
+    clientCerts: []
   }
 }
 

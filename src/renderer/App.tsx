@@ -16,11 +16,15 @@ import { interpolate } from '@shared/interpolate'
 import { Sidebar } from './features/sidebar/Sidebar'
 import { RequestBuilder } from './features/request/RequestBuilder'
 import { ResponsePanel } from './features/response/ResponsePanel'
+import { RealtimePanel } from './features/realtime/RealtimePanel'
 import { AiPanel } from './features/ai/AiPanel'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { SaveDialog } from './features/collections/SaveDialog'
 import { ToolConfirmModal } from './features/ai/ToolConfirmModal'
+import { RunnerPanel } from './features/runner/RunnerPanel'
+import { WorkspaceSwitcher } from './features/workspaces/WorkspaceSwitcher'
+import { useWorkspaces } from './store/workspaces'
 
 export function App() {
   const [ready, setReady] = useState(false)
@@ -34,6 +38,7 @@ export function App() {
 
   useEffect(() => {
     bootstrap()
+      .then(() => useWorkspaces.getState().load())
       .catch((err) => console.error('bootstrap failed', err))
       .finally(() => setReady(true))
   }, [])
@@ -128,6 +133,7 @@ export function App() {
       {settingsOpen && <SettingsScreen onClose={() => useUi.getState().closeSettings()} initialSection={settingsSection} />}
       {paletteOpen && <CommandPalette />}
       <ToolConfirmModal />
+      <RunnerPanel />
       <SaveDialog open={saveOpen} initialName={useTabs.getState().activeTab()?.request.name ?? 'Untitled'} onOpenChange={setSaveOpen} onSave={onSaveAs} />
 
       {toast && (
@@ -166,6 +172,7 @@ function Titlebar() {
         </div>
         Relay
       </div>
+      <WorkspaceSwitcher />
       <div className="grow" />
       <div className="global-search nodrag" onClick={() => useUi.getState().setPaletteOpen(true)}>
         <Icon name="search" size={14} />
@@ -258,6 +265,7 @@ function Workspace() {
   const setRespPct = useUi((s) => s.setRespPct)
   const toggleLayout = useUi((s) => s.toggleLayout)
   const activeTabId = useTabs((s) => s.doc.activeTabId)
+  const activeMode = useTabs((s) => s.doc.tabs.find((t) => t.id === s.doc.activeTabId)?.request.mode ?? 'http')
   const wsRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -312,7 +320,12 @@ function Workspace() {
               : { height: `${respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
           }
         >
-          {activeTabId && <ResponsePanel key={activeTabId} tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />}
+          {activeTabId &&
+            (activeMode === 'http' ? (
+              <ResponsePanel key={activeTabId} tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />
+            ) : (
+              <RealtimePanel key={activeTabId} tabId={activeTabId} kind={activeMode === 'websocket' ? 'websocket' : 'sse'} />
+            ))}
         </div>
       </div>
     </div>

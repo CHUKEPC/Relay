@@ -4,14 +4,16 @@ import { Kbd } from '@renderer/components/primitives'
 import { ProvidersSection } from './ProvidersSection'
 import { AppearanceSection } from './AppearanceSection'
 import { GeneralSection } from './GeneralSection'
+import { NetworkSection } from './NetworkSection'
 import { ShortcutsSection } from './ShortcutsSection'
 
-export type SettingsSection = 'providers' | 'appearance' | 'general' | 'shortcuts'
+export type SettingsSection = 'providers' | 'appearance' | 'general' | 'network' | 'shortcuts'
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: 'providers', label: 'AI-провайдеры', icon: 'sparkle' },
   { id: 'appearance', label: 'Внешний вид', icon: 'sun' },
   { id: 'general', label: 'Основные', icon: 'settings' },
+  { id: 'network', label: 'Сеть', icon: 'link' },
   { id: 'shortcuts', label: 'Горячие клавиши', icon: 'bolt' }
 ]
 
@@ -75,6 +77,7 @@ export function SettingsScreen({
             {section === 'providers' && <ProvidersSection />}
             {section === 'appearance' && <AppearanceSection />}
             {section === 'general' && <GeneralSection />}
+            {section === 'network' && <NetworkSection />}
             {section === 'shortcuts' && <ShortcutsSection />}
           </div>
         </div>

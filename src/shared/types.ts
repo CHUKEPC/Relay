@@ -67,7 +67,44 @@ export type Auth =
       code?: string
       redirectUri?: string
     }
-  | { type: 'digest'; username: string; password: string; algorithm?: 'MD5' | 'SHA-256' }
+  | {
+      type: 'digest'
+      username: string
+      password: string
+      algorithm?: 'MD5' | 'SHA-256' | 'MD5-sess' | 'SHA-256-sess'
+    }
+
+/**
+ * Outbound HTTP/HTTPS proxy configuration. Applied via undici's ProxyAgent.
+ * `bypass` is a list of host globs (e.g. `localhost`, `*.internal`, `10.0.0.0/8`
+ * is NOT CIDR-matched — only host/suffix globs) that skip the proxy.
+ */
+export interface ProxyConfig {
+  enabled: boolean
+  /** proxy origin, e.g. http://127.0.0.1:8080 */
+  url: string
+  auth?: { username: string; password: string }
+  /** hosts that bypass the proxy (exact, or `*.suffix`, or `*`) */
+  bypass?: string[]
+}
+
+/**
+ * A client TLS certificate applied to requests whose host matches `host`.
+ * Only file PATHS + an inline passphrase are stored; the key/cert bytes are read
+ * in the main process at send time and never travel to the renderer.
+ */
+export interface ClientCert {
+  id: string
+  /** host or host:port this cert applies to (exact match, case-insensitive) */
+  host: string
+  /** PEM cert path (with keyPath), OR pfxPath for PKCS#12 */
+  certPath?: string
+  keyPath?: string
+  pfxPath?: string
+  /** optional extra CA bundle (PEM) to trust for this host */
+  caPath?: string
+  passphrase?: string
+}
 
 export interface RequestSettings {
   timeoutMs: number
@@ -75,6 +112,10 @@ export interface RequestSettings {
   maxRedirects: number
   rejectUnauthorized: boolean
   encodeUrl?: boolean
+  /** resolved proxy for this request (renderer merges global + per-request override) */
+  proxy?: ProxyConfig | null
+  /** client certs available to match this request's host (paths only) */
+  clientCerts?: ClientCert[]
 }
 
 /** A fully-resolved (variables already interpolated) request ready for the engine. */
@@ -186,6 +227,9 @@ export interface DocEnvelope {
   version: number
 }
 
+/** Protocol mode of a request tab. Defaults to `http` when absent. */
+export type RequestMode = 'http' | 'websocket' | 'sse'
+
 /** A saved request — the editable unit shown in a tab. */
 export interface RequestModel {
   id: string
@@ -197,6 +241,10 @@ export interface RequestModel {
   pathVariables: KV[]
   body: RequestBody
   auth: Auth
+  /** protocol mode — http (default), websocket, or sse */
+  mode?: RequestMode
+  /** websocket message draft + saved messages composer text */
+  wsMessage?: string
   /** pre-request and test scripts (P1) */
   preRequestScript?: string
   testScript?: string
@@ -296,6 +344,10 @@ export interface SettingsDoc extends DocEnvelope {
   sendAiContext: boolean
   autoApplyAiTools: boolean
   defaultProviderId: string | null
+  /** global outbound proxy (per-request settings can override) */
+  proxy: ProxyConfig
+  /** client TLS certificates matched by host (paths only; bytes read in main) */
+  clientCerts: ClientCert[]
 }
 
 /* ============================================================
@@ -424,6 +476,14 @@ export interface ScriptRunRequest {
   globals: Record<string, string>
   /** collection-scoped variables (read-only via pm.variables) */
   collection?: Record<string, string>
+  /** data-file row for the current runner iteration (pm.iterationData) */
+  iterationData?: Record<string, string>
+}
+
+/** Payload captured from `pm.visualizer.set(template, data)` in a test script. */
+export interface VisualizerPayload {
+  template: string
+  data: unknown
 }
 
 export interface ScriptRunResult {
@@ -434,6 +494,8 @@ export interface ScriptRunResult {
   globalUpdates: Record<string, string | null>
   /** request mutations from pre-request scripts */
   requestPatch?: Partial<Pick<RequestModel, 'url' | 'headers' | 'method'>>
+  /** captured Postman-style visualizer template + data (test phase) */
+  visualizer?: VisualizerPayload | null
   error?: string
 }
 
@@ -492,4 +554,61 @@ export interface StoredCookie {
 
 export interface CookiesDoc extends DocEnvelope {
   cookies: StoredCookie[]
+}
+
+/* ============================================================
+ * Realtime (WebSocket + SSE) — P2
+ * ============================================================ */
+
+export type RealtimeKind = 'websocket' | 'sse'
+
+/** One entry in a connection's message log. */
+export interface RealtimeMessage {
+  id: string
+  /** in = received, out = sent by us, system = lifecycle/info */
+  dir: 'in' | 'out' | 'system'
+  data: string
+  at: number
+  /** ws: 'text' | 'binary'; sse: the event name (message/ping/...) */
+  kind?: string
+}
+
+/** Events streamed from main → renderer for a live connection. */
+export type RealtimeEvent =
+  | { type: 'open'; protocol?: string }
+  | { type: 'message'; message: RealtimeMessage }
+  | { type: 'close'; code?: number; reason?: string }
+  | { type: 'error'; error: string }
+  | { type: 'reconnecting'; attempt: number; delayMs: number }
+
+export interface WsConnectSpec {
+  connId: string
+  url: string
+  protocols?: string[]
+  /** custom handshake headers (already variable-interpolated) */
+  headers: KV[]
+  rejectUnauthorized?: boolean
+}
+
+export interface SseConnectSpec {
+  connId: string
+  url: string
+  headers: KV[]
+  rejectUnauthorized?: boolean
+}
+
+/* ============================================================
+ * Local workspaces — P2
+ * ============================================================ */
+
+export interface WorkspaceMeta {
+  id: string
+  name: string
+}
+
+/** Root-level meta file (outside per-workspace data) tracking the workspace set. */
+export interface WorkspacesDoc {
+  version: number
+  workspaces: WorkspaceMeta[]
+  activeWorkspaceId: string
 }

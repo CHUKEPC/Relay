@@ -27,3 +27,19 @@ export function flushPersist(): void {
   }
   pendingValues.clear()
 }
+
+/**
+ * Flush pending writes and AWAIT them. Use before switching workspaces so the
+ * outgoing workspace's edits land in main BEFORE its store is re-pointed (a fire-
+ * and-forget flush could otherwise write into the newly-activated workspace).
+ */
+export async function flushPersistAndWait(): Promise<void> {
+  for (const timer of timers.values()) clearTimeout(timer)
+  timers.clear()
+  const writes: Promise<void>[] = []
+  for (const [key, value] of pendingValues) {
+    writes.push(window.api.storageSave(key as StorageKey, value as StorageMap[StorageKey]))
+  }
+  pendingValues.clear()
+  await Promise.all(writes)
+}

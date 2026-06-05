@@ -151,9 +151,12 @@ describe('buildAuthHeaders', () => {
     expect(headers).toEqual({})
   })
 
-  it('digest does not crash and yields a best-effort header', () => {
-    const { headers } = buildAuthHeaders({ type: 'digest', username: 'u', password: 'p' })
-    expect(typeof headers.Authorization).toBe('string')
+  it('digest sends NO preemptive header (challenge/response is handled in runRequest)', () => {
+    const { headers, query } = buildAuthHeaders({ type: 'digest', username: 'u', password: 'p' })
+    // Per RFC 7616 the first request is unauthenticated; the engine answers the
+    // 401 Digest challenge and replays. So buildAuthHeaders contributes nothing.
+    expect(headers).toEqual({})
+    expect(query).toBeUndefined()
   })
 })
 

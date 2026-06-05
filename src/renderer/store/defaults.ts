@@ -26,7 +26,9 @@ export function defaultSettingsDoc(): SettingsDoc {
     wordWrapResponse: false,
     sendAiContext: true,
     autoApplyAiTools: false,
-    defaultProviderId: null
+    defaultProviderId: null,
+    proxy: { enabled: false, url: '', bypass: [] },
+    clientCerts: []
   }
 }
 

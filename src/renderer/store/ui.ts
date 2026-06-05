@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 export type SideTab = 'collections' | 'history' | 'env'
-export type SettingsSection = 'providers' | 'appearance' | 'general' | 'shortcuts'
+export type SettingsSection = 'providers' | 'appearance' | 'general' | 'network' | 'shortcuts'
 export type Layout = 'split-v' | 'split-h'
 
 interface UiState {

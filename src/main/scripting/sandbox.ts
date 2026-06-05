@@ -11,7 +11,8 @@ import type {
   ScriptConsoleLine,
   ScriptRunRequest,
   ScriptRunResult,
-  ScriptTestResult
+  ScriptTestResult,
+  VisualizerPayload
 } from '@shared/types'
 
 class AssertionError extends Error {}
@@ -179,6 +180,17 @@ function json(v: unknown): string {
  * JSON-serialized (not lossily turned into "[object Object]"); null/undefined
  * become an empty string instead of the literals "null"/"undefined".
  */
+/** Round-trip a value through JSON so only plain, serializable data escapes the
+ *  sandbox (drops functions/host objects; returns null on cycles/failure). */
+function jsonSafe(v: unknown): unknown {
+  if (v === undefined) return null
+  try {
+    return JSON.parse(JSON.stringify(v))
+  } catch {
+    return null
+  }
+}
+
 function coerceVar(v: unknown): string {
   if (typeof v === 'string') return v
   if (v === null || v === undefined) return ''
@@ -205,8 +217,13 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   const env: Record<string, string> = Object.assign(Object.create(null), payload.environment)
   const globals: Record<string, string> = Object.assign(Object.create(null), payload.globals)
   const collection: Record<string, string> = Object.assign(Object.create(null), payload.collection ?? {})
-  // Precedence mirrors the interpolation resolver: collection > environment > global.
-  const merged = (): Record<string, string> => Object.assign(Object.create(null), globals, env, collection)
+  const iterationData: Record<string, string> = Object.assign(Object.create(null), payload.iterationData ?? {})
+  // Precedence mirrors the interpolation resolver: data > collection > environment > global.
+  const merged = (): Record<string, string> =>
+    Object.assign(Object.create(null), globals, env, collection, iterationData)
+
+  // Captured by pm.visualizer.set(template, data) — returned for the Visualize tab.
+  let visualizer: VisualizerPayload | null = null
 
   const reqState = {
     url: payload.request.url,
@@ -290,6 +307,19 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       get: (k: string) => merged()[k],
       has: (k: string) => k in merged()
     },
+    iterationData: {
+      get: (k: string) => iterationData[k],
+      has: (k: string) => k in iterationData,
+      toObject: () => ({ ...iterationData })
+    },
+    visualizer: {
+      // Capture a Postman-style visualizer template + data. `data` is sanitized
+      // to a JSON-safe value so it survives the child→parent IPC boundary and
+      // can't smuggle functions/host objects out of the sandbox.
+      set: (template: unknown, data?: unknown) => {
+        visualizer = { template: typeof template === 'string' ? template : String(template ?? ''), data: jsonSafe(data) }
+      }
+    },
     request: {
       get url() {
         return reqState.url
@@ -357,6 +387,7 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       tests,
       environmentUpdates: envUpdates,
       globalUpdates,
+      visualizer,
       error: err instanceof Error ? err.message : String(err)
     }
   }
@@ -378,5 +409,5 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       ? { url: reqState.url, method: reqState.method, headers: reqState.headers }
       : undefined
 
-  return { logs, tests, environmentUpdates: envUpdates, globalUpdates, requestPatch }
+  return { logs, tests, environmentUpdates: envUpdates, globalUpdates, requestPatch, visualizer }
 }

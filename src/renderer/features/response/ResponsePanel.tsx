@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useResponse, type TabResponse } from '@renderer/store/response'
 import { useSettings } from '@renderer/store/settings'
+import { useUi } from '@renderer/store/ui'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { Icon } from '@renderer/components/Icon'
-import { IconButton, Segmented } from '@renderer/components/primitives'
+import { Field, IconButton, Modal, Segmented } from '@renderer/components/primitives'
 import { monaco } from '@renderer/lib/monaco'
+import { saveResponseExample } from '@renderer/lib/examples'
+import { statusColor } from '@renderer/lib/status-color'
+import { VisualizerTab } from './VisualizerTab'
+import { CookieManager } from '@renderer/features/cookies/CookieManager'
 import type { ResponseResult, HttpErrorKind } from '@shared/types'
 
 /* ============================================================
@@ -19,17 +24,8 @@ export function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`
 }
 
-/** Pick the status-family color CSS variable for a HTTP status code. */
-export function statusColor(status: number): string {
-  if (status <= 0) return 'var(--s-5xx)' // network error / no response
-  if (status >= 500) return 'var(--s-5xx)'
-  if (status >= 400) return 'var(--s-4xx)'
-  if (status >= 300) return 'var(--s-3xx)'
-  return 'var(--s-2xx)'
-}
-
 type BodyView = 'pretty' | 'raw' | 'preview'
-type RespTab = 'body' | 'headers' | 'cookies' | 'tests'
+type RespTab = 'body' | 'headers' | 'cookies' | 'tests' | 'visualize'
 
 /** Map a content-type to a Monaco language id for the Pretty viewer. */
 function languageForContentType(contentType: string | undefined): string {
@@ -270,12 +266,14 @@ function StatusBar({
   copied,
   onCopy,
   onSave,
+  onSaveExample,
   onAskAI
 }: {
   result: ResponseResult
   copied: boolean
   onCopy: () => void
   onSave: () => void
+  onSaveExample: () => void
   onAskAI: () => void
 }): JSX.Element {
   const sc = statusColor(result.status)
@@ -302,7 +300,8 @@ function StatusBar({
           Спросить AI
         </button>
         <IconButton icon={copied ? 'check' : 'copy'} title="Копировать" onClick={onCopy} />
-        <IconButton icon="save" title="Сохранить" onClick={onSave} />
+        <IconButton icon="save" title="Сохранить в файл" onClick={onSave} />
+        <IconButton icon="doc" title="Сохранить как пример" onClick={onSaveExample} />
       </div>
     </div>
   )
@@ -337,7 +336,8 @@ function TabsRow({
     { id: 'body', label: 'Body' },
     { id: 'headers', label: 'Headers', count: result.headers.length },
     { id: 'cookies', label: 'Cookies', count: result.cookies.length },
-    { id: 'tests', label: 'Tests', count: testCount }
+    { id: 'tests', label: 'Tests', count: testCount },
+    { id: 'visualize', label: 'Visualize' }
   ]
 
   return (
@@ -379,6 +379,60 @@ function TabsRow({
   )
 }
 
+/** Hostname of a URL, or undefined when unparseable (used to focus the cookie jar). */
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return undefined
+  }
+}
+
+/** Small modal to name a response example before saving it onto the request. */
+function ExampleNameModal({
+  open,
+  onOpenChange,
+  defaultName,
+  onSave
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  defaultName: string
+  onSave: (name: string) => void
+}): JSX.Element {
+  const [name, setName] = useState(defaultName)
+  useEffect(() => {
+    if (open) setName(defaultName)
+  }, [open, defaultName])
+  const commit = (): void => {
+    onSave(name.trim() || defaultName)
+    onOpenChange(false)
+  }
+  return (
+    <Modal open={open} onOpenChange={onOpenChange} title="Сохранить как пример" width={420}>
+      <Field label="Имя примера">
+        <input
+          className="input"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit()
+          }}
+        />
+      </Field>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+        <button className="btn ghost" onClick={() => onOpenChange(false)}>
+          Отмена
+        </button>
+        <button className="btn primary" onClick={commit}>
+          Сохранить
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 /* ============================================================
  * ResponsePanel
  * ============================================================ */
@@ -391,6 +445,8 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
   const [bodyView, setBodyView] = useState<BodyView>('pretty')
   const [search, setSearch] = useState('')
   const [copied, setCopied] = useState(false)
+  const [cookieMgrOpen, setCookieMgrOpen] = useState(false)
+  const [exampleOpen, setExampleOpen] = useState(false)
   const bodyHostRef = useRef<HTMLDivElement>(null)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -483,7 +539,14 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
 
   return (
     <div className="response" style={{ flex: 1 }}>
-      <StatusBar result={result} copied={copied} onCopy={copyBody} onSave={saveBody} onAskAI={onAskAI} />
+      <StatusBar
+        result={result}
+        copied={copied}
+        onCopy={copyBody}
+        onSave={saveBody}
+        onSaveExample={() => setExampleOpen(true)}
+        onAskAI={onAskAI}
+      />
 
       <TabsRow
         result={result}
@@ -497,6 +560,17 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         onTriggerFind={triggerFind}
       />
 
+      <CookieManager open={cookieMgrOpen} onOpenChange={setCookieMgrOpen} initialDomain={hostOf(result.finalUrl)} />
+      <ExampleNameModal
+        open={exampleOpen}
+        onOpenChange={setExampleOpen}
+        defaultName={statusLabel(result)}
+        onSave={(name) => {
+          saveResponseExample(name, result)
+          useUi.getState().showToast('Пример сохранён')
+        }}
+      />
+
       <div className="resp-body">
         {tab === 'body' &&
           (isError ? (
@@ -504,6 +578,8 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
           ) : (
             <BodyPane result={result} view={bodyView} wordWrap={wordWrap} hostRef={bodyHostRef} />
           ))}
+
+        {tab === 'visualize' && <VisualizerTab payload={r.visualizer} result={result} />}
 
         {tab === 'headers' && (
           <table className="resp-table">
@@ -525,28 +601,45 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         )}
 
         {tab === 'cookies' && (
-          <table className="resp-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Value</th>
-                <th>Domain</th>
-                <th>Path</th>
-                <th>Expires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.cookies.map((c, i) => (
-                <tr key={i}>
-                  <td className="hk">{c.name}</td>
-                  <td className="hv">{c.value}</td>
-                  <td className="hv">{c.domain ?? ''}</td>
-                  <td className="hv">{c.path ?? ''}</td>
-                  <td className="hv">{c.expires ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px' }}>
+              <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
+                Set-Cookie из этого ответа. Постоянное хранилище — в менеджере.
+              </span>
+              <button className="btn ghost" style={{ height: 28 }} onClick={() => setCookieMgrOpen(true)}>
+                <Icon name="cookie" size={14} />
+                Управление cookies
+              </button>
+            </div>
+            {result.cookies.length > 0 ? (
+              <table className="resp-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Value</th>
+                    <th>Domain</th>
+                    <th>Path</th>
+                    <th>Expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.cookies.map((c, i) => (
+                    <tr key={i}>
+                      <td className="hk">{c.name}</td>
+                      <td className="hv">{c.value}</td>
+                      <td className="hv">{c.domain ?? ''}</td>
+                      <td className="hv">{c.path ?? ''}</td>
+                      <td className="hv">{c.expires ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--tx-3)' }}>
+                В этом ответе нет Set-Cookie.
+              </div>
+            )}
+          </div>
         )}
 
         {tab === 'tests' && <TestsPane r={r} />}

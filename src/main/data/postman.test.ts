@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { importPostmanCollection } from './postman'
+import { importPostmanCollection, exportPostmanCollection } from './postman'
+import type { CollectionFolderNode, RequestModel } from '@shared/types'
 
 /** Find the first request anywhere in an imported collection tree. */
 function firstRequest(node: any): any {
@@ -88,5 +89,84 @@ describe('Postman import', () => {
     })
     const req = firstRequest(col)
     expect(req.url).toBe('https://api.test:8080/v1/users')
+  })
+
+  it('imports saved responses into request.examples', () => {
+    const col = importPostmanCollection({
+      info: { name: 'C' },
+      item: [
+        {
+          name: 'r',
+          request: { method: 'GET', url: 'https://api/x' },
+          response: [
+            {
+              name: 'Success',
+              code: 200,
+              header: [{ key: 'Content-Type', value: 'application/json' }],
+              body: '{"ok":true}'
+            }
+          ]
+        }
+      ]
+    })
+    const req = firstRequest(col)
+    expect(req.examples).toHaveLength(1)
+    expect(req.examples[0].name).toBe('Success')
+    expect(req.examples[0].status).toBe(200)
+    expect(req.examples[0].contentType).toBe('application/json')
+    expect(req.examples[0].body).toBe('{"ok":true}')
+  })
+})
+
+describe('Postman examples round-trip', () => {
+  it('exports examples to item.response[] and re-imports them losslessly', () => {
+    const request: RequestModel = {
+      id: 'req1',
+      name: 'Get user',
+      method: 'GET',
+      url: 'https://api/users/1',
+      query: [],
+      headers: [],
+      pathVariables: [],
+      body: { type: 'none' },
+      auth: { type: 'none' },
+      examples: [
+        {
+          id: 'ex1',
+          name: 'Found',
+          status: 200,
+          headers: [['Content-Type', 'application/json']],
+          body: '{"id":1}',
+          contentType: 'application/json'
+        },
+        {
+          id: 'ex2',
+          name: 'Missing',
+          status: 404,
+          headers: [['Content-Type', 'application/json']],
+          body: '{"error":"not found"}',
+          contentType: 'application/json'
+        }
+      ]
+    }
+    const collection: CollectionFolderNode = {
+      id: 'c1',
+      type: 'collection',
+      name: 'C',
+      children: [{ id: 'req1', type: 'request', request }]
+    }
+
+    const exported = exportPostmanCollection(collection)
+    const item = exported.item[0]
+    expect(item.response).toHaveLength(2)
+    expect(item.response[0]).toMatchObject({ name: 'Found', code: 200, status: 'OK' })
+    expect(item.response[0]._postman_previewlanguage).toBe('json')
+
+    // Re-import the exported JSON and confirm examples survive.
+    const reimported = importPostmanCollection(exported)
+    const req = firstRequest(reimported)
+    expect(req.examples).toHaveLength(2)
+    expect(req.examples[1]).toMatchObject({ name: 'Missing', status: 404, contentType: 'application/json' })
+    expect(req.examples[0].body).toBe('{"id":1}')
   })
 })

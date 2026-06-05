@@ -306,3 +306,494 @@
   font-size: 11px;
   margin-left: 8px;
 }
+
+/* ============================================================
+   Collections tree — drag & drop reordering indicators
+   (native HTML5 DnD). `.tree-row` is position:relative already.
+   ============================================================ */
+
+/* Drop INTO a folder/collection: highlight the whole row + inner ring. */
+.tree-row.drop-into {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--tx-0);
+}
+
+/* Drop BEFORE/AFTER a sibling: a 2px accent line at the row's top/bottom edge.
+   Uses ::after so it never collides with .tree-row.active::before (left bar). */
+.tree-row.drop-before::after,
+.tree-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}
+.tree-row.drop-before::after {
+  top: -1px;
+}
+.tree-row.drop-after::after {
+  bottom: -1px;
+}
+/* A small leading dot makes the insertion point read clearly. */
+.tree-row.drop-before::after,
+.tree-row.drop-after::after {
+  box-shadow: -3px 0 0 -1px var(--accent);
+}
+
+/* ============================================================
+   Settings → Network section (proxy + client TLS certificates)
+   Appended for NetworkSection.tsx. Reuses .set-h/.set-row/.field/
+   .input/.btn/.icon-btn/.seg + design tokens.
+   ============================================================ */
+
+/* proxy fields block: collapses interactivity when proxy is off */
+.net-block {
+  padding: 16px 0 4px;
+}
+.net-block-off {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.net-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+.net-textarea {
+  height: auto;
+  min-height: 78px;
+  padding: 9px 12px;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre;
+}
+.net-block .field .hint code,
+.net-cert-intro code,
+.net-cert-pass code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+/* client certificate list */
+.net-cert-intro {
+  font-size: 12px;
+  color: var(--tx-2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.net-empty {
+  font-size: 12.5px;
+  color: var(--tx-3);
+  padding: 16px;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.net-cert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.net-cert {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  overflow: hidden;
+}
+.net-cert-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.net-cert-ico {
+  color: var(--accent);
+  flex: none;
+}
+.net-cert-host {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+}
+.net-cert-mode {
+  flex: none;
+}
+.net-cert-mode button {
+  min-width: 46px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.net-cert-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px 14px;
+}
+.net-cert-body .field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.net-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.net-pick-btn {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  justify-content: flex-start;
+  border: 1px solid var(--line);
+  background: var(--bg-0);
+  color: var(--tx-1);
+}
+.net-pick-btn:hover {
+  border-color: var(--line-2);
+  color: var(--tx-0);
+}
+.net-pick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.net-add-cert {
+  margin-top: 14px;
+}
+
+@media (max-width: 620px) {
+  .net-grid-2,
+  .net-cert-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Cookie Manager modal (features/cookies/CookieManager.tsx)
+   Appended. Reuses .resp-table/.btn/.input/.icon-btn + tokens.
+   ============================================================ */
+.ck-mgr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* toolbar */
+.ck-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ck-count {
+  font-size: 12px;
+  color: var(--tx-2);
+}
+.ck-toolbar .btn[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* inline error banner */
+.ck-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--s-5xx);
+  background: color-mix(in oklch, var(--s-5xx) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--s-5xx) 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+}
+
+/* scrollable cookie list */
+.ck-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+}
+
+/* empty state */
+.ck-empty {
+  text-align: center;
+  padding: 36px 20px;
+}
+.ck-empty-ico {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  color: var(--tx-2);
+}
+.ck-empty-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tx-0);
+  margin-bottom: 4px;
+}
+.ck-empty-sub {
+  font-size: 12px;
+  color: var(--tx-2);
+}
+
+/* one domain group */
+.ck-domain {
+  border-bottom: 1px solid var(--line);
+}
+.ck-domain:last-child {
+  border-bottom: none;
+}
+.ck-domain.emph {
+  background: var(--accent-soft);
+  box-shadow: inset 2.5px 0 0 var(--accent);
+}
+.ck-domain-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-1);
+}
+.ck-domain.emph .ck-domain-head {
+  background: color-mix(in oklch, var(--accent-soft) 60%, var(--bg-1));
+}
+.ck-domain-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  color: var(--tx-0);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.ck-domain-toggle:hover {
+  color: var(--accent);
+}
+.ck-chev {
+  color: var(--tx-3);
+  transition: transform 0.15s var(--ease, ease);
+  flex: none;
+}
+.ck-chev.open {
+  transform: rotate(90deg);
+}
+.ck-domain-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.ck-domain-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--tx-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 1px 7px;
+  flex: none;
+}
+.ck-clear-domain {
+  height: 26px;
+  font-size: 11.5px;
+  flex: none;
+}
+.ck-clear-domain[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* per-domain cookie table (extends .resp-table) */
+.ck-table {
+  table-layout: fixed;
+}
+.ck-table th {
+  position: static;
+  padding: 6px 12px;
+  background: transparent;
+}
+.ck-table td {
+  padding: 7px 12px;
+}
+.ck-name {
+  font-weight: 600;
+}
+.ck-value,
+.ck-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ck-muted {
+  color: var(--tx-3);
+}
+.ck-exp {
+  white-space: nowrap;
+}
+.ck-session {
+  color: var(--tx-2);
+  font-style: italic;
+}
+.ck-flags {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.ck-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.ck-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+.ck-actions .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.ck-del:hover {
+  color: var(--s-5xx) !important;
+  background: color-mix(in oklch, var(--s-5xx) 14%, transparent) !important;
+}
+.ck-row .icon-btn[disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* inline edit row */
+.ck-edit-row td {
+  background: var(--bg-2) !important;
+  padding: 10px 12px;
+}
+.ck-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ck-edit-grid,
+.ck-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}
+.ck-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ck-add-field > span {
+  font-size: 11px;
+  color: var(--tx-2);
+  font-weight: 500;
+}
+.ck-add-wide {
+  grid-column: 1 / -1;
+}
+.ck-input {
+  height: 32px;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+.ck-edit-foot,
+.ck-add-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ck-flag-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--tx-1);
+  cursor: pointer;
+}
+.ck-spacer {
+  flex: 1;
+}
+
+/* add-cookie form block */
+.ck-add {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-1);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ck-add-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-0);
+}
+.ck-add-foot .btn[disabled],
+.ck-edit-foot .btn[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (max-width: 560px) {
+  .ck-edit-grid,
+  .ck-add-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Realtime (WebSocket / SSE) panel + response examples
+   ============================================================ */
+.rt-log { flex: 1; overflow: auto; min-height: 0; padding: 6px 0; }
+.rt-msg { display: flex; align-items: flex-start; gap: 9px; padding: 6px 14px; border-bottom: 1px solid var(--line); }
+.rt-msg:hover { background: var(--bg-hover); }
+.rt-msg-data { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--tx-0); white-space: pre-wrap; word-break: break-word; }
+.rt-msg-meta { flex: none; font-size: 10.5px; color: var(--tx-3); white-space: nowrap; padding-top: 2px; }
+.rt-composer { flex: none; display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--bg-1); }
+.rt-composer textarea {
+  flex: 1; min-height: 56px; max-height: 160px; resize: vertical; padding: 8px 10px;
+  border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg-0);
+  color: var(--tx-0); font-family: var(--font-mono); font-size: 12.5px;
+}
+.rt-composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rt-composer textarea:disabled { opacity: 0.6; }
+
+.example-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: var(--radius-sm); }
+.example-row:hover { background: var(--bg-hover); }

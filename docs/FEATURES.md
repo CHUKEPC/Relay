@@ -50,7 +50,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] Create / rename (inline) / delete / duplicate collections, folders, requests (context menu).
 - [x] Save current request into a collection (Save / Save As with target picker).
 - [x] Multiple open requests as **tabs**; dirty/unsaved indicator; reopen on restart.
-- [~] Reorder via drag-and-drop (tree CRUD is done; DnD reorder not implemented).
+- [x] Reorder via **drag-and-drop** (native HTML5 DnD: reorder requests/folders within and
+      between folders/collections, reorder top-level collections; drop indicators; cycle-safe).
 
 ### Variables & environments
 - [x] Environments: create / duplicate / delete / rename / select active environment.
@@ -91,11 +92,20 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Export**: collection as Postman v2.1 JSON.
 - [x] **Code generation**: cURL, JavaScript (fetch), Python (requests), Node, Go.
 - [x] **Paste cURL** into the URL bar to auto-fill the whole request.
-- [x] **OAuth 2.0** (client credentials + password grant token fetch). [~] Digest auth is best-effort.
-- [~] **Cookie manager**: response Set-Cookie parsed and shown per response; persistent editable
-      jar UI not built (type + storage scaffolded).
-- [ ] Save **response examples** on a request (type scaffolded; no UI yet).
-- [ ] **Bulk edit** for params/headers (key:value text mode).
+- [x] **OAuth 2.0** (client credentials + password grant token fetch).
+- [x] **Digest auth** — full RFC 7616 challenge/response (MD5, SHA-256 and `-sess` variants;
+      qop=auth; legacy RFC 2069 fallback). The first request is sent unauthenticated; the engine
+      answers the 401 `WWW-Authenticate: Digest` challenge and replays once. Unit-tested against
+      the canonical RFC vectors.
+- [x] **Cookie manager**: persistent, editable jar in main (per workspace) — auto-captures
+      `Set-Cookie` and auto-attaches matching cookies (domain/path/secure/expiry) to requests; a
+      Cookie Manager UI (grouped by domain; add/edit/delete; clear-all / clear-by-domain). The
+      per-response Cookies table remains.
+- [x] Save **response examples** on a request (save the current response as a named example;
+      Examples tab to view/restore/delete; restore shows the stored response without sending;
+      round-trips to/from Postman v2.1 `item.response[]`).
+- [x] **Bulk edit** for params/headers (key:value text mode; `//` disables a row; blank lines
+      ignored; lossless two-way, preserving enabled state + descriptions).
 - [x] **Search** across collections/requests; **command palette** (Cmd/Ctrl+K).
 - [x] Keyboard shortcuts (Send = Cmd/Ctrl+Enter, new tab ⌘N, save ⌘S, close tab ⌘W, AI ⌘J, settings ⌘,).
 - [x] **AI tool-calling**: assistant can read/modify the current request, set variables, and send the
@@ -103,14 +113,32 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 
 ---
 
-## P2 — Best-effort / future (not in this build)
+## P2 — implemented locally (no hosted backend needed)
 
-- [ ] Collection **Runner** (iterations + data file CSV/JSON).
-- [ ] **WebSocket** / SSE / Socket.IO client; gRPC.
-- [ ] Response **visualizer**.
-- [ ] Proxy configuration; client TLS certificates.
-- [ ] Workspaces (local, multiple).
-- [ ] SQLite storage backend (upgrade from JSON).
+- [x] Collection **Runner** (N iterations + optional CSV/JSON data file). Each iteration binds one
+      data row as the highest-precedence scope and exposes `pm.iterationData`; runs every request
+      in order with pre-request/test scripts; live progress; per-request/iteration pass/fail; stop.
+- [x] **WebSocket** + **SSE** client (main-process engines over undici; per-connection IPC event
+      stream; custom handshake headers; WS send + binary frames as base64; SSE `event/data/id/retry`
+      parsing with auto-reconnect + `Last-Event-ID`). Mode switch in the URL bar; messages/events
+      panel + composer.
+- [x] Response **visualizer**: `pm.visualizer.set(template, data)` rendered with a safe, pure
+      template engine inside a locked-down `<iframe sandbox>` (no scripts, no network, strict CSP);
+      plus a zero-config auto-table for JSON arrays.
+- [x] **Proxy** configuration (undici `ProxyAgent`, proxy auth + no-proxy bypass list) and **client
+      TLS certificates** (per-host PEM/PFX + optional CA + passphrase; bytes read only in main).
+      Configured in Settings → Network.
+- [x] **Workspaces** (local, multiple): each its own isolated collections/environments/globals/
+      history/tabs/cookies under a per-workspace dir; titlebar switcher (create/rename/delete/
+      switch) with hot-reload on switch. App-level settings, AI providers and secrets are shared.
+- [ ] **Socket.IO** — deferred: it is a protocol layer on top of WebSocket and its official client
+      pulls in a non-trivial dependency; raw WebSocket + SSE cover the core need. Revisit if a
+      pure-JS, build-safe path is confirmed.
+- [ ] **gRPC** — deferred: needs proto tooling/heavy deps and doesn't fit the "no native modules,
+      local-first, one-shot reliable build" constraint.
+- [ ] **SQLite storage backend** — intentionally NOT used: CLAUDE.md locks the JSON document store
+      and marks SQLite (`better-sqlite3`, a native module) as a documented future upgrade requiring
+      explicit approval, to keep the one-shot cross-platform build reliable.
 
 ## Out of scope (needs a hosted backend)
 

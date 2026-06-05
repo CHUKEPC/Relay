@@ -19,7 +19,9 @@ export const DEFAULT_SETTINGS = {
   maxHistory: 200,
   wordWrapResponse: false,
   sendAiContext: true,
-  autoApplyAiTools: false
+  autoApplyAiTools: false,
+  proxy: { enabled: false, url: '', bypass: [] as string[] },
+  clientCerts: [] as import('./types').ClientCert[]
 }
 
 export type AppSettings = typeof DEFAULT_SETTINGS

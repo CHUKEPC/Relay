@@ -9,7 +9,8 @@ import type {
   KV,
   OAuth2Grant,
   RequestBody,
-  RequestModel
+  RequestModel,
+  ResponseExample
 } from '@shared/types'
 
 /* ---------------- helpers ---------------- */
@@ -158,6 +159,63 @@ function importBody(body: any): RequestBody {
   }
 }
 
+/** First header value (case-insensitive) from a Postman header array. */
+function headerValueOf(headers: any[], name: string): string {
+  const lower = name.toLowerCase()
+  const found = (headers ?? []).find((h) => (h?.key ?? '').toLowerCase() === lower)
+  return found?.value ?? ''
+}
+
+/** Import Postman v2.1 `item.response[]` saved responses into ResponseExample[]. */
+function importExamples(responses: any): ResponseExample[] | undefined {
+  if (!Array.isArray(responses) || responses.length === 0) return undefined
+  const out: ResponseExample[] = []
+  for (const r of responses) {
+    if (!r) continue
+    const headers = (r.header ?? []).map((h: any) => [h?.key ?? '', h?.value ?? ''] as [string, string])
+    out.push({
+      id: makeId('ex'),
+      name: r.name ?? 'Example',
+      status: typeof r.code === 'number' ? r.code : 0,
+      headers,
+      body: typeof r.body === 'string' ? r.body : '',
+      contentType: headerValueOf(r.header, 'content-type')
+    })
+  }
+  return out.length ? out : undefined
+}
+
+/** Map a content-type to a Postman preview-language hint. */
+function previewLanguage(contentType: string): string {
+  const ct = contentType.toLowerCase()
+  if (ct.includes('json')) return 'json'
+  if (ct.includes('html')) return 'html'
+  if (ct.includes('xml')) return 'xml'
+  if (ct.includes('javascript')) return 'javascript'
+  return 'text'
+}
+
+/** Minimal reason phrases for the few codes worth labeling on export. */
+const REASON: Record<number, string> = {
+  200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content', 301: 'Moved Permanently',
+  302: 'Found', 304: 'Not Modified', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
+  404: 'Not Found', 409: 'Conflict', 422: 'Unprocessable Entity', 429: 'Too Many Requests',
+  500: 'Internal Server Error', 502: 'Bad Gateway', 503: 'Service Unavailable'
+}
+
+/** Export ResponseExample[] to Postman v2.1 `item.response[]`. */
+function exportExamples(examples: ResponseExample[] | undefined): any[] | undefined {
+  if (!examples || examples.length === 0) return undefined
+  return examples.map((ex) => ({
+    name: ex.name,
+    status: REASON[ex.status] ?? '',
+    code: ex.status,
+    header: (ex.headers ?? []).map(([key, value]) => ({ key, value })),
+    body: ex.body ?? '',
+    _postman_previewlanguage: previewLanguage(ex.contentType ?? '')
+  }))
+}
+
 function scriptFromEvents(events: any[], listen: string): string | undefined {
   const ev = (events ?? []).find((e) => e.listen === listen)
   if (!ev) return undefined
@@ -195,6 +253,7 @@ function importItem(item: any): CollectionNode {
     auth: importAuth(r.auth),
     preRequestScript: scriptFromEvents(item.event, 'prerequest'),
     testScript: scriptFromEvents(item.event, 'test'),
+    examples: importExamples(item.response),
     description: typeof r.description === 'string' ? r.description : undefined
   }
   return { id: request.id, type: 'request', request }
@@ -316,7 +375,8 @@ function exportRequest(r: RequestModel): any {
       auth: exportAuth(r.auth),
       body: exportBody(r.body),
       description: r.description
-    }
+    },
+    response: exportExamples(r.examples)
   }
 }
 

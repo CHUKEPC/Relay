@@ -20,13 +20,18 @@ import type {
   OAuthTokenRequest,
   OAuthTokenResult,
   ProvidersDoc,
+  RealtimeEvent,
   RequestSpec,
   ResponseResult,
   RunOptions,
   ScriptRunRequest,
   ScriptRunResult,
   SettingsDoc,
-  TabsDoc
+  SseConnectSpec,
+  StoredCookie,
+  TabsDoc,
+  WorkspaceMeta,
+  WsConnectSpec
 } from './types'
 
 /** Channel names, grouped. Use these constants on both ends. */
@@ -62,9 +67,32 @@ export const IPC = {
   oauth: {
     token: 'oauth:token'
   },
+  cookies: {
+    get: 'cookies:get',
+    set: 'cookies:set',
+    delete: 'cookies:delete',
+    clear: 'cookies:clear'
+  },
+  realtime: {
+    wsConnect: 'realtime:wsConnect',
+    wsSend: 'realtime:wsSend',
+    wsClose: 'realtime:wsClose',
+    sseConnect: 'realtime:sseConnect',
+    sseClose: 'realtime:sseClose',
+    /** event channel suffix; full channel = `${realtime.event}:${connId}` */
+    event: 'realtime:event'
+  },
+  workspace: {
+    list: 'workspace:list',
+    create: 'workspace:create',
+    rename: 'workspace:rename',
+    delete: 'workspace:delete',
+    switch: 'workspace:switch'
+  },
   dialog: {
     openFile: 'dialog:openFile',
-    saveFile: 'dialog:saveFile'
+    saveFile: 'dialog:saveFile',
+    readFile: 'dialog:readFile'
   },
   app: {
     platform: 'app:platform',
@@ -142,9 +170,35 @@ export interface RelayApi {
   /* ---- oauth (P1) ---- */
   oauthToken(payload: OAuthTokenRequest): Promise<OAuthTokenResult>
 
+  /* ---- cookies (persistent jar) ---- */
+  cookiesGet(): Promise<StoredCookie[]>
+  /** upsert by (domain, path, key) */
+  cookiesSet(cookie: StoredCookie): Promise<void>
+  cookiesDelete(cookie: Pick<StoredCookie, 'domain' | 'path' | 'key'>): Promise<void>
+  /** clear all, or just one domain when `domain` is given */
+  cookiesClear(domain?: string): Promise<void>
+
+  /* ---- realtime: WebSocket + SSE ---- */
+  wsConnect(spec: WsConnectSpec): Promise<void>
+  wsSend(connId: string, data: string): Promise<void>
+  wsClose(connId: string): Promise<void>
+  sseConnect(spec: SseConnectSpec): Promise<void>
+  sseClose(connId: string): Promise<void>
+  /** Subscribe to events for a connection. Returns an unsubscribe fn. */
+  onRealtime(connId: string, cb: (event: RealtimeEvent) => void): () => void
+
+  /* ---- local workspaces ---- */
+  workspaceList(): Promise<{ workspaces: WorkspaceMeta[]; activeId: string }>
+  workspaceCreate(name: string): Promise<WorkspaceMeta>
+  workspaceRename(id: string, name: string): Promise<void>
+  workspaceDelete(id: string): Promise<void>
+  workspaceSwitch(id: string): Promise<void>
+
   /* ---- dialogs / fs ---- */
   openFile(opts: OpenFileOptions): Promise<FilePickResult[] | null>
   saveFile(opts: SaveFileOptions): Promise<string | null>
+  /** Read a UTF-8 text file the user picked (for runner data files). Size-capped in main. */
+  readTextFile(path: string): Promise<string>
 
   /* ---- window controls (frameless) ---- */
   minimizeWindow(): Promise<void>
