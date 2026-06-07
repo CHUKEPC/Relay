@@ -20,6 +20,7 @@ import { Cookie } from 'tough-cookie'
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { buildDigestAuthHeader, parseDigestChallenge } from '../auth/digest'
 import { buildTokenAuth, signRequest } from '../auth/sign'
+import { createType1Message, createType3Message, decodeType2Message } from '../auth/ntlm'
 import type {
   Auth,
   ClientCert,
@@ -146,6 +147,13 @@ export function buildAuthHeaders(auth: Auth | undefined): {
       return { headers: {} }
     }
 
+    case 'ntlm': {
+      // NTLM is a connection-bound 3-message handshake driven inside runRequest:
+      // the first request carries the Type 1 (NEGOTIATE) message; the Type 2/3
+      // exchange happens on the 401. Seed the Type 1 here.
+      return { headers: { Authorization: `NTLM ${createType1Message({ domain: auth.domain, workstation: auth.workstation })}` } }
+    }
+
     default:
       return { headers: {} }
   }
@@ -203,6 +211,25 @@ function firstHeader(headers: Record<string, string | string[] | undefined>, nam
   const v = headers[name] ?? headers[name.toLowerCase()]
   if (v === undefined) return undefined
   return Array.isArray(v) ? v[0] : v
+}
+
+/**
+ * Find the NTLM Type 2 token from `WWW-Authenticate`. A server may send several
+ * challenges (e.g. `Negotiate` and `NTLM <b64>`) as one comma-joined string or
+ * as repeated headers, so scan every candidate and return the base64 that
+ * follows the `NTLM` scheme. Returns undefined for a bare `NTLM` (no token).
+ */
+function extractNtlmToken(headers: Record<string, string | string[] | undefined>): string | undefined {
+  const raw = headers['www-authenticate'] ?? headers['WWW-Authenticate']
+  if (raw === undefined) return undefined
+  const values = Array.isArray(raw) ? raw : [raw]
+  for (const value of values) {
+    for (const part of value.split(',')) {
+      const m = /^\s*NTLM\s+([A-Za-z0-9+/=]+)\s*$/.exec(part)
+      if (m) return m[1]
+    }
+  }
+  return undefined
 }
 
 /** Same scheme + host (origin) — used to decide whether to forward credentials. */
@@ -317,7 +344,10 @@ async function loadClientCert(tls: ConnectTls, cert: ClientCert): Promise<void> 
 async function makeDispatcher(
   url: string,
   settings: RequestSettings | undefined,
-  relaxTls: boolean
+  relaxTls: boolean,
+  // NTLM binds auth state to a single TCP connection, so the Type 1 and Type 3
+  // requests must reuse one socket — force a single-connection, non-pipelined pool.
+  singleConnection = false
 ): Promise<Dispatcher | undefined> {
   let hostname = ''
   let host = ''
@@ -341,6 +371,10 @@ async function makeDispatcher(
     const opts: ProxyAgent.Options = { uri: proxy.url }
     if (hasTls) opts.requestTls = tls
     if (allowH2) opts.allowH2 = true
+    if (singleConnection) {
+      opts.connections = 1
+      opts.pipelining = 1
+    }
     if (proxy.auth && proxy.auth.username) {
       const token = Buffer.from(`${proxy.auth.username}:${proxy.auth.password ?? ''}`, 'utf8').toString('base64')
       opts.token = `Basic ${token}`
@@ -348,10 +382,14 @@ async function makeDispatcher(
     return new ProxyAgent(opts)
   }
 
-  if (hasTls || allowH2) {
+  if (hasTls || allowH2 || singleConnection) {
     const opts: Agent.Options = {}
     if (hasTls) opts.connect = tls
     if (allowH2) opts.allowH2 = true
+    if (singleConnection) {
+      opts.connections = 1
+      opts.pipelining = 1
+    }
     return new Agent(opts)
   }
   return undefined
@@ -781,6 +819,10 @@ export async function runRequest(
   // Digest auth: send unauthenticated first, then answer one 401 challenge.
   const digestAuth = spec.auth && spec.auth.type === 'digest' ? spec.auth : null
   let digestTried = false
+  // NTLM auth: Type 1 is seeded preemptively; on the 401 Type 2 challenge we
+  // reply with Type 3 over the SAME connection (forced single-socket pool).
+  const ntlmAuth = spec.auth && spec.auth.type === 'ntlm' ? spec.auth : null
+  let ntlmTried = false
 
   try {
     // --- 6. Request loop: send, optionally follow redirects manually. ---
@@ -798,10 +840,10 @@ export async function runRequest(
       } catch {
         /* validated upstream */
       }
-      const dispKey = `${hopHost}|${relaxTls}`
+      const dispKey = `${hopHost}|${relaxTls}|${ntlmAuth ? 'ntlm' : ''}`
       if (dispKey !== lastDispKey) {
         closeDispatcher()
-        dispatcher = await makeDispatcher(currentUrl, settings, relaxTls)
+        dispatcher = await makeDispatcher(currentUrl, settings, relaxTls, !!ntlmAuth)
         lastDispKey = dispKey
       }
 
@@ -845,6 +887,30 @@ export async function runRequest(
           })
           setHeaderCI(headers, 'Authorization', authHeader)
           continue // replay same URL with credentials
+        }
+      }
+
+      // NTLM challenge/response: the server answers the Type 1 (sent preemptively)
+      // with a 401 carrying `WWW-Authenticate: NTLM <type2 base64>`. Decode it,
+      // build the Type 3, and replay once over the same keep-alive socket.
+      if (status === 401 && ntlmAuth && !ntlmTried) {
+        const ntlmToken = extractNtlmToken(res.headers)
+        if (ntlmToken) {
+          await res.body.dump?.()
+          ntlmTried = true
+          try {
+            const type2 = decodeType2Message(ntlmToken)
+            const type3 = createType3Message(type2, {
+              username: ntlmAuth.username ?? '',
+              password: ntlmAuth.password ?? '',
+              domain: ntlmAuth.domain,
+              workstation: ntlmAuth.workstation
+            })
+            setHeaderCI(headers, 'Authorization', `NTLM ${type3}`)
+            continue // replay same URL with the Type 3 authenticate message
+          } catch {
+            // Malformed Type 2 — fall through and return the 401 as the result.
+          }
         }
       }
 

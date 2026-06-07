@@ -83,6 +83,14 @@ function resolveAuth(auth: Auth, scope: VariableScope, unresolved: Set<string>):
         privateKey: res(auth.privateKey, scope, unresolved),
         subject: auth.subject ? res(auth.subject, scope, unresolved) : auth.subject
       }
+    case 'ntlm':
+      return {
+        ...auth,
+        username: res(auth.username, scope, unresolved),
+        password: res(auth.password, scope, unresolved),
+        domain: auth.domain ? res(auth.domain, scope, unresolved) : auth.domain,
+        workstation: auth.workstation ? res(auth.workstation, scope, unresolved) : auth.workstation
+      }
     default:
       return auth
   }

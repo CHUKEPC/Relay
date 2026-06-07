@@ -19,7 +19,8 @@ const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
   { id: 'aws', label: 'AWS Signature' },
   { id: 'hawk', label: 'Hawk' },
   { id: 'akamai', label: 'Akamai' },
-  { id: 'asap', label: 'ASAP' }
+  { id: 'asap', label: 'ASAP' },
+  { id: 'ntlm', label: 'NTLM' }
 ]
 
 const JWT_ALGS: JwtAlg[] = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512']
@@ -74,6 +75,8 @@ export function AuthTab({ req }: { req: RequestModel }) {
         return setAuth({ type: 'akamai', clientToken: '', clientSecret: '', accessToken: '' })
       case 'asap':
         return setAuth({ type: 'asap', issuer: '', audience: '', keyId: '', privateKey: '' })
+      case 'ntlm':
+        return setAuth({ type: 'ntlm', username: '', password: '', domain: '', workstation: '' })
     }
   }
 
@@ -341,6 +344,27 @@ export function AuthTab({ req }: { req: RequestModel }) {
           <Field label="Subject">
             <input className="input mono" value={auth.subject ?? ''} onChange={(e) => setAuth({ ...auth, subject: e.target.value })} placeholder="(необязательно)" />
           </Field>
+        </>
+      )}
+
+      {auth.type === 'ntlm' && (
+        <>
+          <Field label="Username">
+            <input className="input" value={auth.username} onChange={(e) => setAuth({ ...auth, username: e.target.value })} placeholder="user" />
+          </Field>
+          <Field label="Password">
+            <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
+          </Field>
+          <Field label="Domain" hint="Домен Windows (необязательно)">
+            <input className="input" value={auth.domain ?? ''} onChange={(e) => setAuth({ ...auth, domain: e.target.value })} placeholder="(необязательно)" />
+          </Field>
+          <Field label="Workstation" hint="Имя рабочей станции (необязательно)">
+            <input className="input" value={auth.workstation ?? ''} onChange={(e) => setAuth({ ...auth, workstation: e.target.value })} placeholder="(необязательно)" />
+          </Field>
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: 4 }}>
+            NTLMv2: запрос отправляется с Type 1, на 401 с Type 2 движок отвечает Type 3 по тому же
+            keep-alive соединению.
+          </div>
         </>
       )}
     </div>

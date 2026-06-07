@@ -127,6 +127,14 @@ export type Auth =
       privateKey: string
       subject?: string
     }
+  | {
+      /** NTLM (NTLMv2) — connection-oriented type1/type2/type3 handshake. */
+      type: 'ntlm'
+      username: string
+      password: string
+      domain?: string
+      workstation?: string
+    }
 
 export type JwtAlg =
   | 'HS256'

@@ -108,9 +108,11 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       ignored; lossless two-way, preserving enabled state + descriptions).
 - [x] **Extended auth types** (pure `node:crypto`, vector-tested): **JWT Bearer** (HS/RS/PS),
       **OAuth 1.0a** (HMAC-SHA1/256, PLAINTEXT), **AWS Signature v4** (incl. UNSIGNED-PAYLOAD for
-      multipart), **Hawk**, **Akamai EdgeGrid**, **ASAP**. Token-style auth attaches a header;
-      request-bound auth is signed after the body is assembled. (NTLM deferred — needs MD4 + a
-      multi-step handshake.)
+      multipart), **Hawk**, **Akamai EdgeGrid**, **ASAP**, and **NTLM** (NTLMv2 with a hand-written
+      pure-JS MD4 since OpenSSL 3 drops it; the Type 1/2/3 handshake runs inside the engine on a
+      forced single-connection pool, replaying the 401 challenge with the Type 3 message). Token-style
+      auth attaches a header; request-bound auth is signed after the body is assembled. **This now
+      covers Postman's entire auth roster.**
 - [x] **Test snippets** — a Snippets panel in the Scripts editor inserts ready `pm.test`/`pm.expect`
       boilerplate (status code, response time, body contains/equals/JSON value, header checks,
       set/get env vars, …).
