@@ -617,7 +617,7 @@ export interface ScriptRunResult {
  * Import / export, codegen, dialogs, OAuth, cookies
  * ============================================================ */
 
-export type ImportKind = 'postman' | 'openapi' | 'curl' | 'har' | 'swagger' | 'insomnia' | 'auto'
+export type ImportKind = 'postman' | 'openapi' | 'curl' | 'har' | 'swagger' | 'insomnia' | 'environment' | 'auto'
 
 export interface ImportResult {
   kind: 'collection' | 'request' | 'environment'

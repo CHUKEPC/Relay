@@ -8,6 +8,7 @@ import { importOpenApi } from './openapi'
 import { importHar, isHar } from './har'
 import { importInsomnia, isInsomniaExport } from './insomnia'
 import { isSwagger2 } from './swagger2'
+import { importPostmanEnvironment, isPostmanEnvironment } from './environment'
 
 /** Does this text look like YAML rather than JSON? (no leading `{`/`[`). */
 function looksLikeYaml(text: string): boolean {
@@ -60,6 +61,9 @@ function detectKind(text: string): ImportKind {
   if (obj.openapi) return 'openapi'
   if (obj.swagger) return 'swagger'
   if (obj.info && obj.item) return 'postman'
+  // Environment/globals exports carry `values[]` but no collection `item[]`;
+  // checked after the collection cases so a real collection always wins.
+  if (isPostmanEnvironment(obj)) return 'environment'
   return 'auto'
 }
 
@@ -91,6 +95,11 @@ export function importData(kind: ImportKind, text: string): ImportResult[] {
       const obj = parseJsonOrThrow(text, 'Postman')
       const collection = importPostmanCollection(obj)
       return [{ kind: 'collection', collection, warnings: [] }]
+    }
+    case 'environment': {
+      const obj = parseJsonOrThrow(text, 'Postman environment')
+      const environment = importPostmanEnvironment(obj)
+      return [{ kind: 'environment', environment, warnings: [] }]
     }
     case 'openapi':
     case 'swagger': {

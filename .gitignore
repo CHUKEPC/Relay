@@ -18,3 +18,6 @@ coverage/
 # Build instructions / Claude config — kept private (intentional)
 .claude
 CLAUDE.md
+
+# QA test kit — local testing material, not part of the shipped source
+qa/
