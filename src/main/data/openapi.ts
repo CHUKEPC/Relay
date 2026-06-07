@@ -4,6 +4,7 @@
  */
 import { makeId } from '@shared/id'
 import { escapeRegExp } from '@shared/regex'
+import { importSwagger2 } from './swagger2'
 import type {
   CollectionFolderNode,
   CollectionNode,
@@ -136,6 +137,12 @@ export interface OpenApiImportResult {
 }
 
 export function importOpenApi(doc: any): OpenApiImportResult {
+  // A Swagger 2.0 document has a fundamentally different shape (host/basePath/
+  // schemes, body/formData params, #/definitions). Delegate to the dedicated
+  // importer so callers can feed either spec version through one entry point.
+  if (typeof doc?.swagger === 'string' && doc.swagger.startsWith('2')) {
+    return importSwagger2(doc)
+  }
   const warnings: string[] = []
   const title = doc.info?.title ?? 'OpenAPI import'
 

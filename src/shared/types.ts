@@ -43,7 +43,12 @@ export type RequestBody =
   | { type: 'graphql'; query: string; variables: string }
 
 export type ApiKeyLocation = 'header' | 'query'
-export type OAuth2Grant = 'authorization_code' | 'client_credentials' | 'password'
+export type OAuth2Grant =
+  | 'authorization_code'
+  | 'client_credentials'
+  | 'password'
+  | 'refresh_token'
+  | 'device_code'
 
 export type Auth =
   | { type: 'none' }
@@ -66,12 +71,30 @@ export type Auth =
       /** authorization_code grant: the code obtained from the redirect */
       code?: string
       redirectUri?: string
+      /** PKCE code_verifier (authorization_code); challenge is derived for the auth URL */
+      codeVerifier?: string
+      /** how client credentials are sent to the token endpoint */
+      clientAuth?: 'body' | 'basic'
+      /** refresh_token grant: the refresh token to exchange */
+      refreshToken?: string
+      /** device_code grant: the device authorization endpoint */
+      deviceAuthUrl?: string
+      /** device_code grant: the device_code returned by the device-authorization step */
+      deviceCode?: string
+      /** auto-refresh the access token on a 401 (needs refreshToken + tokenUrl) */
+      autoRefresh?: boolean
     }
   | {
       type: 'digest'
       username: string
       password: string
       algorithm?: 'MD5' | 'SHA-256' | 'MD5-sess' | 'SHA-256-sess'
+      /** send credentials on the first request from a known challenge (no 401 round-trip) */
+      preemptive?: boolean
+      realm?: string
+      nonce?: string
+      opaque?: string
+      qop?: string
     }
   | {
       /** JWT Bearer — Relay signs a JWT from the payload and attaches it. */
@@ -320,6 +343,10 @@ export interface RequestModel {
   mode?: RequestMode
   /** websocket message draft + saved messages composer text */
   wsMessage?: string
+  /** saved realtime message templates (WS/Socket.IO/MQTT) */
+  messageTemplates?: MessageTemplate[]
+  /** per-request MQTT QoS + Last-Will config (mqtt mode) */
+  mqtt?: { qos?: 0 | 1 | 2; lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean } }
   /** gRPC mode config (proto text, target, selected service/method, message) */
   grpc?: GrpcConfig
   /** pre-request and test scripts (P1) */
@@ -553,10 +580,14 @@ export interface ScriptRunRequest {
   response?: ResponseResult
   environment: Record<string, string>
   globals: Record<string, string>
-  /** collection-scoped variables (read-only via pm.variables) */
+  /** collection-scoped variables (read/write via pm.collectionVariables) */
   collection?: Record<string, string>
   /** data-file row for the current runner iteration (pm.iterationData) */
   iterationData?: Record<string, string>
+  /** cookie snapshot for the request URL's domain, for pm.cookies (read) */
+  cookies?: StoredCookie[]
+  /** the request URL (for pm.cookies.jar() defaults) */
+  url?: string
 }
 
 /** Payload captured from `pm.visualizer.set(template, data)` in a test script. */
@@ -571,6 +602,10 @@ export interface ScriptRunResult {
   /** variable mutations to apply back */
   environmentUpdates: Record<string, string | null>
   globalUpdates: Record<string, string | null>
+  /** collection-variable mutations (pm.collectionVariables.set/unset) */
+  collectionUpdates?: Record<string, string | null>
+  /** cookie mutations (pm.cookies.jar().set/unset) to apply to the jar */
+  cookieUpdates?: { set?: StoredCookie[]; remove?: Array<Pick<StoredCookie, 'domain' | 'path' | 'key'>> }
   /** request mutations from pre-request scripts */
   requestPatch?: Partial<Pick<RequestModel, 'url' | 'headers' | 'method'>>
   /** captured Postman-style visualizer template + data (test phase) */
@@ -582,7 +617,7 @@ export interface ScriptRunResult {
  * Import / export, codegen, dialogs, OAuth, cookies
  * ============================================================ */
 
-export type ImportKind = 'postman' | 'openapi' | 'curl' | 'auto'
+export type ImportKind = 'postman' | 'openapi' | 'curl' | 'har' | 'swagger' | 'insomnia' | 'auto'
 
 export interface ImportResult {
   kind: 'collection' | 'request' | 'environment'
@@ -610,6 +645,14 @@ export interface OAuthTokenRequest {
   /** authorization_code grant */
   code?: string
   redirectUri?: string
+  /** PKCE code_verifier (authorization_code) */
+  codeVerifier?: string
+  /** refresh_token grant */
+  refreshToken?: string
+  /** device_code grant: the device_code returned by the device-authorization step */
+  deviceCode?: string
+  /** how to present client credentials: request body (default) or HTTP Basic */
+  clientAuth?: 'body' | 'basic'
 }
 
 export interface OAuthTokenResult {
@@ -617,7 +660,27 @@ export interface OAuthTokenResult {
   accessToken?: string
   tokenType?: string
   expiresIn?: number
+  /** refresh_token returned by the token endpoint, if any */
+  refreshToken?: string
   raw?: string
+  error?: string
+}
+
+/** Device Authorization Grant — step 1 (RFC 8628). */
+export interface OAuthDeviceRequest {
+  deviceAuthUrl: string
+  clientId: string
+  scope?: string
+}
+
+export interface OAuthDeviceResult {
+  ok: boolean
+  deviceCode?: string
+  userCode?: string
+  verificationUri?: string
+  verificationUriComplete?: string
+  expiresIn?: number
+  interval?: number
   error?: string
 }
 
@@ -695,6 +758,21 @@ export interface MqttConnectSpec {
   /** topics to subscribe to on connect */
   subscribeTopics?: string[]
   rejectUnauthorized?: boolean
+  /** default QoS for publish/subscribe (0/1/2) */
+  qos?: 0 | 1 | 2
+  /** Last-Will and Testament published by the broker if the client drops */
+  lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean }
+}
+
+/** A reusable, saved realtime message (WebSocket frame / Socket.IO emit / MQTT publish). */
+export interface MessageTemplate {
+  id: string
+  name: string
+  content: string
+  /** Socket.IO event name (socketio mode) */
+  event?: string
+  /** MQTT topic (mqtt mode) */
+  topic?: string
 }
 
 /* ============================================================
@@ -744,6 +822,25 @@ export interface GrpcConfig {
   metadata?: KV[]
   /** use plaintext (h2c) instead of TLS */
   plaintext?: boolean
+  /** discover services via gRPC Server Reflection instead of a pasted .proto */
+  useReflection?: boolean
+  /** per-call deadline in milliseconds (0/undefined = none) */
+  deadlineMs?: number
+  /** mTLS: PEM paths (read in main only) */
+  caCertPath?: string
+  clientCertPath?: string
+  clientKeyPath?: string
+}
+
+/** Discover services/methods from a running server via gRPC Server Reflection. */
+export interface GrpcReflectSpec {
+  address: string
+  metadata: KV[]
+  plaintext?: boolean
+  rejectUnauthorized?: boolean
+  caCertPath?: string
+  clientCertPath?: string
+  clientKeyPath?: string
 }
 
 /** Start a gRPC call. Streams results over `grpc:event:<connId>`. */
@@ -760,6 +857,14 @@ export interface GrpcInvokeSpec {
   metadata: KV[]
   plaintext?: boolean
   rejectUnauthorized?: boolean
+  /** discover descriptors via Server Reflection instead of `proto` */
+  useReflection?: boolean
+  /** per-call deadline in milliseconds (0/undefined = none) */
+  deadlineMs?: number
+  /** mTLS: PEM paths (read in main only) */
+  caCertPath?: string
+  clientCertPath?: string
+  clientKeyPath?: string
 }
 
 /* ============================================================
@@ -798,4 +903,36 @@ export interface SqliteImportSummary {
   environments: number
   globals: number
   history: number
+}
+
+/* ============================================================
+ * GraphQL schema introspection — P2
+ * ============================================================ */
+
+export interface GraphqlField {
+  name: string
+  /** rendered type, e.g. "String!" or "[User!]" */
+  type: string
+  args: { name: string; type: string }[]
+  description?: string
+}
+
+export interface GraphqlTypeInfo {
+  name: string
+  kind: string
+  description?: string
+  fields: GraphqlField[]
+}
+
+export interface GraphqlSchema {
+  queryType?: string
+  mutationType?: string
+  subscriptionType?: string
+  types: GraphqlTypeInfo[]
+}
+
+export interface GraphqlIntrospectResult {
+  ok: boolean
+  schema?: GraphqlSchema
+  error?: string
 }

@@ -164,5 +164,63 @@ pm.environment.set("token", json.token);
     phase: 'pre',
     code: `pm.environment.set("timestamp", String(Date.now()));
 `
+  },
+  {
+    id: 'collection-var-set',
+    label: 'Set a collection variable',
+    phase: 'both',
+    code: `pm.collectionVariables.set("key", "value");
+`
+  },
+  {
+    id: 'local-var-set',
+    label: 'Set a local (this-run-only) variable',
+    phase: 'both',
+    code: `pm.variables.set("key", "value");
+`
+  },
+
+  // --- Sending a follow-up request ----------------------------------------
+  {
+    id: 'send-request-get',
+    label: 'Send a request (pm.sendRequest)',
+    phase: 'both',
+    code: `pm.sendRequest("https://postman-echo.com/get", function (err, res) {
+    if (err) { console.log(err); return; }
+    console.log(res.json());
+});
+`
+  },
+  {
+    id: 'send-request-post',
+    label: 'Send a POST request with a JSON body',
+    phase: 'both',
+    code: `pm.sendRequest({
+    url: "https://postman-echo.com/post",
+    method: "POST",
+    header: { "Content-Type": "application/json" },
+    body: { mode: "raw", raw: JSON.stringify({ hello: "world" }) }
+}, function (err, res) {
+    if (err) { console.log(err); return; }
+    pm.expect(res.code).to.eql(200);
+});
+`
+  },
+
+  // --- Cookies -------------------------------------------------------------
+  {
+    id: 'cookies-get',
+    label: 'Read a cookie value (pm.cookies.get)',
+    phase: 'both',
+    code: `const sessionId = pm.cookies.get("sessionid");
+console.log(sessionId);
+`
+  },
+  {
+    id: 'cookies-jar-set',
+    label: 'Set a cookie in the jar',
+    phase: 'both',
+    code: `pm.cookies.jar().set({ name: "token", value: "abc123", domain: "example.com", path: "/" });
+`
   }
 ]

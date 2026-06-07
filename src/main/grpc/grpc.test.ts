@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseProto } from './index'
+import { parseProto, reflectServices } from './index'
 
 const SAMPLE = `
 syntax = "proto3";
@@ -47,4 +47,14 @@ describe('gRPC parseProto', () => {
     expect(res.services).toHaveLength(0)
     expect(res.error).toBeTruthy()
   })
+})
+
+describe('gRPC reflectServices', () => {
+  it('returns a structured error for an unreachable address (no throw)', async () => {
+    // Port 1 is reserved/closed: the dial fails fast and we should resolve with
+    // an error result rather than throwing or hanging.
+    const res = await reflectServices({ address: '127.0.0.1:1', metadata: [], plaintext: true })
+    expect(res.services).toHaveLength(0)
+    expect(res.error).toBeTruthy()
+  }, 20000)
 })

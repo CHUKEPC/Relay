@@ -3,7 +3,12 @@ import type { CollectionNode, RequestModel, VariableScope } from '@shared/types'
 import { makeId } from '@shared/id'
 import { parseCsv } from '@shared/csv'
 import { buildRequestSpec } from '../lib/request-spec'
-import { settingsToRequestSettings, persistVarUpdates } from '../lib/request-runner'
+import {
+  settingsToRequestSettings,
+  persistVarUpdates,
+  cookieSnapshotFor,
+  applyScriptSideEffects
+} from '../lib/request-runner'
 import { useCollections } from './collections'
 import { useEnvironments } from './environments'
 
@@ -202,20 +207,29 @@ async function runOneRequest(
 
   const envStore = useEnvironments.getState()
   const collectionScope = collections.collectionScopeFor(savedRequestId)
+  const ancestors = collections.ancestorScriptsFor(savedRequestId)
 
-  // 1) pre-request script (data row = highest-precedence iterationData)
-  if (workingReq.preRequestScript?.trim()) {
+  // 1) pre-request scripts: collection/folder scripts top-down, then own. Data
+  // row = highest-precedence iterationData.
+  const prePhases = [
+    ...ancestors.map((a) => a.preRequestScript).filter((s): s is string => !!s?.trim()),
+    ...(workingReq.preRequestScript?.trim() ? [workingReq.preRequestScript] : [])
+  ]
+  for (const code of prePhases) {
     try {
       const pre = await window.api.runScript({
         phase: 'pre-request',
-        code: workingReq.preRequestScript,
+        code,
         request: workingReq,
         environment: envStore.envScope(),
         globals: envStore.globalScope(),
         collection: collectionScope,
-        iterationData: dataRow
+        iterationData: dataRow,
+        cookies: await cookieSnapshotFor(workingReq.url),
+        url: workingReq.url
       })
       persistVarUpdates(pre.environmentUpdates, pre.globalUpdates)
+      applyScriptSideEffects(savedRequestId, pre)
       if (pre.requestPatch) {
         workingReq = {
           ...workingReq,
@@ -253,23 +267,34 @@ async function runOneRequest(
   base.timeMs = result.timings.totalMs
   if (result.error) base.error = result.error.message
 
-  // 4) test script — skip if the run was cancelled while the send was in flight.
-  if (workingReq.testScript?.trim() && !aborted) {
-    try {
-      const testRes = await window.api.runScript({
-        phase: 'test',
-        code: workingReq.testScript,
-        request: workingReq,
-        response: result,
-        environment: envStore.envScope(),
-        globals: envStore.globalScope(),
-        collection: collectionScope,
-        iterationData: dataRow
-      })
-      persistVarUpdates(testRes.environmentUpdates, testRes.globalUpdates)
-      base.tests = testRes.tests
-    } catch {
-      /* test failure is captured per-test; ignore runner-level throw */
+  // 4) test scripts — collection/folder top-down, then own. Skip entirely if the
+  // run was cancelled while the send was in flight.
+  const testPhases = [
+    ...ancestors.map((a) => a.testScript).filter((s): s is string => !!s?.trim()),
+    ...(workingReq.testScript?.trim() ? [workingReq.testScript] : [])
+  ]
+  if (testPhases.length && !aborted) {
+    const cookies = await cookieSnapshotFor(workingReq.url)
+    for (const code of testPhases) {
+      try {
+        const testRes = await window.api.runScript({
+          phase: 'test',
+          code,
+          request: workingReq,
+          response: result,
+          environment: envStore.envScope(),
+          globals: envStore.globalScope(),
+          collection: collectionScope,
+          iterationData: dataRow,
+          cookies,
+          url: workingReq.url
+        })
+        persistVarUpdates(testRes.environmentUpdates, testRes.globalUpdates)
+        applyScriptSideEffects(savedRequestId, testRes)
+        base.tests.push(...testRes.tests)
+      } catch {
+        /* test failure is captured per-test; ignore runner-level throw */
+      }
     }
   }
 

@@ -65,6 +65,11 @@ const api: RelayApi = {
 
   /* ---- oauth ---- */
   oauthToken: (payload: OAuthTokenRequest) => ipcRenderer.invoke(IPC.oauth.token, payload),
+  oauthDevice: (payload) => ipcRenderer.invoke(IPC.oauth.device, payload),
+
+  /* ---- GraphQL ---- */
+  graphqlIntrospect: (url: string, headers, rejectUnauthorized: boolean) =>
+    ipcRenderer.invoke(IPC.graphql.introspect, url, headers, rejectUnauthorized),
 
   /* ---- cookies ---- */
   cookiesGet: () => ipcRenderer.invoke(IPC.cookies.get),
@@ -101,6 +106,7 @@ const api: RelayApi = {
   grpcSend: (connId: string, message: string) => ipcRenderer.invoke(IPC.grpc.send, connId, message),
   grpcEnd: (connId: string) => ipcRenderer.invoke(IPC.grpc.end, connId),
   grpcCancel: (connId: string) => ipcRenderer.invoke(IPC.grpc.cancel, connId),
+  grpcReflect: (spec) => ipcRenderer.invoke(IPC.grpc.reflect, spec),
   onGrpc: (connId: string, cb: (event: RealtimeEvent) => void) => {
     const channel = `${IPC.grpc.event}:${connId}`
     const handler = (_e: unknown, event: RealtimeEvent) => cb(event)

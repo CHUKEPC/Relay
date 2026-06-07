@@ -1,6 +1,6 @@
 {
   "name": "relay-api-client",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Relay — a cross-platform desktop API client with a built-in multi-provider AI assistant.",
   "productName": "Relay",
   "author": {
@@ -28,7 +28,8 @@
     "socket.io-client": "^4.8.3",
     "sql.js": "^1.14.1",
     "tough-cookie": "^4.1.4",
-    "undici": "^6.21.0"
+    "undici": "^6.21.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@fontsource/inter": "^5.1.0",

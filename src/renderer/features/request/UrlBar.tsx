@@ -111,8 +111,12 @@ export function UrlBar({ req }: { req: RequestModel }) {
   const invokeGrpc = () => {
     if (!tab) return
     const g = req.grpc ?? {}
-    if (!g.proto?.trim() || !g.service || !g.method) {
-      useUi.getState().showToast('Загрузите .proto и выберите сервис/метод')
+    // With reflection the descriptors are fetched server-side, so a pasted .proto
+    // is not required — only a selected service/method.
+    if ((!g.useReflection && !g.proto?.trim()) || !g.service || !g.method) {
+      useUi.getState().showToast(
+        g.useReflection ? 'Выполните Discover и выберите сервис/метод' : 'Загрузите .proto и выберите сервис/метод'
+      )
       return
     }
     if (!grpcAddress.trim()) {
@@ -123,7 +127,7 @@ export function UrlBar({ req }: { req: RequestModel }) {
       .filter((h) => h.enabled && h.key)
       .map((h) => ({ key: interpolate(h.key, scope), value: interpolate(h.value, scope), enabled: true }))
     useGrpc.getState().invoke(tab.id, {
-      proto: g.proto,
+      proto: g.proto ?? '',
       address: interpolate(grpcAddress, scope).replace(/^[a-z]+:\/\//i, ''),
       service: g.service,
       method: g.method,
@@ -131,7 +135,12 @@ export function UrlBar({ req }: { req: RequestModel }) {
       metadata,
       plaintext: g.plaintext ?? false,
       rejectUnauthorized: useSettings.getState().settings.rejectUnauthorized,
-      callKind: g.methodKind ?? 'unary'
+      callKind: g.methodKind ?? 'unary',
+      useReflection: g.useReflection,
+      deadlineMs: g.deadlineMs,
+      caCertPath: g.caCertPath,
+      clientCertPath: g.clientCertPath,
+      clientKeyPath: g.clientKeyPath
     })
   }
 
@@ -155,7 +164,9 @@ export function UrlBar({ req }: { req: RequestModel }) {
       kind: mode as 'websocket' | 'sse' | 'socketio' | 'mqtt',
       url,
       headers,
-      rejectUnauthorized: useSettings.getState().settings.rejectUnauthorized
+      rejectUnauthorized: useSettings.getState().settings.rejectUnauthorized,
+      // MQTT-only: carry the per-request QoS + Last-Will config into the connection.
+      ...(mode === 'mqtt' ? { qos: req.mqtt?.qos, lwt: req.mqtt?.lwt } : {})
     })
   }
 

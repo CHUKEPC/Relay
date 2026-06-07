@@ -175,7 +175,10 @@ if (!window.api) {
     grpcSend: async () => {},
     grpcEnd: async () => {},
     grpcCancel: async () => {},
+    grpcReflect: async () => ({ services: [], error: 'gRPC недоступен в web-режиме' }),
     onGrpc: () => () => {},
+    oauthDevice: async () => ({ ok: false, error: 'Недоступно в web-режиме' }),
+    graphqlIntrospect: async () => ({ ok: false, error: 'Недоступно в web-режиме' }),
     sqliteExport: async () => '',
     sqliteImport: async () => ({
       snapshot: { collections: [], environments: [], activeEnvironmentId: null, globals: [], history: [] },

@@ -15,9 +15,13 @@ import type {
   GlobalsDoc,
   GrpcInvokeSpec,
   GrpcParseResult,
+  GrpcReflectSpec,
+  GraphqlIntrospectResult,
   HistoryDoc,
   ImportKind,
   ImportResult,
+  OAuthDeviceRequest,
+  OAuthDeviceResult,
   ModelInfo,
   OAuthTokenRequest,
   OAuthTokenResult,
@@ -71,7 +75,11 @@ export const IPC = {
     run: 'script:run'
   },
   oauth: {
-    token: 'oauth:token'
+    token: 'oauth:token',
+    device: 'oauth:device'
+  },
+  graphql: {
+    introspect: 'graphql:introspect'
   },
   cookies: {
     get: 'cookies:get',
@@ -101,6 +109,7 @@ export const IPC = {
     send: 'grpc:send',
     end: 'grpc:end',
     cancel: 'grpc:cancel',
+    reflect: 'grpc:reflect',
     /** event channel suffix; full channel = `${grpc.event}:${connId}` */
     event: 'grpc:event'
   },
@@ -195,6 +204,12 @@ export interface RelayApi {
 
   /* ---- oauth (P1) ---- */
   oauthToken(payload: OAuthTokenRequest): Promise<OAuthTokenResult>
+  /** Device Authorization Grant — step 1 (RFC 8628). */
+  oauthDevice(payload: OAuthDeviceRequest): Promise<OAuthDeviceResult>
+
+  /* ---- GraphQL ---- */
+  /** Introspect a GraphQL endpoint's schema (for docs + autocomplete). */
+  graphqlIntrospect(url: string, headers: { key: string; value: string }[], rejectUnauthorized: boolean): Promise<GraphqlIntrospectResult>
 
   /* ---- cookies (persistent jar) ---- */
   cookiesGet(): Promise<StoredCookie[]>
@@ -231,6 +246,8 @@ export interface RelayApi {
   grpcEnd(connId: string): Promise<void>
   /** Cancel an in-flight call. */
   grpcCancel(connId: string): Promise<void>
+  /** Discover services/methods from a live server via Server Reflection. */
+  grpcReflect(spec: GrpcReflectSpec): Promise<GrpcParseResult>
   /** Subscribe to gRPC events for a call. Returns an unsubscribe fn. */
   onGrpc(connId: string, cb: (event: RealtimeEvent) => void): () => void
 

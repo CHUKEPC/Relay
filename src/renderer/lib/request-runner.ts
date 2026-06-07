@@ -1,4 +1,12 @@
-import type { RequestModel, RequestSettings, RequestSpec, VariableDef, VariableScope } from '@shared/types'
+import type {
+  RequestModel,
+  RequestSettings,
+  RequestSpec,
+  ScriptRunResult,
+  StoredCookie,
+  VariableDef,
+  VariableScope
+} from '@shared/types'
 import { makeId } from '@shared/id'
 import { useTabs } from '../store/tabs'
 import { useCollections } from '../store/collections'
@@ -74,6 +82,81 @@ export function persistVarUpdates(envUpdates: Record<string, string | null>, glo
   }
 }
 
+/** Hostname of a URL (lowercased), or '' if it can't be parsed. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+/** True if `cookieDomain` (dot-stripped) is `host` or a suffix of it. */
+function cookieDomainMatches(host: string, cookieDomain: string): boolean {
+  const d = cookieDomain.replace(/^\./, '').toLowerCase()
+  if (!host || !d) return false
+  return host === d || host.endsWith(`.${d}`)
+}
+
+/** Fetch the persistent jar and keep only cookies matching `url`'s host, for
+ *  the pm.cookies (read) snapshot passed into a script run. */
+export async function cookieSnapshotFor(url: string): Promise<StoredCookie[]> {
+  const host = hostOf(url)
+  if (!host) return []
+  try {
+    const all = await window.api.cookiesGet()
+    return all.filter((c) => c && c.domain && cookieDomainMatches(host, c.domain))
+  } catch {
+    return []
+  }
+}
+
+/** Apply a script's collection-variable + cookie mutations back to their stores. */
+export function applyScriptSideEffects(savedRequestId: string | null, result: ScriptRunResult): void {
+  if (result.collectionUpdates && Object.keys(result.collectionUpdates).length) {
+    useCollections.getState().applyCollectionVarUpdates(savedRequestId, result.collectionUpdates)
+  }
+  const cu = result.cookieUpdates
+  if (cu) {
+    for (const c of cu.set ?? []) void window.api.cookiesSet(c)
+    for (const r of cu.remove ?? []) void window.api.cookiesDelete(r)
+  }
+}
+
+/** Merge a pre-request script's requestPatch into the working request. */
+function applyRequestPatch(req: RequestModel, patch: ScriptRunResult['requestPatch']): RequestModel {
+  if (!patch) return req
+  return {
+    ...req,
+    url: patch.url ?? req.url,
+    method: patch.method ?? req.method,
+    headers: patch.headers ?? req.headers
+  }
+}
+
+/**
+ * Ordered pre-request script bodies for a request: ancestor collection/folder
+ * scripts top-down (root first), then the request's own. Empty bodies dropped.
+ */
+function preScriptBodies(workingReq: RequestModel, savedRequestId: string | null): string[] {
+  const out: string[] = []
+  for (const a of useCollections.getState().ancestorScriptsFor(savedRequestId)) {
+    if (a.preRequestScript?.trim()) out.push(a.preRequestScript)
+  }
+  if (workingReq.preRequestScript?.trim()) out.push(workingReq.preRequestScript)
+  return out
+}
+
+/** Ordered test script bodies: ancestor scripts top-down, then the own one. */
+function testScriptBodies(workingReq: RequestModel, savedRequestId: string | null): string[] {
+  const out: string[] = []
+  for (const a of useCollections.getState().ancestorScriptsFor(savedRequestId)) {
+    if (a.testScript?.trim()) out.push(a.testScript)
+  }
+  if (workingReq.testScript?.trim()) out.push(workingReq.testScript)
+  return out
+}
+
 /** Run the active tab's request end-to-end: pre-request script → send → tests → history. */
 export async function sendActiveRequest(): Promise<void> {
   const tabsStore = useTabs.getState()
@@ -86,29 +169,25 @@ export async function sendActiveRequest(): Promise<void> {
 
   let workingReq: RequestModel = structuredClone(tab.request)
 
-  // 1) pre-request script (P1)
-  if (workingReq.preRequestScript?.trim()) {
+  // 1) pre-request scripts (P1): collection/folder scripts top-down, then own.
+  for (const code of preScriptBodies(workingReq, tab.savedRequestId)) {
     try {
       const result = await window.api.runScript({
         phase: 'pre-request',
-        code: workingReq.preRequestScript,
+        code,
         request: workingReq,
         environment: envStore.envScope(),
         globals: envStore.globalScope(),
-        collection: collections.collectionScopeFor(tab.savedRequestId)
+        collection: collections.collectionScopeFor(tab.savedRequestId),
+        cookies: await cookieSnapshotFor(workingReq.url),
+        url: workingReq.url
       })
       persistVarUpdates(result.environmentUpdates, result.globalUpdates)
+      applyScriptSideEffects(tab.savedRequestId, result)
       // Pre-request scripts have no results pane — surface a failure so it isn't
       // silently dropped (e.g. a sandbox timeout that skipped an auth header).
       if (result.error) useUi.getState().showToast(`Pre-request скрипт: ${result.error}`, 'error')
-      if (result.requestPatch) {
-        workingReq = {
-          ...workingReq,
-          url: result.requestPatch.url ?? workingReq.url,
-          method: result.requestPatch.method ?? workingReq.method,
-          headers: result.requestPatch.headers ?? workingReq.headers
-        }
-      }
+      workingReq = applyRequestPatch(workingReq, result.requestPatch)
     } catch (err) {
       console.error('pre-request script failed', err)
     }
@@ -186,23 +265,37 @@ export async function sendActiveRequest(): Promise<void> {
     useSettings.getState().settings.maxHistory
   )
 
-  // 5) test script (P1)
-  if (workingReq.testScript?.trim()) {
-    try {
-      const scriptRes = await window.api.runScript({
-        phase: 'test',
-        code: workingReq.testScript,
-        request: workingReq,
-        response: result,
-        environment: useEnvironments.getState().envScope(),
-        globals: useEnvironments.getState().globalScope(),
-        collection: collections.collectionScopeFor(tab.savedRequestId)
-      })
-      persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
-      useResponse.getState().setTests(tab.id, requestId, scriptRes.tests, scriptRes.logs, scriptRes.visualizer)
-    } catch (err) {
-      console.error('test script failed', err)
+  // 5) test scripts (P1): collection/folder scripts top-down, then own. Results
+  // (tests + logs) accumulate across all scripts; the last visualizer wins.
+  const testBodies = testScriptBodies(workingReq, tab.savedRequestId)
+  if (testBodies.length) {
+    const allTests: ScriptRunResult['tests'] = []
+    const allLogs: ScriptRunResult['logs'] = []
+    let visualizer: ScriptRunResult['visualizer'] = null
+    const cookies = await cookieSnapshotFor(workingReq.url)
+    for (const code of testBodies) {
+      try {
+        const scriptRes = await window.api.runScript({
+          phase: 'test',
+          code,
+          request: workingReq,
+          response: result,
+          environment: useEnvironments.getState().envScope(),
+          globals: useEnvironments.getState().globalScope(),
+          collection: collections.collectionScopeFor(tab.savedRequestId),
+          cookies,
+          url: workingReq.url
+        })
+        persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
+        applyScriptSideEffects(tab.savedRequestId, scriptRes)
+        allTests.push(...scriptRes.tests)
+        allLogs.push(...scriptRes.logs)
+        if (scriptRes.visualizer) visualizer = scriptRes.visualizer
+      } catch (err) {
+        console.error('test script failed', err)
+      }
     }
+    useResponse.getState().setTests(tab.id, requestId, allTests, allLogs, visualizer)
   } else {
     useResponse.getState().setTests(tab.id, requestId, [], [], null)
   }

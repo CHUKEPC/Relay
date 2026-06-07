@@ -4,7 +4,8 @@ import type {
   CollectionFolderNode,
   CollectionNode,
   CollectionsDoc,
-  RequestModel
+  RequestModel,
+  VariableDef
 } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
@@ -109,7 +110,20 @@ interface CollectionsState {
   collectionScopeFor: (requestId: string | null) => Record<string, string>
   collectionSecretValues: (requestId: string | null) => string[]
   inheritedAuthFor: (requestId: string | null) => Auth
+  /** Pre/test scripts of every ancestor container (root collection first, then
+   *  nested folders) for a saved request — used to run folder-level scripts. */
+  ancestorScriptsFor: (requestId: string | null) => AncestorScript[]
+  /** Apply pm.collectionVariables.set/unset mutations to the request's root
+   *  collection node (Postman writes collection vars at the collection root). */
+  applyCollectionVarUpdates: (requestId: string | null, updates: Record<string, string | null>) => void
   locate: (id: string) => Located | null
+}
+
+/** A container's scripts, tagged with the owning collection/folder node id. */
+export interface AncestorScript {
+  collectionId: string
+  preRequestScript?: string
+  testScript?: string
 }
 
 export const useCollections = create<CollectionsState>((set, get) => {
@@ -261,9 +275,48 @@ export const useCollections = create<CollectionsState>((set, get) => {
       return { type: 'none' }
     },
 
+    ancestorScriptsFor: (requestId) => {
+      if (!requestId) return []
+      const found = locate(topLevel(), requestId)
+      if (!found) return []
+      // root → leaf: collection scripts run before nested-folder scripts.
+      return found.ancestors
+        .filter((a) => a.preRequestScript?.trim() || a.testScript?.trim())
+        .map((a) => ({ collectionId: a.id, preRequestScript: a.preRequestScript, testScript: a.testScript }))
+    },
+
+    applyCollectionVarUpdates: (requestId, updates) => {
+      if (!requestId || Object.keys(updates).length === 0) return
+      const found = locate(topLevel(), requestId)
+      // Postman stores collection variables on the collection root.
+      const root = found?.ancestors[0]
+      if (!root) return
+      const nextVars = applyVarDefUpdates(root.variables ?? [], updates)
+      const next = mapTree(topLevel(), (n) =>
+        n.id === root.id && n.type !== 'request' ? { ...n, variables: nextVars } : n
+      )
+      commit(next as CollectionFolderNode[])
+    },
+
     locate: (id) => locate(topLevel(), id)
   }
 })
+
+/** Apply key→value (or null=delete) updates to a VariableDef[] immutably. */
+function applyVarDefUpdates(existing: VariableDef[], updates: Record<string, string | null>): VariableDef[] {
+  const out = existing.map((v) => ({ ...v }))
+  for (const [key, value] of Object.entries(updates)) {
+    const idx = out.findIndex((v) => v.key === key)
+    if (value === null) {
+      if (idx >= 0) out.splice(idx, 1)
+    } else if (idx >= 0) {
+      out[idx] = { ...out[idx], value }
+    } else {
+      out.push({ key, value, enabled: true })
+    }
+  }
+  return out
+}
 
 function cloneNodeWithNewIds(node: CollectionNode): CollectionNode {
   if (node.type === 'request') {

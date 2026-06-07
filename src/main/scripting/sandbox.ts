@@ -12,6 +12,7 @@ import type {
   ScriptRunRequest,
   ScriptRunResult,
   ScriptTestResult,
+  StoredCookie,
   VisualizerPayload
 } from '@shared/types'
 
@@ -21,6 +22,17 @@ function typeOf(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
   return typeof v
+}
+
+/** Duck-typed RegExp check that survives the vm realm boundary (a `/x/` literal
+ *  created inside the sandbox is not an instanceof the host RegExp). */
+function isRegExpLike(v: unknown): v is { test: (s: string) => boolean } {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { test?: unknown }).test === 'function' &&
+    typeof (v as { source?: unknown }).source === 'string'
+  )
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -39,7 +51,8 @@ class Assertion {
   constructor(
     private actual: unknown,
     private negate = false,
-    private _deep = false
+    private _deep = false,
+    private _nested = false
   ) {}
 
   private check(pass: boolean, message: string): void {
@@ -82,10 +95,14 @@ class Assertion {
     return this
   }
   get not(): Assertion {
-    return new Assertion(this.actual, !this.negate, this._deep)
+    return new Assertion(this.actual, !this.negate, this._deep, this._nested)
   }
   get deep(): Assertion {
-    return new Assertion(this.actual, this.negate, true)
+    return new Assertion(this.actual, this.negate, true, this._nested)
+  }
+  // `.nested.property('a.b.c')` resolves a dotted path instead of a flat key.
+  get nested(): Assertion {
+    return new Assertion(this.actual, this.negate, this._deep, true)
   }
 
   // terminal getters (return `this` so they can be used in a chain)
@@ -142,7 +159,7 @@ class Assertion {
   most(n: number): void {
     this.check((this.actual as number) <= n, `expected ${json(this.actual)} to be at most ${n}`)
   }
-  include(sub: unknown): void {
+  private includeOf(sub: unknown): void {
     let pass = false
     if (typeof this.actual === 'string') pass = this.actual.includes(String(sub))
     else if (Array.isArray(this.actual)) pass = this.actual.some((x) => deepEqual(x, sub))
@@ -150,7 +167,43 @@ class Assertion {
       pass = Object.entries(sub as object).every(([k, v]) => deepEqual((this.actual as any)[k], v))
     this.check(pass, `expected ${json(this.actual)} to include ${json(sub)}`)
   }
+  /**
+   * `include` is both a method (`expect(x).to.include(y)`) and a chainable
+   * (`expect(arr).to.include.members([...])`). We expose it as a getter that
+   * returns a callable carrying a `.members` method so both forms work.
+   */
+  get include(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
+    const fn = ((sub: unknown) => this.includeOf(sub)) as ((sub: unknown) => void) & {
+      members: (arr: unknown[]) => void
+    }
+    fn.members = (arr: unknown[]) => this.members(arr)
+    return fn
+  }
+  get contain(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
+    return this.include
+  }
+  get contains(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
+    return this.include
+  }
   property(key: string, value?: unknown): Assertion {
+    if (this._nested) {
+      // Walk a dotted path: 'a.b.c'. Existence requires every segment to resolve.
+      const path = String(key).split('.')
+      let cur: unknown = this.actual
+      let exists = true
+      for (const seg of path) {
+        if (cur != null && Object.prototype.hasOwnProperty.call(cur, seg)) {
+          cur = (cur as any)[seg]
+        } else {
+          exists = false
+          cur = undefined
+          break
+        }
+      }
+      this.check(exists, `expected object to have nested property ${key}`)
+      if (arguments.length > 1) this.check(deepEqual(cur, value), `nested property ${key} mismatch`)
+      return new Assertion(cur, this.negate, this._deep)
+    }
     const has = this.actual != null && Object.prototype.hasOwnProperty.call(this.actual, key)
     this.check(has, `expected object to have property ${key}`)
     if (arguments.length > 1) this.check(deepEqual((this.actual as any)[key], value), `property ${key} mismatch`)
@@ -164,6 +217,83 @@ class Assertion {
   }
   match(re: RegExp): void {
     this.check(re.test(String(this.actual)), `expected ${json(this.actual)} to match ${re}`)
+  }
+
+  // --- additional chai-style methods (Postman parity) ----------------------
+
+  /** Asserts the actual array contains every element of `arr` (order-insensitive,
+   *  deep). Doubles as `.include.members` (chai aliases it). */
+  members(arr: unknown[]): void {
+    const actual = Array.isArray(this.actual) ? this.actual : []
+    const pass = arr.every((want) => actual.some((have) => deepEqual(have, want)))
+    this.check(pass, `expected ${json(this.actual)} to include members ${json(arr)}`)
+  }
+
+  /** Asserts the actual value deep-equals one of the supplied candidates. */
+  oneOf(arr: unknown[]): void {
+    const pass = arr.some((c) => deepEqual(this.actual, c))
+    this.check(pass, `expected ${json(this.actual)} to be one of ${json(arr)}`)
+  }
+
+  /** Asserts the target object has exactly the given own keys (set equality). */
+  keys(...names: Array<string | string[]>): void {
+    const want = names.flat()
+    const actualKeys =
+      this.actual && typeof this.actual === 'object' ? Object.keys(this.actual as object) : []
+    const pass = actualKeys.length === want.length && want.every((k) => actualKeys.includes(k))
+    this.check(pass, `expected ${json(this.actual)} to have keys ${json(want)}`)
+  }
+
+  /** Asserts the actual number is within `delta` of `n`. */
+  closeTo(n: number, delta: number): void {
+    const pass = Math.abs((this.actual as number) - n) <= delta
+    this.check(pass, `expected ${json(this.actual)} to be close to ${n} ±${delta}`)
+  }
+
+  /** Asserts the target function throws when invoked (optionally with a message
+   *  substring or matching RegExp). `.Throw` is an alias chai also exposes. */
+  throw(matcher?: string | RegExp): void {
+    let threw = false
+    let caught: unknown
+    if (typeof this.actual === 'function') {
+      const fn = this.actual as () => unknown
+      try {
+        fn()
+      } catch (err) {
+        threw = true
+        caught = err
+      }
+    }
+    let pass = threw
+    if (threw && matcher != null) {
+      const message = caught instanceof Error ? caught.message : String(caught)
+      // Duck-type the RegExp: a literal created inside the vm realm is NOT an
+      // instanceof the host RegExp, so check for a `.test` method instead.
+      pass = isRegExpLike(matcher) ? matcher.test(message) : message.includes(String(matcher))
+    }
+    this.check(pass, `expected function to throw${matcher != null ? ` ${json(matcher)}` : ''}`)
+  }
+  Throw(matcher?: string | RegExp): void {
+    this.throw(matcher)
+  }
+
+  /** Asserts the actual string contains `sub` (chai's `.string(...)`). */
+  string(sub: string): void {
+    this.check(String(this.actual).includes(sub), `expected ${json(this.actual)} to contain string ${json(sub)}`)
+  }
+
+  // numeric comparison aliases mirroring chai's named forms.
+  greaterThan(n: number): void {
+    this.above(n)
+  }
+  lessThan(n: number): void {
+    this.below(n)
+  }
+  gte(n: number): void {
+    this.least(n)
+  }
+  lte(n: number): void {
+    this.most(n)
   }
 }
 
@@ -204,12 +334,166 @@ function coerceVar(v: unknown): string {
   return String(v)
 }
 
+/** Hostname of a URL, or '' when it can't be parsed. */
+function hostOf(url: string | undefined): string {
+  if (!url) return ''
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * RFC 6265-style domain match used by pm.cookies (read side). A cookie whose
+ * (leading-dot-stripped) `domain` is the host itself or a suffix of it matches.
+ * Kept dependency-free so the sandbox stays pure/unit-testable.
+ */
+function cookieDomainMatches(host: string, cookieDomain: string): boolean {
+  if (!host || !cookieDomain) return false
+  const d = cookieDomain.replace(/^\./, '').toLowerCase()
+  if (host === d) return true
+  return host.endsWith(`.${d}`)
+}
+
+/** A request accepted by pm.sendRequest (string URL or a Postman-like object). */
+type SendRequestInput =
+  | string
+  | {
+      url?: string
+      method?: string
+      header?: Array<{ key: string; value: string }> | Record<string, string>
+      body?: { mode?: string; raw?: string } | string
+    }
+
+/** The Postman-like response object handed back from pm.sendRequest. */
+interface SendRequestResponse {
+  code: number
+  status: string
+  responseTime: number
+  headers: { get: (name: string) => string | undefined }
+  text: () => string
+  json: () => unknown
+}
+
+/**
+ * Perform a real HTTP request from inside the sandbox using the global `fetch`
+ * (Node 20+). This deliberately does NOT use the app's cookie jar, proxy, or
+ * client-cert config — it is a bare fetch, so cookies/proxy are NOT applied.
+ */
+async function performSendRequest(input: SendRequestInput): Promise<SendRequestResponse> {
+  let url: string
+  let method = 'GET'
+  const headers: Record<string, string> = {}
+  let body: string | undefined
+
+  if (typeof input === 'string') {
+    url = input
+  } else {
+    url = String(input.url ?? '')
+    if (input.method) method = String(input.method).toUpperCase()
+    if (Array.isArray(input.header)) {
+      for (const h of input.header) if (h && h.key) headers[h.key] = String(h.value ?? '')
+    } else if (input.header && typeof input.header === 'object') {
+      for (const [k, v] of Object.entries(input.header)) headers[k] = String(v ?? '')
+    }
+    if (typeof input.body === 'string') body = input.body
+    else if (input.body && input.body.mode === 'raw' && typeof input.body.raw === 'string') body = input.body.raw
+  }
+
+  if (!url) throw new Error('pm.sendRequest: a URL is required')
+
+  const startedAt = Date.now()
+  // `fetch` rejects HEAD/GET with a body, so only attach one for other methods.
+  const init: RequestInit = { method, headers }
+  if (body != null && method !== 'GET' && method !== 'HEAD') init.body = body
+  const res = await fetch(url, init)
+  const responseTime = Date.now() - startedAt
+  const textBody = await res.text()
+
+  return {
+    code: res.status,
+    status: res.statusText,
+    responseTime,
+    headers: { get: (name: string) => res.headers.get(name) ?? undefined },
+    text: () => textBody,
+    json: () => JSON.parse(textBody)
+  }
+}
+
+/**
+ * Build the `pm.cookies` surface. Reads from the request-domain cookie snapshot
+ * in `payload.cookies`; jar().set/unset record mutations into `cookieUpdates`
+ * (applied to the persistent jar by the renderer after the run).
+ */
+function buildCookies(
+  payload: ScriptRunRequest,
+  cookieUpdates: NonNullable<ScriptRunResult['cookieUpdates']>
+): {
+  get: (name: string) => string | undefined
+  has: (name: string) => boolean
+  toObject: () => Record<string, string>
+  jar: () => {
+    set: (cookie: Partial<StoredCookie> & { name?: string; key?: string; value?: string }) => void
+    unset: (target: { name?: string; key?: string; domain?: string; path?: string }) => void
+    get: (name: string) => string | undefined
+  }
+} {
+  const snapshot = (payload.cookies ?? []).filter((c) => c && c.key)
+  const host = hostOf(payload.url)
+  // Only cookies whose domain matches the request host are visible (Postman).
+  const matching = host ? snapshot.filter((c) => cookieDomainMatches(host, c.domain)) : snapshot.slice()
+
+  const get = (name: string): string | undefined => matching.find((c) => c.key === name)?.value
+  const has = (name: string): boolean => matching.some((c) => c.key === name)
+  const toObject = (): Record<string, string> => {
+    const out: Record<string, string> = {}
+    for (const c of matching) out[c.key] = c.value
+    return out
+  }
+
+  const jar = () => ({
+    get,
+    set: (cookie: Partial<StoredCookie> & { name?: string; key?: string; value?: string }) => {
+      const key = cookie.key ?? cookie.name
+      if (!key) return
+      const next: StoredCookie = {
+        key,
+        value: cookie.value ?? '',
+        domain: (cookie.domain ?? host ?? '').replace(/^\./, '').toLowerCase(),
+        path: cookie.path ?? '/',
+        expires: cookie.expires,
+        httpOnly: cookie.httpOnly,
+        secure: cookie.secure
+      }
+      if (!next.domain) return
+      const set = (cookieUpdates.set ??= [])
+      set.push(next)
+    },
+    unset: (target: { name?: string; key?: string; domain?: string; path?: string }) => {
+      const key = target.key ?? target.name
+      if (!key) return
+      const remove = (cookieUpdates.remove ??= [])
+      remove.push({
+        key,
+        domain: (target.domain ?? host ?? '').replace(/^\./, '').toLowerCase(),
+        path: target.path ?? '/'
+      })
+    }
+  })
+
+  return { get, has, toObject, jar }
+}
+
 export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunResult> {
   const logs: ScriptConsoleLine[] = []
   const tests: ScriptTestResult[] = []
   const pendingTests: Promise<void>[] = []
+  const pendingRequests: Promise<unknown>[] = []
   const envUpdates: Record<string, string | null> = {}
   const globalUpdates: Record<string, string | null> = {}
+  const collectionUpdates: Record<string, string | null> = {}
+  const cookieUpdates: NonNullable<ScriptRunResult['cookieUpdates']> = {}
 
   // Null-prototype maps so a variable named like an Object.prototype member
   // ('toString', 'constructor', '__proto__', ...) resolves to undefined/false
@@ -218,9 +502,12 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   const globals: Record<string, string> = Object.assign(Object.create(null), payload.globals)
   const collection: Record<string, string> = Object.assign(Object.create(null), payload.collection ?? {})
   const iterationData: Record<string, string> = Object.assign(Object.create(null), payload.iterationData ?? {})
-  // Precedence mirrors the interpolation resolver: data > collection > environment > global.
+  // Ephemeral, highest-precedence scope written by pm.variables.set during the
+  // run (Postman 'local' vars). NOT persisted; affects merged() only this run.
+  const local: Record<string, string> = Object.create(null)
+  // Precedence mirrors the interpolation resolver: local > data > collection > environment > global.
   const merged = (): Record<string, string> =>
-    Object.assign(Object.create(null), globals, env, collection, iterationData)
+    Object.assign(Object.create(null), globals, env, collection, iterationData, local)
 
   // Captured by pm.visualizer.set(template, data) — returned for the Visualize tab.
   let visualizer: VisualizerPayload | null = null
@@ -305,8 +592,31 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
     },
     variables: {
       get: (k: string) => merged()[k],
-      has: (k: string) => k in merged()
+      has: (k: string) => k in merged(),
+      // pm.variables.set writes to the ephemeral LOCAL scope: it wins over every
+      // other scope inside this run and is NOT persisted (Postman 'local' vars).
+      set: (k: string, v: unknown) => {
+        local[k] = coerceVar(v)
+      },
+      unset: (k: string) => {
+        delete local[k]
+      }
     },
+    collectionVariables: {
+      get: (k: string) => collection[k],
+      has: (k: string) => k in collection,
+      set: (k: string, v: unknown) => {
+        const s = coerceVar(v)
+        collection[k] = s
+        collectionUpdates[k] = s
+      },
+      unset: (k: string) => {
+        delete collection[k]
+        collectionUpdates[k] = null
+      },
+      toObject: () => ({ ...collection })
+    },
+    cookies: buildCookies(payload, cookieUpdates),
     iterationData: {
       get: (k: string) => iterationData[k],
       has: (k: string) => k in iterationData,
@@ -368,8 +678,25 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       }
     },
     expect: (actual: unknown) => new Assertion(actual),
-    sendRequest: () => {
-      throw new Error('pm.sendRequest is not supported in this sandbox')
+    // pm.sendRequest(urlOrReq, callback?) — performs a real HTTP request via the
+    // child's global fetch. Calls back (err, res) Postman-style and also returns a
+    // promise. NOTE: no cookie jar / proxy / client certs are applied (bare fetch).
+    sendRequest: (
+      input: SendRequestInput,
+      cb?: (err: Error | null, res?: SendRequestResponse) => void
+    ): Promise<SendRequestResponse> => {
+      const p = performSendRequest(input)
+      // Track the callback chain (not just the raw request) so the async-settle
+      // window also waits for work the callback does (e.g. setting a variable).
+      const settled =
+        typeof cb === 'function'
+          ? p.then(
+              (res) => cb(null, res),
+              (err) => cb(err instanceof Error ? err : new Error(String(err)))
+            )
+          : p
+      pendingRequests.push(settled.catch(() => undefined))
+      return p
     }
   }
 
@@ -379,24 +706,40 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   // top of the process-level --disallow-code-generation-from-strings flag).
   const context = createContext({ pm, console: sandboxConsole }, { codeGeneration: { strings: false, wasm: false } })
 
-  try {
-    runInContext(payload.code, context, { timeout: 3000, displayErrors: true })
-  } catch (err) {
-    return {
+  // Surface collection-variable / cookie mutations (only when non-empty so the
+  // result stays compact and the renderer can skip a no-op write).
+  const finalize = (error?: string): ScriptRunResult => {
+    const requestPatch =
+      payload.phase === 'pre-request'
+        ? { url: reqState.url, method: reqState.method, headers: reqState.headers }
+        : undefined
+    const result: ScriptRunResult = {
       logs,
       tests,
       environmentUpdates: envUpdates,
       globalUpdates,
-      visualizer,
-      error: err instanceof Error ? err.message : String(err)
+      requestPatch,
+      visualizer
     }
+    if (Object.keys(collectionUpdates).length) result.collectionUpdates = collectionUpdates
+    if (cookieUpdates.set?.length || cookieUpdates.remove?.length) result.cookieUpdates = cookieUpdates
+    if (error != null) result.error = error
+    return result
   }
 
-  // Settle any async pm.test(...) bodies, bounded so a non-resolving test can't hang.
-  if (pendingTests.length) {
+  try {
+    runInContext(payload.code, context, { timeout: 3000, displayErrors: true })
+  } catch (err) {
+    return finalize(err instanceof Error ? err.message : String(err))
+  }
+
+  // Settle any async pm.test(...) bodies and in-flight pm.sendRequest() calls,
+  // bounded so a non-resolving promise can't hang the run.
+  const pending = [...pendingTests, ...pendingRequests]
+  if (pending.length) {
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([
-      Promise.allSettled(pendingTests),
+      Promise.allSettled(pending),
       new Promise<void>((resolve) => {
         timer = setTimeout(resolve, 3000)
       })
@@ -404,10 +747,5 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
     if (timer) clearTimeout(timer)
   }
 
-  const requestPatch =
-    payload.phase === 'pre-request'
-      ? { url: reqState.url, method: reqState.method, headers: reqState.headers }
-      : undefined
-
-  return { logs, tests, environmentUpdates: envUpdates, globalUpdates, requestPatch, visualizer }
+  return finalize()
 }

@@ -47,7 +47,7 @@ export function AuthTab({ req }: { req: RequestModel }) {
       case 'apikey':
         return setAuth({ type: 'apikey', key: 'X-API-Key', value: '{{api_key}}', addTo: 'header' })
       case 'oauth2':
-        return setAuth({ type: 'oauth2', grant: 'client_credentials', accessToken: '', headerPrefix: 'Bearer' })
+        return setAuth({ type: 'oauth2', grant: 'client_credentials', accessToken: '', headerPrefix: 'Bearer', clientAuth: 'body' })
       case 'digest':
         return setAuth({ type: 'digest', username: '', password: '' })
       case 'jwt':
@@ -152,11 +152,38 @@ export function AuthTab({ req }: { req: RequestModel }) {
           <Field label="Password">
             <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
           </Field>
-          <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
-            Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с
-            заголовком <span className="mono">WWW-Authenticate: Digest</span> автоматически
-            вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.
-          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
+            <input type="checkbox" checked={auth.preemptive ?? false} onChange={(e) => setAuth({ ...auth, preemptive: e.target.checked })} />
+            Preemptive (отправлять авторизацию сразу, без ожидания 401)
+          </label>
+          {auth.preemptive && (
+            <>
+              <Field label="Realm">
+                <input className="input mono" value={auth.realm ?? ''} onChange={(e) => setAuth({ ...auth, realm: e.target.value })} placeholder="example.com" />
+              </Field>
+              <Field label="Nonce">
+                <input className="input mono" value={auth.nonce ?? ''} onChange={(e) => setAuth({ ...auth, nonce: e.target.value })} placeholder="из предыдущего ответа сервера" />
+              </Field>
+              <Field label="QOP">
+                <input className="input mono" value={auth.qop ?? ''} onChange={(e) => setAuth({ ...auth, qop: e.target.value })} placeholder="auth (необязательно)" />
+              </Field>
+              <Field label="Opaque">
+                <input className="input mono" value={auth.opaque ?? ''} onChange={(e) => setAuth({ ...auth, opaque: e.target.value })} placeholder="(необязательно)" />
+              </Field>
+              <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
+                Preemptive требует известных <span className="mono">realm</span> и{' '}
+                <span className="mono">nonce</span> (например, из предыдущего ответа 401). Заголовок{' '}
+                <span className="mono">Authorization</span> вычисляется и отправляется в первом же запросе.
+              </div>
+            </>
+          )}
+          {!auth.preemptive && (
+            <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
+              Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с
+              заголовком <span className="mono">WWW-Authenticate: Digest</span> автоматически
+              вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.
+            </div>
+          )}
         </>
       )}
 
@@ -371,9 +398,23 @@ export function AuthTab({ req }: { req: RequestModel }) {
   )
 }
 
+/**
+ * Generate a high-entropy PKCE code_verifier (RFC 7636 §4.1): 32 random bytes,
+ * base64url-encoded (43 chars, unreserved A-Z a-z 0-9 - . _ ~).
+ */
+function generateCodeVerifier(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' }>; setAuth: (a: Auth) => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+
+  const pkceOn = auth.codeVerifier !== undefined
 
   const getToken = async () => {
     if (!auth.tokenUrl) {
@@ -391,29 +432,59 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       username: auth.username,
       password: auth.password,
       code: auth.code,
-      redirectUri: auth.redirectUri
+      redirectUri: auth.redirectUri,
+      codeVerifier: auth.codeVerifier,
+      refreshToken: auth.refreshToken,
+      clientAuth: auth.clientAuth
     })
     setBusy(false)
     if (res.ok && res.accessToken) {
-      setAuth({ ...auth, accessToken: res.accessToken })
+      // Persist the new access token (and a rotated refresh token, if returned).
+      setAuth({ ...auth, accessToken: res.accessToken, ...(res.refreshToken ? { refreshToken: res.refreshToken } : {}) })
       setMsg('Токен получен')
     } else {
       setMsg(res.error ?? 'Не удалось получить токен')
     }
   }
 
+  const requestDeviceCode = async () => {
+    if (!auth.deviceAuthUrl) {
+      setMsg('Укажите Device Auth URL')
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    const res = await window.api.oauthDevice({
+      deviceAuthUrl: auth.deviceAuthUrl,
+      clientId: auth.clientId ?? '',
+      scope: auth.scope
+    })
+    setBusy(false)
+    if (res.ok && res.deviceCode) {
+      // Store the device_code so a subsequent "Получить токен" can poll for it.
+      setAuth({ ...auth, deviceCode: res.deviceCode })
+      const where = res.verificationUriComplete ?? res.verificationUri ?? ''
+      setMsg(`Откройте ${where} и введите код: ${res.userCode ?? ''}`)
+    } else {
+      setMsg(res.error ?? 'Не удалось получить device code')
+    }
+  }
+
+  const togglePkce = (on: boolean) => {
+    if (on) setAuth({ ...auth, codeVerifier: generateCodeVerifier() })
+    else setAuth({ ...auth, codeVerifier: undefined })
+  }
+
   return (
     <>
       <Field label="Grant Type">
-        <Segmented
-          value={auth.grant}
-          onChange={(grant) => setAuth({ ...auth, grant: grant as OAuth2Grant })}
-          options={[
-            { value: 'client_credentials', label: 'Client Credentials' },
-            { value: 'password', label: 'Password' },
-            { value: 'authorization_code', label: 'Auth Code' }
-          ]}
-        />
+        <select className="input mono" value={auth.grant} onChange={(e) => setAuth({ ...auth, grant: e.target.value as OAuth2Grant })}>
+          <option value="client_credentials">Client Credentials</option>
+          <option value="password">Password</option>
+          <option value="authorization_code">Authorization Code</option>
+          <option value="refresh_token">Refresh Token</option>
+          <option value="device_code">Device Code</option>
+        </select>
       </Field>
       <Field label="Access Token">
         <input className="input mono" value={auth.accessToken} placeholder="(пусто — получите ниже)" onChange={(e) => setAuth({ ...auth, accessToken: e.target.value })} />
@@ -426,6 +497,16 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       </Field>
       <Field label="Client Secret">
         <input className="input mono" type="password" value={auth.clientSecret ?? ''} onChange={(e) => setAuth({ ...auth, clientSecret: e.target.value })} />
+      </Field>
+      <Field label="Client Authentication">
+        <Segmented
+          value={auth.clientAuth ?? 'body'}
+          onChange={(clientAuth) => setAuth({ ...auth, clientAuth })}
+          options={[
+            { value: 'body', label: 'Send in Body' },
+            { value: 'basic', label: 'Basic Auth Header' }
+          ]}
+        />
       </Field>
       {auth.grant === 'password' && (
         <>
@@ -445,15 +526,48 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
           <Field label="Redirect URI">
             <input className="input mono" value={auth.redirectUri ?? ''} onChange={(e) => setAuth({ ...auth, redirectUri: e.target.value })} placeholder="https://app.example.com/callback" />
           </Field>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
+            <input type="checkbox" checked={pkceOn} onChange={(e) => togglePkce(e.target.checked)} />
+            Использовать PKCE
+          </label>
+          {pkceOn && (
+            <Field label="Code Verifier" hint="отправляется при обмене кода на токен">
+              <input className="input mono" value={auth.codeVerifier ?? ''} readOnly />
+            </Field>
+          )}
+        </>
+      )}
+      {auth.grant === 'refresh_token' && (
+        <Field label="Refresh Token">
+          <input className="input mono" value={auth.refreshToken ?? ''} onChange={(e) => setAuth({ ...auth, refreshToken: e.target.value })} placeholder="refresh token для обмена" />
+        </Field>
+      )}
+      {auth.grant === 'device_code' && (
+        <>
+          <Field label="Device Auth URL">
+            <input className="input mono" value={auth.deviceAuthUrl ?? ''} onChange={(e) => setAuth({ ...auth, deviceAuthUrl: e.target.value })} placeholder="https://auth.example.com/device/code" />
+          </Field>
+          <Field label="Device Code" hint="заполняется кнопкой ниже">
+            <input className="input mono" value={auth.deviceCode ?? ''} onChange={(e) => setAuth({ ...auth, deviceCode: e.target.value })} placeholder="(получите device code)" />
+          </Field>
         </>
       )}
       <Field label="Scope">
         <input className="input mono" value={auth.scope ?? ''} onChange={(e) => setAuth({ ...auth, scope: e.target.value })} placeholder="read write" />
       </Field>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 10px' }}>
+        <input type="checkbox" checked={auth.autoRefresh ?? false} onChange={(e) => setAuth({ ...auth, autoRefresh: e.target.checked })} />
+        Авто-обновление токена при 401 (нужны Refresh Token и Token URL)
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn primary" onClick={getToken} disabled={busy}>
           {busy ? 'Запрос…' : 'Получить токен'}
         </button>
+        {auth.grant === 'device_code' && (
+          <button className="btn" onClick={requestDeviceCode} disabled={busy}>
+            Запросить device code
+          </button>
+        )}
         {msg && <span style={{ fontSize: 12, color: 'var(--tx-2)' }}>{msg}</span>}
       </div>
     </>

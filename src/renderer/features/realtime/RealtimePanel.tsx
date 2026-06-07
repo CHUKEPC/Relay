@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RealtimeMessage } from '@shared/types'
+import type { MessageTemplate, RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { useTabs } from '@renderer/store/tabs'
+import { useUi } from '@renderer/store/ui'
 import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/realtime'
+import { makeId } from '@shared/id'
+import { templatesForKind } from './templates'
 
 /** Bottom-panel view for WebSocket / SSE / Socket.IO / MQTT (replaces the HTTP response). */
 
@@ -58,6 +62,11 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
   const publish = useRealtime((s) => s.publish)
   const subscribe = useRealtime((s) => s.subscribe)
   const clear = useRealtime((s) => s.clear)
+
+  // Subscribe to this tab's request so saved templates + MQTT config stay in sync.
+  const req = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request)
+  const patchActive = useTabs((s) => s.patchActive)
+
   const [draft, setDraft] = useState('')
   const [event, setEvent] = useState('message')
   const [topic, setTopic] = useState('')
@@ -73,6 +82,11 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
   const sc = statusColor(rt.status)
   const open = rt.status === 'open'
 
+  const templates = templatesForKind(req?.messageTemplates, kind)
+  const mqttCfg = req?.mqtt
+  const mqttQos: 0 | 1 | 2 = mqttCfg?.qos === 1 || mqttCfg?.qos === 2 ? mqttCfg.qos : 0
+  const lwt = mqttCfg?.lwt
+
   const doSend = (): void => {
     if (kind === 'websocket') {
       send(tabId, draft)
@@ -86,6 +100,48 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
       publish(tabId, topic.trim(), draft)
       setDraft('')
     }
+  }
+
+  // Load a saved template into the composer (and the event/topic field per mode).
+  const loadTemplate = (t: MessageTemplate): void => {
+    setDraft(t.content)
+    if (kind === 'socketio' && t.event) setEvent(t.event)
+    if (kind === 'mqtt' && t.topic) setTopic(t.topic)
+  }
+
+  // Save the current composer contents as a named template via the tabs store.
+  const saveTemplate = (): void => {
+    const content = draft
+    if (!content.trim()) {
+      useUi.getState().showToast('Нечего сохранять — composer пуст', 'error')
+      return
+    }
+    const name = window.prompt('Название шаблона:')?.trim()
+    if (!name) return
+    const tpl: MessageTemplate = {
+      id: makeId('mt'),
+      name,
+      content,
+      ...(kind === 'socketio' && event.trim() ? { event: event.trim() } : {}),
+      ...(kind === 'mqtt' && topic.trim() ? { topic: topic.trim() } : {})
+    }
+    const existing = req?.messageTemplates ?? []
+    patchActive({ messageTemplates: [...existing, tpl] })
+    useUi.getState().showToast('Шаблон сохранён')
+  }
+
+  const deleteTemplate = (id: string): void => {
+    const existing = req?.messageTemplates ?? []
+    patchActive({ messageTemplates: existing.filter((t) => t.id !== id) })
+  }
+
+  // Patch the MQTT QoS/LWT config without clobbering the other field.
+  const patchMqtt = (next: Partial<NonNullable<typeof mqttCfg>>): void => {
+    patchActive({ mqtt: { ...(req?.mqtt ?? {}), ...next } })
+  }
+  const patchLwt = (next: Partial<NonNullable<typeof lwt>>): void => {
+    const base = lwt ?? { topic: '', payload: '' }
+    patchMqtt({ lwt: { ...base, ...next } })
   }
 
   return (
@@ -107,6 +163,96 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           </button>
         </div>
       </div>
+
+      {/* MQTT: per-request QoS + Last-Will config, persisted onto the request. */}
+      {kind === 'mqtt' && (
+        <div className="rt-mqtt-config" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--line)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx-2)' }}>
+            QoS
+            <select
+              className="input"
+              value={mqttQos}
+              onChange={(e) => patchMqtt({ qos: Number(e.target.value) as 0 | 1 | 2 })}
+              style={{ width: 60, height: 28 }}
+            >
+              <option value={0}>0</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+            </select>
+          </label>
+          <span style={{ width: 1, height: 18, background: 'var(--line)' }} />
+          <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>Last Will</span>
+          <input
+            className="input mono"
+            placeholder="will topic"
+            value={lwt?.topic ?? ''}
+            onChange={(e) => patchLwt({ topic: e.target.value })}
+            style={{ width: 150, height: 28 }}
+          />
+          <input
+            className="input mono"
+            placeholder="will payload"
+            value={lwt?.payload ?? ''}
+            onChange={(e) => patchLwt({ payload: e.target.value })}
+            style={{ width: 160, height: 28 }}
+          />
+          <select
+            className="input"
+            value={lwt?.qos === 1 || lwt?.qos === 2 ? lwt.qos : 0}
+            onChange={(e) => patchLwt({ qos: Number(e.target.value) as 0 | 1 | 2 })}
+            title="Will QoS"
+            style={{ width: 60, height: 28 }}
+          >
+            <option value={0}>QoS 0</option>
+            <option value={1}>QoS 1</option>
+            <option value={2}>QoS 2</option>
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--tx-2)' }}>
+            <input type="checkbox" checked={lwt?.retain === true} onChange={(e) => patchLwt({ retain: e.target.checked })} />
+            retain
+          </label>
+        </div>
+      )}
+
+      {/* Saved message templates (not applicable to SSE — it has no outbound channel). */}
+      {kind !== 'sse' && (
+        <div className="rt-templates" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid var(--line)', overflowX: 'auto' }}>
+          <span style={{ fontSize: 11, color: 'var(--tx-3)', flex: 'none', textTransform: 'uppercase', letterSpacing: '.04em' }}>Шаблоны</span>
+          {templates.length === 0 ? (
+            <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>—</span>
+          ) : (
+            templates.map((t) => (
+              <span key={t.id} className="rt-template-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flex: 'none', background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 4px 2px 8px' }}>
+                <button
+                  className="btn ghost"
+                  style={{ height: 22, padding: '0 4px', fontSize: 12 }}
+                  onClick={() => loadTemplate(t)}
+                  title={t.content}
+                >
+                  {t.name}
+                </button>
+                <button
+                  className="btn ghost"
+                  style={{ height: 20, width: 20, padding: 0, justifyContent: 'center' }}
+                  onClick={() => deleteTemplate(t.id)}
+                  title="Удалить шаблон"
+                >
+                  <Icon name="close" size={11} />
+                </button>
+              </span>
+            ))
+          )}
+          <button
+            className="btn ghost"
+            style={{ height: 24, marginLeft: 'auto', flex: 'none' }}
+            onClick={saveTemplate}
+            title="Сохранить текущее сообщение как шаблон"
+          >
+            <Icon name="plus" size={12} />
+            Сохранить как шаблон
+          </button>
+        </div>
+      )}
 
       <div className="rt-log" ref={logRef}>
         {rt.messages.length === 0 ? (

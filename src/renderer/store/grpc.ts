@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { GrpcMethodKind, KV, RealtimeEvent, RealtimeMessage } from '@shared/types'
+import type {
+  GrpcMethodKind,
+  GrpcReflectSpec,
+  GrpcServiceInfo,
+  KV,
+  RealtimeEvent,
+  RealtimeMessage
+} from '@shared/types'
 import { makeId } from '@shared/id'
 
 export type GrpcStatus = 'idle' | 'running' | 'done' | 'error'
@@ -29,12 +36,28 @@ export interface GrpcInvokeArgs {
   plaintext: boolean
   rejectUnauthorized: boolean
   callKind: GrpcMethodKind
+  /** discover descriptors via Server Reflection instead of `proto` */
+  useReflection?: boolean
+  /** per-call deadline in milliseconds (0/undefined = none) */
+  deadlineMs?: number
+  /** mTLS PEM paths (read in main only) */
+  caCertPath?: string
+  clientCertPath?: string
+  clientKeyPath?: string
+}
+
+/** Result of a Server Reflection discovery: services or a structured error. */
+export interface GrpcReflectResult {
+  services: GrpcServiceInfo[]
+  error?: string
 }
 
 interface GrpcState {
   byTab: Record<string, TabGrpc>
   get: (tabId: string) => TabGrpc
   invoke: (tabId: string, args: GrpcInvokeArgs) => void
+  /** Discover services via Server Reflection. Resolves with services or an error. */
+  reflect: (spec: GrpcReflectSpec) => Promise<GrpcReflectResult>
   send: (tabId: string, message: string) => void
   end: (tabId: string) => void
   cancel: (tabId: string) => void
@@ -117,9 +140,23 @@ export const useGrpc = create<GrpcState>((set, get) => {
           message: args.message,
           metadata: args.metadata,
           plaintext: args.plaintext,
-          rejectUnauthorized: args.rejectUnauthorized
+          rejectUnauthorized: args.rejectUnauthorized,
+          useReflection: args.useReflection,
+          deadlineMs: args.deadlineMs,
+          caCertPath: args.caCertPath,
+          clientCertPath: args.clientCertPath,
+          clientKeyPath: args.clientKeyPath
         })
         .catch((err) => onEvent(tabId, { type: 'error', error: err instanceof Error ? err.message : String(err) }))
+    },
+
+    reflect: async (spec) => {
+      try {
+        const res = await window.api.grpcReflect(spec)
+        return { services: res.services, error: res.error }
+      } catch (err) {
+        return { services: [], error: err instanceof Error ? err.message : String(err) }
+      }
     },
 
     send: (tabId, message) => {

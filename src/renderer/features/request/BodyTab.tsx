@@ -1,12 +1,17 @@
-import type { FormDataField, RawLanguage, RequestBody, RequestModel } from '@shared/types'
+import { useEffect, useState } from 'react'
+import type { FormDataField, GraphqlSchema, GraphqlTypeInfo, RawLanguage, RequestBody, RequestModel, VariableScope } from '@shared/types'
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { makeId } from '@shared/id'
+import { interpolate } from '@shared/interpolate'
 import { Icon } from '@renderer/components/Icon'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
+import { useSettings } from '@renderer/store/settings'
 import { useScope } from '@renderer/lib/hooks'
 import { beautify } from '@renderer/lib/beautify'
+import { useGraphqlSchema } from '@renderer/store/graphql'
+import { ensureGraphqlCompletion, setGraphqlSchema } from '@renderer/lib/graphql-completion'
 
 const BODY_TYPES: { id: RequestBody['type']; label: string }[] = [
   { id: 'none', label: 'none' },
@@ -124,15 +129,146 @@ export function BodyTab({ req }: { req: RequestModel }) {
       {body.type === 'binary' && <BinaryPicker body={body} onChange={setBody} />}
 
       {body.type === 'graphql' && (
-        <div>
-          <div className="section-title">Query</div>
-          <div className="code-editor" style={{ height: 200, marginTop: 0 }}>
-            <CodeEditor value={body.query} language="graphql" onChange={(query) => setBody({ ...body, query })} />
-          </div>
-          <div className="section-title">Variables</div>
-          <div className="code-editor" style={{ height: 140, marginTop: 0 }}>
-            <CodeEditor value={body.variables} language="json" onChange={(variables) => setBody({ ...body, variables })} />
-          </div>
+        <GraphqlBody
+          req={req}
+          query={body.query}
+          variables={body.variables}
+          scope={scope}
+          onQuery={(query) => setBody({ ...body, query })}
+          onVariables={(variables) => setBody({ ...body, variables })}
+        />
+      )}
+    </div>
+  )
+}
+
+function GraphqlBody({
+  req,
+  query,
+  variables,
+  scope,
+  onQuery,
+  onVariables
+}: {
+  req: RequestModel
+  query: string
+  variables: string
+  scope: VariableScope
+  onQuery: (v: string) => void
+  onVariables: (v: string) => void
+}) {
+  const entry = useGraphqlSchema((s) => s.byRequest[req.id])
+  const introspect = useGraphqlSchema((s) => s.introspect)
+  const [docsOpen, setDocsOpen] = useState(false)
+
+  // Register the (single) Monaco completion provider once, and feed it this
+  // request's schema while the GraphQL body is mounted.
+  useEffect(() => {
+    ensureGraphqlCompletion()
+  }, [])
+  useEffect(() => {
+    setGraphqlSchema(entry?.schema ?? null)
+    return () => setGraphqlSchema(null)
+  }, [entry?.schema])
+
+  const runIntrospect = () => {
+    const url = interpolate(req.url ?? '', scope)
+    const headers = req.headers
+      .filter((h) => h.enabled && h.key.trim())
+      .map((h) => ({ key: interpolate(h.key, scope), value: interpolate(h.value, scope) }))
+    const rejectUnauthorized = useSettings.getState().settings.rejectUnauthorized
+    void introspect(req.id, url, headers, rejectUnauthorized)
+    setDocsOpen(true)
+  }
+
+  const status = entry?.status ?? 'idle'
+
+  return (
+    <div>
+      <div className="subbar" style={{ gap: 8 }}>
+        <button className="btn ghost" style={{ height: 26 }} onClick={runIntrospect} disabled={status === 'loading'}>
+          <Icon name="refresh" size={14} />
+          {status === 'loading' ? 'Загрузка схемы…' : 'Интроспекция схемы'}
+        </button>
+        {entry?.schema && (
+          <button className="btn ghost" style={{ height: 26 }} onClick={() => setDocsOpen((v) => !v)}>
+            <Icon name={docsOpen ? 'chevD' : 'chevR'} size={14} />
+            Схема (документация)
+          </button>
+        )}
+        {status === 'error' && entry?.error && (
+          <span style={{ fontSize: 11.5, color: 'var(--danger, #e06)' }}>{entry.error}</span>
+        )}
+      </div>
+
+      {docsOpen && entry?.schema && <SchemaDocs schema={entry.schema} />}
+
+      <div className="section-title">Query</div>
+      <div className="code-editor" style={{ height: 200, marginTop: 0 }}>
+        <CodeEditor value={query} language="graphql" onChange={onQuery} />
+      </div>
+      <div className="section-title">Variables</div>
+      <div className="code-editor" style={{ height: 140, marginTop: 0 }}>
+        <CodeEditor value={variables} language="json" onChange={onVariables} />
+      </div>
+    </div>
+  )
+}
+
+function SchemaDocs({ schema }: { schema: GraphqlSchema }) {
+  // Surface root types first, then the rest (excluding introspection internals).
+  const roots = [schema.queryType, schema.mutationType, schema.subscriptionType].filter(Boolean) as string[]
+  const visible = schema.types.filter((t) => !t.name.startsWith('__'))
+  const ordered = [
+    ...visible.filter((t) => roots.includes(t.name)),
+    ...visible.filter((t) => !roots.includes(t.name))
+  ]
+
+  return (
+    <div
+      style={{
+        margin: '8px 14px',
+        border: '1px solid var(--bd-1, #2a2b31)',
+        borderRadius: 6,
+        maxHeight: 240,
+        overflow: 'auto',
+        background: 'var(--bg-2, #15161a)'
+      }}
+    >
+      {ordered.map((t) => (
+        <SchemaType key={t.name} type={t} roots={roots} />
+      ))}
+    </div>
+  )
+}
+
+function SchemaType({ type, roots }: { type: GraphqlTypeInfo; roots: string[] }) {
+  const [open, setOpen] = useState(roots.includes(type.name))
+  const hasFields = type.fields.length > 0
+  return (
+    <div style={{ borderBottom: '1px solid var(--bd-1, #2a2b31)' }}>
+      <button
+        className="btn ghost"
+        style={{ width: '100%', justifyContent: 'flex-start', height: 28, fontSize: 12 }}
+        onClick={() => hasFields && setOpen((v) => !v)}
+      >
+        {hasFields && <Icon name={open ? 'chevD' : 'chevR'} size={13} />}
+        <span style={{ fontWeight: 600 }}>{type.name}</span>
+        <span style={{ color: 'var(--tx-3)', marginLeft: 6, fontSize: 11 }}>{type.kind}</span>
+      </button>
+      {open && hasFields && (
+        <div style={{ padding: '2px 14px 8px 26px' }}>
+          {type.fields.map((f) => (
+            <div key={f.name} style={{ fontSize: 11.5, lineHeight: '18px', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ color: 'var(--accent, #8ab4f8)' }}>{f.name}</span>
+              {f.args.length > 0 && (
+                <span style={{ color: 'var(--tx-3)' }}>
+                  ({f.args.map((a) => `${a.name}: ${a.type}`).join(', ')})
+                </span>
+              )}
+              <span style={{ color: 'var(--tx-2)' }}>: {f.type}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

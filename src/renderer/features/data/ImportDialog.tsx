@@ -50,7 +50,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       const results = await window.api.importData(kind, text)
       if (!results.length) {
         setError(
-          'Не удалось распознать формат. Поддерживаются: коллекция Postman v2.1, OpenAPI 3.x и команда cURL. ' +
+          'Не удалось распознать формат. Поддерживаются: коллекция Postman v2.1, OpenAPI 3.x / Swagger 2.0 ' +
+            '(JSON или YAML), HAR, экспорт Insomnia v4 и команда cURL. ' +
             'Убедитесь, что вы вставили именно файл коллекции, а не произвольный JSON.'
         )
         return
@@ -103,7 +104,10 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             { value: 'auto', label: 'Авто' },
             { value: 'postman', label: 'Postman v2.1' },
             { value: 'openapi', label: 'OpenAPI 3' },
-            { value: 'curl', label: 'cURL' }
+            { value: 'swagger', label: 'Swagger 2.0' },
+            { value: 'curl', label: 'cURL' },
+            { value: 'har', label: 'HAR' },
+            { value: 'insomnia', label: 'Insomnia' }
           ]}
         />
       </div>
@@ -119,7 +123,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <input
           ref={fileRef}
           type="file"
-          accept=".json,.txt,.yaml,.yml,.curl,application/json"
+          accept=".json,.txt,.yaml,.yml,.curl,.har,application/json"
           style={{ display: 'none' }}
           onChange={(e) => {
             const f = e.target.files?.[0]

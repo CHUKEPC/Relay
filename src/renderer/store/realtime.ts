@@ -27,6 +27,10 @@ export interface ConnectOpts {
   url: string
   headers: KV[]
   rejectUnauthorized: boolean
+  /** MQTT only: default QoS for publish/subscribe. */
+  qos?: 0 | 1 | 2
+  /** MQTT only: Last-Will-and-Testament. */
+  lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean }
 }
 
 interface RealtimeState {
@@ -116,7 +120,9 @@ export const useRealtime = create<RealtimeState>((set, get) => {
           guard(window.api.socketioConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
           break
         case 'mqtt':
-          guard(window.api.mqttConnect({ connId, url: opts.url, rejectUnauthorized: ru }))
+          // QoS + Last-Will travel in the connect spec; the main engine applies
+          // the configured QoS to every publish/subscribe on this connection.
+          guard(window.api.mqttConnect({ connId, url: opts.url, rejectUnauthorized: ru, qos: opts.qos, lwt: opts.lwt }))
           break
       }
     },

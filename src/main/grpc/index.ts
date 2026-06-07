@@ -11,11 +11,12 @@
  *
  * Supported method kinds: unary, server-streaming, client-streaming, bidi.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as grpc from '@grpc/grpc-js'
 import * as protoLoader from '@grpc/proto-loader'
+import * as descriptor from 'protobufjs/ext/descriptor'
 import type { BrowserWindow, IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { makeId } from '@shared/id'
@@ -24,6 +25,7 @@ import type {
   GrpcMethodInfo,
   GrpcMethodKind,
   GrpcParseResult,
+  GrpcReflectSpec,
   GrpcServiceInfo,
   KV,
   RealtimeEvent
@@ -105,15 +107,8 @@ function loadProto(proto: string): protoLoader.PackageDefinition {
   }
 }
 
-/** Parse a .proto into its services and methods (no network). */
-export function parseProto(proto: string): GrpcParseResult {
-  if (!proto.trim()) return { services: [], error: 'Proto-файл пуст' }
-  let pkgDef: protoLoader.PackageDefinition
-  try {
-    pkgDef = loadProto(proto)
-  } catch (err) {
-    return { services: [], error: err instanceof Error ? err.message : String(err) }
-  }
+/** Enumerate services/methods from a loaded package definition (no network). */
+function enumerateServices(pkgDef: protoLoader.PackageDefinition): GrpcServiceInfo[] {
   const services: GrpcServiceInfo[] = []
   for (const [qualifiedName, def] of Object.entries(pkgDef)) {
     if (!isServiceDefinition(def)) continue
@@ -132,6 +127,19 @@ export function parseProto(proto: string): GrpcParseResult {
     services.push({ name: qualifiedName, methods })
   }
   services.sort((a, b) => a.name.localeCompare(b.name))
+  return services
+}
+
+/** Parse a .proto into its services and methods (no network). */
+export function parseProto(proto: string): GrpcParseResult {
+  if (!proto.trim()) return { services: [], error: 'Proto-файл пуст' }
+  let pkgDef: protoLoader.PackageDefinition
+  try {
+    pkgDef = loadProto(proto)
+  } catch (err) {
+    return { services: [], error: err instanceof Error ? err.message : String(err) }
+  }
+  const services = enumerateServices(pkgDef)
   if (services.length === 0) return { services: [], error: 'В proto-файле не найдено ни одного service' }
   return { services }
 }
@@ -142,6 +150,242 @@ function metadataFromKV(kv: KV[] | undefined): grpc.Metadata {
     if (h && h.enabled !== false && h.key) md.add(h.key, h.value ?? '')
   }
   return md
+}
+
+/* ------------------------------------------------------------------
+ * Server Reflection (grpc.reflection.v1alpha.ServerReflection)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Minimal v1alpha reflection proto (just the messages/fields we use). Embedded
+ * so reflection works without the user supplying any .proto. The server may
+ * speak v1 or v1alpha; v1alpha is the broadly-supported wire shape and v1 uses
+ * the same field layout, so the request bytes are compatible in practice.
+ */
+const REFLECTION_PROTO = `syntax = "proto3";
+package grpc.reflection.v1alpha;
+
+service ServerReflection {
+  rpc ServerReflectionInfo(stream ServerReflectionRequest) returns (stream ServerReflectionResponse);
+}
+
+message ServerReflectionRequest {
+  string host = 1;
+  string file_by_filename = 3;
+  string file_containing_symbol = 4;
+  string list_services = 7;
+}
+
+message ExtensionRequest {
+  string containing_type = 1;
+  int32 extension_number = 2;
+}
+
+message ServerReflectionResponse {
+  string valid_host = 1;
+  ServerReflectionRequest original_request = 2;
+  FileDescriptorResponse file_descriptor_response = 4;
+  ListServiceResponse list_services_response = 6;
+  ErrorResponse error_response = 7;
+}
+
+message FileDescriptorResponse {
+  repeated bytes file_descriptor_proto = 1;
+}
+
+message ListServiceResponse {
+  repeated ServiceResponse service = 1;
+}
+
+message ServiceResponse {
+  string name = 1;
+}
+
+message ErrorResponse {
+  int32 error_code = 1;
+  string error_message = 2;
+}`
+
+interface ReflectionListResponse {
+  list_services_response?: { service?: { name?: string }[] }
+  file_descriptor_response?: { file_descriptor_proto?: Buffer[] }
+  error_response?: { error_code?: number; error_message?: string }
+}
+
+/** Build a bidi ServerReflectionInfo client against the target address. */
+function reflectionClient(spec: TlsSpec, address: string): grpc.Client {
+  const pkgDef = loadProto(REFLECTION_PROTO)
+  const Ctor = resolveServiceCtor(pkgDef, 'grpc.reflection.v1alpha.ServerReflection')
+  if (!Ctor) throw new Error('Не удалось загрузить reflection proto')
+  return new Ctor(address, credentials(spec))
+}
+
+/** Either a loaded package definition or a structured error. */
+interface ReflectPkg {
+  pkgDef?: protoLoader.PackageDefinition
+  error?: string
+}
+
+const REFLECT_TIMEOUT_MS = 15_000
+
+/**
+ * Discover a server's full descriptor set via Server Reflection and return it as
+ * a proto-loader PackageDefinition.
+ *
+ * Flow: open the ServerReflectionInfo bidi stream, send `list_services`, then a
+ * `file_containing_symbol` request per discovered service; collect the returned
+ * serialized FileDescriptorProto bytes into a descriptor set and load it with
+ * proto-loader. Always resolves (never throws) — callers get `{ pkgDef }` or
+ * `{ error }`. Bounded by a per-call deadline plus a wall-clock guard so an
+ * unreachable address resolves with an error rather than hanging.
+ */
+function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }): Promise<ReflectPkg> {
+  return new Promise<ReflectPkg>((resolve) => {
+    let client: grpc.Client
+    try {
+      client = reflectionClient(spec, spec.address)
+    } catch (err) {
+      resolve({ error: err instanceof Error ? err.message : String(err) })
+      return
+    }
+
+    const md = metadataFromKV(spec.metadata)
+    const reflectFn = (client as unknown as Record<string, ((...a: unknown[]) => unknown) | undefined>)
+      .ServerReflectionInfo
+    if (typeof reflectFn !== 'function') {
+      try {
+        client.close()
+      } catch {
+        /* ignore */
+      }
+      resolve({ error: 'Сервер не поддерживает reflection' })
+      return
+    }
+
+    const callOpts: grpc.CallOptions = { deadline: new Date(Date.now() + REFLECT_TIMEOUT_MS) }
+    let stream: grpc.ClientDuplexStream<object, ReflectionListResponse>
+    try {
+      stream = reflectFn.call(client, md, callOpts) as grpc.ClientDuplexStream<object, ReflectionListResponse>
+    } catch (err) {
+      try {
+        client.close()
+      } catch {
+        /* ignore */
+      }
+      resolve({ error: err instanceof Error ? err.message : String(err) })
+      return
+    }
+
+    // De-dupe duplicate FileDescriptorProto bytes across symbol responses.
+    const seenFiles = new Set<string>()
+    const fileProtos: Buffer[] = []
+    let pendingSymbols = 0
+    let listed = false
+    let settled = false
+
+    // Wall-clock guard: fires `finish` (declared just below; safe — the timer
+    // resolves asynchronously) if neither the deadline nor a stream event settles
+    // the call, so an unreachable address resolves with an error.
+    const guard = setTimeout(() => finish({ error: 'Тайм-аут reflection' }), REFLECT_TIMEOUT_MS + 1_000)
+
+    const finish = (result: ReflectPkg): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(guard)
+      try {
+        stream.end()
+      } catch {
+        /* ignore */
+      }
+      try {
+        client.close()
+      } catch {
+        /* ignore */
+      }
+      resolve(result)
+    }
+
+    const buildResult = (): void => {
+      if (fileProtos.length === 0) {
+        finish({ error: 'Сервер не вернул дескрипторы' })
+        return
+      }
+      try {
+        const fileSet = { file: fileProtos.map((buf) => descriptor.FileDescriptorProto.decode(buf)) }
+        const pkgDef = protoLoader.loadFileDescriptorSetFromObject(
+          fileSet as Parameters<typeof protoLoader.loadFileDescriptorSetFromObject>[0],
+          LOAD_OPTS
+        )
+        finish({ pkgDef })
+      } catch (err) {
+        finish({ error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    const maybeDone = (): void => {
+      if (listed && pendingSymbols === 0) buildResult()
+    }
+
+    stream.on('data', (resp: ReflectionListResponse) => {
+      if (settled) return
+      if (resp.error_response && resp.error_response.error_code) {
+        finish({ error: resp.error_response.error_message || 'Ошибка reflection' })
+        return
+      }
+      if (resp.list_services_response) {
+        listed = true
+        const names = (resp.list_services_response.service ?? [])
+          .map((s) => s.name ?? '')
+          .filter((n) => n && !n.startsWith('grpc.reflection.'))
+        if (names.length === 0) {
+          finish({ error: 'Сервер не объявил ни одного service' })
+          return
+        }
+        pendingSymbols = names.length
+        for (const name of names) stream.write({ file_containing_symbol: name })
+        return
+      }
+      if (resp.file_descriptor_response) {
+        for (const buf of resp.file_descriptor_response.file_descriptor_proto ?? []) {
+          const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
+          const key = b.toString('base64')
+          if (!seenFiles.has(key)) {
+            seenFiles.add(key)
+            fileProtos.push(b)
+          }
+        }
+        if (pendingSymbols > 0) pendingSymbols -= 1
+        maybeDone()
+      }
+    })
+
+    stream.on('error', (err: grpc.ServiceError) => {
+      finish({ error: `${grpc.status[err.code] ?? err.code}: ${err.message}` })
+    })
+
+    stream.on('end', () => {
+      if (!settled) buildResult()
+    })
+
+    // Kick off discovery.
+    try {
+      stream.write({ list_services: '*' })
+    } catch (err) {
+      finish({ error: err instanceof Error ? err.message : String(err) })
+    }
+  })
+}
+
+/**
+ * Discover services/methods from a live server via Server Reflection and return
+ * the same `{ services, error }` shape as `parseProto`. Never throws.
+ */
+export async function reflectServices(spec: GrpcReflectSpec): Promise<GrpcParseResult> {
+  const { pkgDef, error } = await reflectPackageDef(spec)
+  if (error || !pkgDef) return { services: [], error: error ?? 'Reflection не вернул дескрипторы' }
+  const services = enumerateServices(pkgDef)
+  if (services.length === 0) return { services: [], error: 'Reflection не вернул ни одного service' }
+  return { services }
 }
 
 /** Resolve a service constructor from the loaded package by qualified name. */
@@ -161,31 +405,54 @@ function parseMessage(text: string): object {
   return JSON.parse(trimmed) as object
 }
 
-function credentials(spec: GrpcInvokeSpec): grpc.ChannelCredentials {
-  if (spec.plaintext) return grpc.credentials.createInsecure()
-  if (spec.rejectUnauthorized === false) {
-    // grpc-js cannot fully skip chain verification; we can at least relax the
-    // hostname check. Self-signed chains still require a proper CA in practice.
-    return grpc.credentials.createSsl(null, null, null, {
-      checkServerIdentity: () => undefined
-    })
-  }
-  return grpc.credentials.createSsl()
+/** TLS-related fields shared by invoke and reflect specs. */
+interface TlsSpec {
+  plaintext?: boolean
+  rejectUnauthorized?: boolean
+  caCertPath?: string
+  clientCertPath?: string
+  clientKeyPath?: string
+}
+
+/** Read a PEM file into a Buffer, or null when no path / unreadable. */
+function readPem(path: string | undefined): Buffer | null {
+  if (!path || !path.trim()) return null
+  return readFileSync(path)
 }
 
 /**
- * Invoke a gRPC method. Streams open/message/close/error events to the renderer.
- * Returns a LiveCall so client-/bidi-streams can be fed and finished.
+ * Build channel credentials, honouring plaintext (h2c), a custom CA, mTLS
+ * client cert/key, and a relaxed hostname check when verification is disabled.
+ * Throws if a configured PEM file cannot be read (surfaced to the caller).
  */
-function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCall {
-  let pkgDef: protoLoader.PackageDefinition
-  try {
-    pkgDef = loadProto(spec.proto)
-  } catch (err) {
-    emit({ type: 'error', error: `Не удалось разобрать proto: ${err instanceof Error ? err.message : String(err)}` })
-    return { cancel: () => {} }
-  }
+function credentials(spec: TlsSpec): grpc.ChannelCredentials {
+  if (spec.plaintext) return grpc.credentials.createInsecure()
 
+  const ca = readPem(spec.caCertPath)
+  const cert = readPem(spec.clientCertPath)
+  const key = readPem(spec.clientKeyPath)
+  const verifyOpts =
+    spec.rejectUnauthorized === false
+      ? // grpc-js cannot fully skip chain verification; we at least relax the
+        // hostname check. Self-signed chains still require a proper CA in practice.
+        { checkServerIdentity: () => undefined }
+      : undefined
+
+  // createSsl(rootCerts, privateKey, certChain, verifyOptions): a non-null
+  // key+cert pair enables mTLS; a non-null CA pins a custom root.
+  return grpc.credentials.createSsl(ca, key, cert, verifyOpts)
+}
+
+/**
+ * Invoke a gRPC method against an already-resolved package definition. Streams
+ * open/message/close/error events to the renderer. Returns a LiveCall so
+ * client-/bidi-streams can be fed and finished.
+ */
+function invoke(
+  spec: GrpcInvokeSpec,
+  pkgDef: protoLoader.PackageDefinition,
+  emit: (e: RealtimeEvent) => void
+): LiveCall {
   const Ctor = resolveServiceCtor(pkgDef, spec.service)
   if (!Ctor) {
     emit({ type: 'error', error: `Сервис не найден: ${spec.service}` })
@@ -207,6 +474,10 @@ function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCal
   clients.set(spec.connId, client)
 
   const md = metadataFromKV(spec.metadata)
+  // Per-call deadline: an absolute Date `deadlineMs` from now (grpc-js accepts a
+  // Date or absolute ms). Omitted when <= 0 so calls run without a timeout.
+  const callOpts: grpc.CallOptions =
+    spec.deadlineMs && spec.deadlineMs > 0 ? { deadline: new Date(Date.now() + spec.deadlineMs) } : {}
   const kind = methodKind(Boolean(methodDef.requestStream), Boolean(methodDef.responseStream))
   // grpc-js exposes the RPC on the client under its original name. Bind it to the
   // client — these methods rely on `this` being the client instance.
@@ -262,7 +533,7 @@ function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCal
   try {
     if (kind === 'unary') {
       emit(msg('out', spec.message, spec.method))
-      const call = fn(parseMessage(spec.message), md, (err: grpc.ServiceError | null, response: unknown) => {
+      const call = fn(parseMessage(spec.message), md, callOpts, (err: grpc.ServiceError | null, response: unknown) => {
         if (err) {
           settle(errEvent(err))
         } else {
@@ -284,7 +555,7 @@ function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCal
 
     if (kind === 'server_stream') {
       emit(msg('out', spec.message, spec.method))
-      const call = fn(parseMessage(spec.message), md) as grpc.ClientReadableStream<unknown>
+      const call = fn(parseMessage(spec.message), md, callOpts) as grpc.ClientReadableStream<unknown>
       call.on('data', onResponse)
       call.on('error', (err: grpc.ServiceError) => settle(errEvent(err)))
       call.on('status', onStatus)
@@ -303,7 +574,7 @@ function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCal
 
     // client_stream or bidi: we get a writable (and, for bidi, readable) stream.
     if (kind === 'client_stream') {
-      const call = fn(md, (err: grpc.ServiceError | null, response: unknown) => {
+      const call = fn(md, callOpts, (err: grpc.ServiceError | null, response: unknown) => {
         if (err) {
           settle(errEvent(err))
         } else {
@@ -346,7 +617,7 @@ function invoke(spec: GrpcInvokeSpec, emit: (e: RealtimeEvent) => void): LiveCal
     }
 
     // bidi
-    const call = fn(md) as grpc.ClientDuplexStream<object, unknown>
+    const call = fn(md, callOpts) as grpc.ClientDuplexStream<object, unknown>
     call.on('data', onResponse)
     call.on('error', (err: grpc.ServiceError) => settle(errEvent(err)))
     call.on('status', onStatus)
@@ -404,13 +675,56 @@ function cancelCall(connId: string): void {
   }
 }
 
+/**
+ * Resolve the descriptor set for an invoke: from the pasted `.proto` (sync) or
+ * by querying the server via Server Reflection. Returns `{ pkgDef }` or
+ * `{ error }`; never throws.
+ */
+async function resolveInvokePackageDef(spec: GrpcInvokeSpec): Promise<ReflectPkg> {
+  if (spec.useReflection || !spec.proto?.trim()) {
+    return reflectPackageDef({
+      address: spec.address,
+      metadata: spec.metadata,
+      plaintext: spec.plaintext,
+      rejectUnauthorized: spec.rejectUnauthorized,
+      caCertPath: spec.caCertPath,
+      clientCertPath: spec.clientCertPath,
+      clientKeyPath: spec.clientKeyPath
+    })
+  }
+  try {
+    return { pkgDef: loadProto(spec.proto) }
+  } catch (err) {
+    return { error: `Не удалось разобрать proto: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
 export function registerGrpcHandlers(ipcMain: IpcMain, getWindow: GetWindow): void {
   ipcMain.handle(IPC.grpc.parse, async (_e, proto: string): Promise<GrpcParseResult> => parseProto(proto))
+
+  ipcMain.handle(IPC.grpc.reflect, async (_e, spec: GrpcReflectSpec): Promise<GrpcParseResult> => reflectServices(spec))
 
   ipcMain.handle(IPC.grpc.invoke, async (_e, spec: GrpcInvokeSpec) => {
     cancelCall(spec.connId) // replace any prior call on this id
     const emit = emitter(getWindow, spec.connId)
-    calls.set(spec.connId, invoke(spec, emit))
+
+    // Mark the call as in-flight immediately so a cancel during descriptor
+    // resolution (reflection round-trip) is honoured.
+    let aborted = false
+    calls.set(spec.connId, {
+      cancel: () => {
+        aborted = true
+      }
+    })
+
+    const { pkgDef, error } = await resolveInvokePackageDef(spec)
+    if (aborted) return // cancelled while resolving descriptors
+    if (error || !pkgDef) {
+      emit({ type: 'error', error: error ?? 'Не удалось получить дескрипторы' })
+      calls.delete(spec.connId)
+      return
+    }
+    calls.set(spec.connId, invoke(spec, pkgDef, emit))
   })
 
   ipcMain.handle(IPC.grpc.send, async (_e, connId: string, message: string) => {

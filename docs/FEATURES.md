@@ -85,18 +85,28 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 
 ## P1 — High value (attempted in this build)
 
-- [x] **Pre-request scripts** and **Tests** in a sandboxed `vm` runtime with a `pm.*` subset
-      (`pm.environment`, `pm.globals`, `pm.variables`, `pm.request`, `pm.response`, `pm.test`,
-      `pm.expect` chai-style). Results shown in a **Tests** tab with console output.
-- [x] **Import**: Postman Collection v2.1 JSON, OpenAPI 3.x, and cURL (paste or file).
-- [x] **Export**: collection as Postman v2.1 JSON.
-- [x] **Code generation**: cURL, JavaScript (fetch), Python (requests), Node, Go.
+- [x] **Pre-request scripts** and **Tests** in a sandboxed (isolated child-process) `pm.*` runtime:
+      `pm.environment`, `pm.globals`, `pm.variables` (incl. `.set/.unset` local scope),
+      `pm.collectionVariables`, `pm.iterationData`, `pm.request`, `pm.response`, `pm.cookies`,
+      `pm.sendRequest`, `pm.visualizer`, `pm.test`, and a broad `pm.expect` chai surface
+      (`.members/.oneOf/.keys/.closeTo/.throw/.nested.property/…`). **Collection- and folder-level**
+      pre-request/test scripts run top-down around the request. Results in a Tests tab with console.
+- [x] **Import**: Postman Collection v2.1, OpenAPI 3.x **and Swagger 2.0** (JSON **or YAML**),
+      **HAR**, **Insomnia v4**, and cURL (paste or file).
+- [x] **Export**: collection as Postman v2.1 JSON; full workspace as a portable `.sqlite`.
+- [x] **Code generation** (14 targets): cURL, JavaScript (fetch), Python (requests), Node, Go,
+      **Java (OkHttp), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), Swift (URLSession),
+      Kotlin (OkHttp), Rust (reqwest), PowerShell, HTTPie**.
 - [x] **Paste cURL** into the URL bar to auto-fill the whole request.
-- [x] **OAuth 2.0** (client credentials + password grant token fetch).
+- [x] **~50 dynamic variables** (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomIP}}`,
+      `{{$randomDatetime}}`, … the Postman set) plus `{{$guid}}/{{$timestamp}}/{{$counter}}`.
+- [x] **OAuth 2.0**: client_credentials, password, authorization_code (**+ PKCE**), **refresh_token**,
+      and **device code** (RFC 8628); client creds via body or HTTP Basic; **auto-refresh on 401**.
 - [x] **Digest auth** — full RFC 7616 challenge/response (MD5, SHA-256 and `-sess` variants;
       qop=auth; legacy RFC 2069 fallback). The first request is sent unauthenticated; the engine
       answers the 401 `WWW-Authenticate: Digest` challenge and replays once. Unit-tested against
-      the canonical RFC vectors.
+      the canonical RFC vectors. **Preemptive mode** sends credentials on the first request from a
+      known realm/nonce.
 - [x] **Cookie manager**: persistent, editable jar in main (per workspace) — auto-captures
       `Set-Cookie` and auto-attaches matching cookies (domain/path/secure/expiry) to requests; a
       Cookie Manager UI (grouped by domain; add/edit/delete; clear-all / clear-by-domain). The
@@ -142,17 +152,20 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Workspaces** (local, multiple): each its own isolated collections/environments/globals/
       history/tabs/cookies under a per-workspace dir; titlebar switcher (create/rename/delete/
       switch) with hot-reload on switch. App-level settings, AI providers and secrets are shared.
-- [x] **GraphQL** request mode (HTTP POST with a `{query, variables}` body editor; selectable from
-      the protocol dropdown).
+- [x] **GraphQL** request mode (HTTP POST with a `{query, variables}` body editor) **+ schema
+      introspection**: fetch the endpoint's schema, browse a docs panel (types → fields → type), and
+      get Monaco autocomplete of root fields/types from the introspected schema.
 - [x] **Socket.IO** client (pure-JS `socket.io-client` in main; connect, emit events, listen, with
-      bounded reconnection) — a realtime mode with an event + payload composer.
+      bounded reconnection) — a realtime mode with an event + payload composer **and saved message
+      templates**.
 - [x] **MQTT** client (pure-JS `mqtt.js` in main; connect over mqtt(s)/ws(s), subscribe, publish) —
-      a realtime mode with topic subscribe + publish composer.
+      a realtime mode with topic subscribe + publish composer, **per-connection QoS (0/1/2) and a
+      Last-Will & Testament**, plus saved message templates.
 - [x] **gRPC** client (pure-JS `@grpc/grpc-js` + `@grpc/proto-loader`, no native modules): paste or
-      upload a `.proto`, parse it into services/methods, pick a method, edit the request message as
-      JSON, set call metadata, and invoke. Supports **unary, server-streaming, client-streaming and
-      bidi**; plaintext (h2c) or TLS; results stream into a live log (with a Send/Finish composer for
-      client-/bidi-streams). A request "mode" like the realtime protocols.
+      upload a `.proto` **or discover services via Server Reflection**, pick a method, edit the request
+      message as JSON, set call metadata, **mTLS client certs and a per-call deadline**, and invoke.
+      Supports **unary, server-streaming, client-streaming and bidi**; plaintext (h2c) or TLS; results
+      stream into a live log (with a Send/Finish composer for client-/bidi-streams).
 - [x] **SQLite** backup (optional, pure-WASM `sql.js`, no native modules): export the current
       workspace (collections, environments, globals, history) to a portable `.sqlite` file and import
       it back (Settings → Данные). The file is a real SQLite database with readable columns plus

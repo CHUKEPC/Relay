@@ -19,6 +19,8 @@ import { Cookie } from 'tough-cookie'
 
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { buildDigestAuthHeader, parseDigestChallenge } from '../auth/digest'
+import type { DigestChallenge } from '../auth/digest'
+import { fetchOAuthToken } from '../auth/oauth'
 import { buildTokenAuth, signRequest } from '../auth/sign'
 import { createType1Message, createType3Message, decodeType2Message } from '../auth/ntlm'
 import type {
@@ -140,10 +142,10 @@ export function buildAuthHeaders(auth: Auth | undefined): {
     }
 
     case 'digest': {
-      // Full RFC 7616 digest is a challenge/response round-trip handled inside
-      // runRequest: the first request is sent WITHOUT credentials, and on a 401
-      // with a `WWW-Authenticate: Digest` challenge we compute the response and
-      // retry once. So no preemptive header here.
+      // Digest is driven inside runRequest. By default it is a challenge/response
+      // round-trip (send without credentials, answer the 401). In PREEMPTIVE mode
+      // (a known realm+nonce supplied by the user) runRequest attaches the header
+      // on the first request. Either way nothing is contributed here.
       return { headers: {} }
     }
 
@@ -816,13 +818,49 @@ export async function runRequest(
   let currentUrl = initialUrl
   let method = (spec.method || 'GET').toUpperCase()
   let ttfbMs: number | undefined
-  // Digest auth: send unauthenticated first, then answer one 401 challenge.
+  // Digest auth: either send credentials preemptively (from a known challenge),
+  // or send unauthenticated first and answer one 401 challenge.
   const digestAuth = spec.auth && spec.auth.type === 'digest' ? spec.auth : null
   let digestTried = false
+
+  // Digest PREEMPTIVE: when the user supplies a known challenge (realm + nonce),
+  // attach the Authorization header on the FIRST request instead of waiting for a
+  // 401 round-trip. Synthesize a challenge from the configured fields and reuse
+  // the same builder the 401 path uses.
+  if (digestAuth && digestAuth.preemptive && digestAuth.realm && digestAuth.nonce) {
+    const challenge: DigestChallenge = { realm: digestAuth.realm, nonce: digestAuth.nonce }
+    if (digestAuth.qop) challenge.qop = digestAuth.qop
+    if (digestAuth.opaque) challenge.opaque = digestAuth.opaque
+    if (digestAuth.algorithm) challenge.algorithm = digestAuth.algorithm
+    // string body → itself; no body → '' ; multipart/binary → undefined (can't hash here).
+    const entityBody = encoded.body === undefined ? '' : typeof encoded.body === 'string' ? encoded.body : undefined
+    const preemptiveHeader = buildDigestAuthHeader({
+      username: digestAuth.username ?? '',
+      password: digestAuth.password ?? '',
+      method,
+      uri: requestTarget(initialUrl),
+      challenge,
+      entityBody
+    })
+    setHeaderCI(headers, 'Authorization', preemptiveHeader)
+    // We've already proven possession; don't also answer a follow-up 401.
+    digestTried = true
+  }
   // NTLM auth: Type 1 is seeded preemptively; on the 401 Type 2 challenge we
   // reply with Type 3 over the SAME connection (forced single-socket pool).
   const ntlmAuth = spec.auth && spec.auth.type === 'ntlm' ? spec.auth : null
   let ntlmTried = false
+  // OAuth2 auto-refresh: on a 401, exchange the refresh token for a fresh access
+  // token ONCE and replay. Requires autoRefresh + refreshToken + tokenUrl.
+  const oauth2Auth =
+    spec.auth &&
+    spec.auth.type === 'oauth2' &&
+    spec.auth.autoRefresh &&
+    spec.auth.refreshToken &&
+    spec.auth.tokenUrl
+      ? spec.auth
+      : null
+  let oauth2Refreshed = false
 
   try {
     // --- 6. Request loop: send, optionally follow redirects manually. ---
@@ -912,6 +950,31 @@ export async function runRequest(
             // Malformed Type 2 — fall through and return the 401 as the result.
           }
         }
+      }
+
+      // OAuth2 auto-refresh: on the first 401, exchange the refresh token for a
+      // fresh access token and replay the request once with the new credential.
+      if (status === 401 && oauth2Auth && !oauth2Refreshed) {
+        await res.body.dump?.()
+        oauth2Refreshed = true
+        const refreshed = await fetchOAuthToken({
+          grant: 'refresh_token',
+          tokenUrl: oauth2Auth.tokenUrl ?? '',
+          clientId: oauth2Auth.clientId ?? '',
+          clientSecret: oauth2Auth.clientSecret,
+          scope: oauth2Auth.scope,
+          refreshToken: oauth2Auth.refreshToken,
+          clientAuth: oauth2Auth.clientAuth
+        })
+        if (refreshed.ok && refreshed.accessToken) {
+          const prefix =
+            oauth2Auth.headerPrefix && oauth2Auth.headerPrefix.trim()
+              ? oauth2Auth.headerPrefix.trim()
+              : 'Bearer'
+          setHeaderCI(headers, 'Authorization', `${prefix} ${refreshed.accessToken}`)
+          continue // replay with the refreshed access token
+        }
+        // Refresh failed — fall through and surface the 401 as the result.
       }
 
       const isRedirect = REDIRECT_STATUSES.has(status)

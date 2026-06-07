@@ -11,6 +11,7 @@ import { registerStorageHandlers, registerWorkspaceHandlers, type StorageManager
 import { registerDataHandlers } from '../data'
 import { registerScriptHandlers } from '../scripting'
 import { registerOAuthHandlers } from '../auth/oauth'
+import { registerGraphqlHandlers } from '../graphql'
 import { registerRealtimeHandlers } from '../realtime'
 import { registerGrpcHandlers } from '../grpc'
 import { registerSqliteHandlers } from '../sqlite'
@@ -62,6 +63,7 @@ export function registerIpc(ctx: IpcContext): void {
   registerDataHandlers(ipcMain)
   registerScriptHandlers(ipcMain)
   registerOAuthHandlers(ipcMain)
+  registerGraphqlHandlers(ipcMain)
 
   // Dialogs + filesystem bridges.
   ipcMain.handle(IPC.dialog.openFile, async (_e, opts: OpenFileOptions): Promise<FilePickResult[] | null> => {

@@ -376,6 +376,20 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
     emit({ type: 'error', error: 'MQTT URL must start with mqtt(s)://, ws(s):// or tcp://' })
     return { kind: 'mqtt', close: () => {} }
   }
+  // Clamp to a valid MQTT QoS (0/1/2); default 0 when unset/invalid.
+  const qos: 0 | 1 | 2 = spec.qos === 1 || spec.qos === 2 ? spec.qos : 0
+
+  // Build the Last-Will-and-Testament option only when a topic is provided.
+  const will =
+    spec.lwt && spec.lwt.topic
+      ? {
+          topic: spec.lwt.topic,
+          payload: spec.lwt.payload ?? '',
+          qos: (spec.lwt.qos === 1 || spec.lwt.qos === 2 ? spec.lwt.qos : 0) as 0 | 1 | 2,
+          retain: spec.lwt.retain === true
+        }
+      : undefined
+
   let client: ReturnType<typeof mqtt.connect>
   try {
     client = mqtt.connect(spec.url, {
@@ -384,7 +398,8 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
       clientId: spec.clientId || undefined,
       rejectUnauthorized: spec.rejectUnauthorized !== false,
       reconnectPeriod: 3000,
-      connectTimeout: 15000
+      connectTimeout: 15000,
+      will
     })
   } catch (err) {
     emit({ type: 'error', error: err instanceof Error ? err.message : String(err) })
@@ -394,7 +409,9 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
   client.on('connect', () => {
     emit({ type: 'open' })
     for (const t of spec.subscribeTopics?.filter(Boolean) ?? []) {
-      client.subscribe(t, (err) => emit(msg('system', err ? `subscribe ${t} failed: ${err.message}` : `subscribed to ${t}`, 'system')))
+      client.subscribe(t, { qos }, (err) =>
+        emit(msg('system', err ? `subscribe ${t} failed: ${err.message}` : `subscribed to ${t} (QoS ${qos})`, 'system'))
+      )
     }
   })
   client.on('message', (topic: string, payload: Buffer) => emit(msg('in', payload.toString('utf8'), topic)))
@@ -406,7 +423,7 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
     kind: 'mqtt',
     publish: (topic: string, payload: string) => {
       try {
-        client.publish(topic, payload)
+        client.publish(topic, payload, { qos })
         emit(msg('out', payload, topic))
       } catch (err) {
         emit({ type: 'error', error: err instanceof Error ? err.message : 'publish failed' })
@@ -414,8 +431,8 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
     },
     subscribe: (topic: string) => {
       try {
-        client.subscribe(topic, (err) =>
-          emit(msg('system', err ? `subscribe ${topic} failed: ${err.message}` : `subscribed to ${topic}`, 'system'))
+        client.subscribe(topic, { qos }, (err) =>
+          emit(msg('system', err ? `subscribe ${topic} failed: ${err.message}` : `subscribed to ${topic} (QoS ${qos})`, 'system'))
         )
       } catch (err) {
         emit({ type: 'error', error: err instanceof Error ? err.message : 'subscribe failed' })
