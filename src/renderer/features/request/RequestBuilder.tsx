@@ -6,6 +6,7 @@ import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
 import { useScope, useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
 import { detectPathVars } from '@renderer/lib/url'
+import { saveActiveRequest, openSaveAsDialog } from '@renderer/lib/save'
 import { UrlBar } from './UrlBar'
 import { BodyTab } from './BodyTab'
 import { AuthTab } from './AuthTab'
@@ -79,6 +80,19 @@ export function RequestBuilder() {
           </button>
         ))}
         <div style={{ marginLeft: 'auto' }} />
+        <button className="btn ghost" style={{ height: 28 }} onClick={() => saveActiveRequest()} title="Сохранить (⌘S / Ctrl+S)">
+          <Icon name="save" size={14} />
+          Сохранить
+        </button>
+        <button
+          className="btn ghost"
+          style={{ height: 28 }}
+          onClick={() => openSaveAsDialog()}
+          title="Сохранить как… (в коллекцию)"
+        >
+          <Icon name="copy" size={14} />
+          Save As
+        </button>
         {mode === 'http' && (
           <button className="btn ghost" style={{ height: 28 }} onClick={() => setCodeGenOpen(true)} title="Сгенерировать код">
             <Icon name="code2" size={14} />
@@ -104,7 +118,7 @@ export function RequestBuilder() {
             <KVTable rows={req.headers} onChange={(headers) => patch({ headers })} scope={scope} keyPlaceholder="Header-Name" keyAutocomplete={COMMON_HEADER_NAMES} />
             <div style={{ padding: '4px 18px 14px', fontSize: 11, color: 'var(--tx-3)' }}>
               {mode === 'http'
-                ? 'Host, Content-Length, User-Agent и др. добавляются автоматически при отправке.'
+                ? 'Host, Content-Length, User-Agent и др. добавляются автоматически. Чтобы переопределить любой из них — добавьте заголовок с тем же именем выше.'
                 : 'Заголовки рукопожатия отправляются при подключении.'}
             </div>
           </>

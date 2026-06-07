@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { useUi, type SideTab } from '@renderer/store/ui'
+import { useConsole } from '@renderer/store/console'
+import { kbd } from '@renderer/lib/platform'
 import { CollectionsTree } from './CollectionsTree'
 import { HistoryList } from './HistoryList'
 import { EnvList } from './EnvList'
@@ -53,12 +55,18 @@ export function Sidebar() {
       {sideTab === 'env' && <EnvList />}
 
       <div style={{ marginTop: 'auto', padding: 10, borderTop: '1px solid var(--line)' }}>
+        <button className="tree-row" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title="Консоль запросов">
+          <span className="twirl">
+            <Icon name="code2" size={15} />
+          </span>
+          <span className="name">Консоль</span>
+        </button>
         <button className="tree-row" style={{ width: '100%' }} onClick={() => openSettings()}>
           <span className="twirl">
             <Icon name="settings" size={15} />
           </span>
           <span className="name">Настройки</span>
-          <span className="kbd">⌘,</span>
+          <span className="kbd">{kbd(',')}</span>
         </button>
       </div>
     </aside>

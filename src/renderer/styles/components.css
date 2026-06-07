@@ -73,10 +73,13 @@
 .rtab:hover { background: var(--bg-hover); }
 .rtab.on { background: var(--bg-2); color: var(--tx-0); box-shadow: var(--shadow-1); }
 .rtab .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rtab .x { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; color: var(--tx-2); opacity: 0; transition: .12s; flex: none; }
+.rtab .tab-end { position: relative; width: 16px; height: 16px; display: grid; place-items: center; flex: none; }
+.rtab .x { position: absolute; inset: 0; border-radius: 4px; display: grid; place-items: center; color: var(--tx-2); opacity: 0; transition: opacity .12s; cursor: pointer; }
 .rtab:hover .x, .rtab.on .x { opacity: 1; }
 .rtab .x:hover { background: var(--bg-active); color: var(--tx-0); }
-.rtab .dirty { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+.rtab .dirty { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* On hover the close X takes over the slot so the dot never blocks closing. */
+.rtab:hover .tab-end .dirty { opacity: 0; }
 
 /* ---------- BODY GRID ---------- */
 .body { flex: 1; display: flex; min-height: 0; }

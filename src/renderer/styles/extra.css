@@ -50,7 +50,7 @@
   box-shadow: var(--shadow-3);
   z-index: 121;
   padding: 20px;
-  animation: scaleIn 0.18s var(--ease-out);
+  animation: modalIn 0.16s var(--ease-out);
 }
 .modal-title {
   font-size: 15px;
@@ -797,3 +797,308 @@
 
 .example-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: var(--radius-sm); }
 .example-row:hover { background: var(--bg-hover); }
+
+/* ============================================================
+   Console (request log) — bottom drawer
+   (features/console/ConsolePanel.tsx). Reuses .method-tag/.m-*,
+   .btn.ghost, .icon-btn + design tokens. Appended block.
+   ============================================================ */
+
+/* Bottom drawer: floats above content, just above the status bar.
+   Mounted near the app root; `position: fixed` keeps it pinned regardless. */
+.console-drawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 22px; /* clears a ~22px status bar; harmless if there is none */
+  height: 38vh;
+  min-height: 200px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line-2);
+  box-shadow: var(--shadow-3);
+  z-index: 90;
+  animation: fadeUp 0.16s var(--ease-out);
+}
+
+/* header row */
+.console-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.console-head-ico {
+  color: var(--accent);
+  flex: none;
+}
+.console-head-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--tx-0);
+}
+.console-head-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--tx-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 1px 7px;
+}
+.console-head-spacer {
+  flex: 1;
+}
+.console-head-btn {
+  height: 28px;
+}
+.console-head-btn[disabled] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* empty state */
+.console-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+.console-empty-ico {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  color: var(--tx-2);
+}
+.console-empty-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--tx-0);
+  margin-bottom: 4px;
+}
+.console-empty-sub {
+  font-size: 12px;
+  color: var(--tx-2);
+}
+
+/* scrollable list */
+.console-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* one entry */
+.console-row {
+  border-bottom: 1px solid var(--line);
+}
+.console-row.open {
+  background: var(--bg-0);
+}
+
+/* clickable header line */
+.console-row-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--tx-1);
+  font: inherit;
+}
+.console-row-head:hover {
+  background: var(--bg-hover);
+}
+.console-row-head:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+.console-chev {
+  flex: none;
+  color: var(--tx-3);
+}
+.console-status {
+  flex: none;
+  min-width: 38px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+.console-method {
+  flex: none;
+  min-width: 44px;
+  font-size: 10px;
+}
+.console-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tx-0);
+}
+.console-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--tx-2);
+}
+.console-sep {
+  color: var(--tx-3);
+}
+.console-time {
+  color: var(--tx-3);
+}
+
+/* expanded details */
+.console-details {
+  padding: 4px 12px 14px 33px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.console-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--s-5xx);
+  background: color-mix(in oklch, var(--s-5xx) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--s-5xx) 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+}
+.console-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.console-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tx-3);
+}
+.console-section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 0 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.console-section-empty {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tx-3);
+}
+.console-section-note {
+  font-size: 11px;
+  color: var(--tx-3);
+}
+.console-kv {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-1);
+}
+.console-kv-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.4fr) 1fr;
+  gap: 12px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.console-kv-row:last-child {
+  border-bottom: none;
+}
+.console-kv-row:hover {
+  background: var(--bg-hover);
+}
+.console-kv-key {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--c-key);
+  word-break: break-all;
+}
+.console-kv-val {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx-1);
+  word-break: break-all;
+}
+.console-body {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--tx-0);
+  background: var(--code-bg, var(--bg-2));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   Windows / Linux titlebar window controls
+   ============================================================ */
+.win-controls { display: flex; align-items: stretch; height: 44px; margin-left: 6px; margin-right: -12px; }
+.win-controls .wc {
+  width: 46px; display: grid; place-items: center; color: var(--tx-2);
+  transition: background .12s, color .12s;
+}
+.win-controls .wc:hover { background: var(--bg-hover); color: var(--tx-0); }
+.win-controls .wc.close:hover { background: #e81123; color: #fff; }
+
+/* ============================================================
+   Tree row hover action (e.g. export collection)
+   ============================================================ */
+.tree-row .row-action {
+  width: 22px; height: 22px; flex: none; display: grid; place-items: center;
+  border-radius: 4px; color: var(--tx-3); opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.tree-row:hover .row-action { opacity: 1; }
+.tree-row .row-action:hover { color: var(--tx-0); background: var(--bg-active); }

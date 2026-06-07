@@ -243,6 +243,12 @@ input, textarea { background: none; border: none; outline: none; }
 @keyframes fadeUp { from { transform: translateY(6px); } to { transform: none; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { transform: scale(0.975) translateY(4px); } to { transform: none; } }
+/* Centered-modal entrance: keeps translate(-50%,-50%) throughout, so the dialog
+   scales in IN PLACE instead of animating off-center then snapping to center. */
+@keyframes modalIn {
+  from { transform: translate(-50%, -50%) scale(0.97); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
 @keyframes slideRight { from { transform: translateX(16px); } to { transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }

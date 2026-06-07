@@ -7,6 +7,7 @@ import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
+import { MOD } from '@renderer/lib/platform'
 
 interface Item {
   id: string
@@ -52,10 +53,10 @@ export function CommandPalette() {
       run: () => openSaved(r.req, r.req.id)
     }))
     const actions: Item[] = [
-      { id: 'new', title: 'Новый запрос', icon: 'plus', kbd: ['⌘', 'N'], run: () => openNew() },
-      { id: 'send', title: 'Отправить текущий запрос', icon: 'send', kbd: ['⌘', '↵'], run: () => void sendActiveRequest() },
-      { id: 'ai', title: 'Открыть AI-ассистента', icon: 'sparkle', kbd: ['⌘', 'J'], run: () => useUi.getState().setAiOpen(true) },
-      { id: 'settings', title: 'Открыть настройки', icon: 'settings', kbd: ['⌘', ','], run: () => useUi.getState().openSettings() },
+      { id: 'new', title: 'Новый запрос', icon: 'plus', kbd: [MOD, 'N'], run: () => openNew() },
+      { id: 'send', title: 'Отправить текущий запрос', icon: 'send', kbd: [MOD, '↵'], run: () => void sendActiveRequest() },
+      { id: 'ai', title: 'Открыть AI-ассистента', icon: 'sparkle', kbd: [MOD, 'J'], run: () => useUi.getState().setAiOpen(true) },
+      { id: 'settings', title: 'Открыть настройки', icon: 'settings', kbd: [MOD, ','], run: () => useUi.getState().openSettings() },
       { id: 'theme', title: 'Переключить тему', icon: 'moon', run: () => {
         const cur = useSettings.getState().resolvedTheme
         useSettings.getState().setTheme(cur === 'dark' ? 'light' : 'dark')

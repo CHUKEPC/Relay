@@ -17,7 +17,8 @@ const THEME_SWATCHES: ThemeSwatchDef[] = [
   { id: 'system', label: 'Системная', bg: ['#1a1b1f', '#f7f7f8'] }
 ]
 
-const ACCENT_HUES = [264, 158, 25, 305, 200]
+// A fuller spectrum of accent presets (blue → teal → green → amber → red → pink → purple).
+const ACCENT_HUES = [264, 230, 200, 170, 145, 110, 70, 40, 20, 330, 300]
 
 export function AppearanceSection(): JSX.Element {
   const theme = useSettings((s) => s.settings.theme)
@@ -62,7 +63,7 @@ export function AppearanceSection(): JSX.Element {
       </div>
 
       <div className="set-group-label">Акцентный цвет</div>
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', maxWidth: 460 }}>
         {ACCENT_HUES.map((h) => {
           const selected = accentHue === h
           return (

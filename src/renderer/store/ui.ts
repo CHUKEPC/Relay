@@ -11,6 +11,7 @@ interface UiState {
   settingsOpen: boolean
   settingsSection: SettingsSection
   paletteOpen: boolean
+  saveDialogOpen: boolean
   respPct: number
   layout: Layout
   toast: { id: number; message: string; kind: 'ok' | 'error' } | null
@@ -22,6 +23,7 @@ interface UiState {
   closeSettings: () => void
   setPaletteOpen: (v: boolean) => void
   togglePalette: () => void
+  setSaveDialogOpen: (v: boolean) => void
   setRespPct: (p: number) => void
   toggleLayout: () => void
   showToast: (message: string, kind?: 'ok' | 'error') => void
@@ -36,6 +38,7 @@ export const useUi = create<UiState>((set) => ({
   settingsOpen: false,
   settingsSection: 'providers',
   paletteOpen: false,
+  saveDialogOpen: false,
   respPct: 46,
   layout: 'split-v',
   toast: null,
@@ -47,6 +50,7 @@ export const useUi = create<UiState>((set) => ({
   closeSettings: () => set({ settingsOpen: false }),
   setPaletteOpen: (v) => set({ paletteOpen: v }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+  setSaveDialogOpen: (v) => set({ saveDialogOpen: v }),
   setRespPct: (p) => set({ respPct: Math.max(18, Math.min(82, p)) }),
   toggleLayout: () => set((s) => ({ layout: s.layout === 'split-v' ? 'split-h' : 'split-v' })),
   showToast: (message, kind = 'ok') => {

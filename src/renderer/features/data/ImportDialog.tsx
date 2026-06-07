@@ -7,6 +7,15 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
+/** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
+ *  so the user sees the clean, actionable message. */
+function cleanError(msg: string): string {
+  return msg
+    .replace(/^Error invoking remote method '[^']*':\s*/i, '')
+    .replace(/^Error:\s*/i, '')
+    .trim()
+}
+
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [kind, setKind] = useState<ImportKind>('auto')
   const [text, setText] = useState('')
@@ -38,17 +47,32 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         return
       }
       const warnings: string[] = []
+      let collections = 0
+      let requests = 0
+      let environments = 0
       for (const r of results) {
         warnings.push(...r.warnings)
-        if (r.kind === 'collection' && r.collection) addCollectionNode(r.collection)
-        else if (r.kind === 'environment' && r.environment) addEnvironment(r.environment)
-        else if (r.kind === 'request' && r.request) openNew(r.request)
+        if (r.kind === 'collection' && r.collection) {
+          addCollectionNode(r.collection)
+          collections++
+        } else if (r.kind === 'environment' && r.environment) {
+          addEnvironment(r.environment)
+          environments++
+        } else if (r.kind === 'request' && r.request) {
+          openNew(r.request)
+          requests++
+        }
       }
-      showToast(`Импортировано${warnings.length ? ` · предупреждений: ${warnings.length}` : ''}`)
+      const parts = [
+        collections && `коллекций: ${collections}`,
+        requests && `запросов: ${requests}`,
+        environments && `сред: ${environments}`
+      ].filter(Boolean)
+      showToast(`Импортировано (${parts.join(', ') || 'данные'})${warnings.length ? ` · предупреждений: ${warnings.length}` : ''}`)
       setText('')
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(cleanError(err instanceof Error ? err.message : String(err)))
     }
   }
 

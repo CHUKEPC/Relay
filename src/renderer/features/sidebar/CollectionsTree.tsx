@@ -150,6 +150,18 @@ function TreeNode({
     setRenameId(null)
   }
 
+  // Export this collection to a Postman v2.1 JSON file (shared by the context
+  // menu and the always-visible hover button on collection rows).
+  const doExport = async (): Promise<void> => {
+    const json = await window.api.exportCollection(JSON.stringify(node))
+    const saved = await window.api.saveFile({
+      defaultName: `${name}.postman_collection.json`,
+      content: json,
+      filters: [{ name: 'Postman Collection', extensions: ['json'] }]
+    })
+    if (saved) showToast('Коллекция экспортирована')
+  }
+
   // --- Drag & drop ---------------------------------------------------------
   const handleDragStart = (e: DragEvent) => {
     // Don't start a node drag while editing its name (let the input handle text).
@@ -288,14 +300,7 @@ function TreeNode({
           <Icon name="play" size={14} /> Запустить
         </ContextMenu.Item>
         {node.type === 'collection' && (
-          <ContextMenu.Item
-            className="pop-item"
-            onSelect={async () => {
-              const json = await window.api.exportCollection(JSON.stringify(node))
-              const saved = await window.api.saveFile({ defaultName: `${node.name}.postman_collection.json`, content: json })
-              if (saved) showToast('Коллекция экспортирована')
-            }}
-          >
+          <ContextMenu.Item className="pop-item" onSelect={() => void doExport()}>
             <Icon name="download" size={14} /> Экспорт (Postman v2.1)
           </ContextMenu.Item>
         )}
@@ -349,6 +354,18 @@ function TreeNode({
           <span className="name" style={{ fontWeight: depth === 0 ? 600 : 500 }}>
             {node.name}
           </span>
+        )}
+        {node.type === 'collection' && !renaming && (
+          <button
+            className="row-action"
+            title="Экспорт коллекции (Postman v2.1)"
+            onClick={(e) => {
+              e.stopPropagation()
+              void doExport()
+            }}
+          >
+            <Icon name="download" size={13} />
+          </button>
         )}
       </div>
     )

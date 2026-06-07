@@ -11,6 +11,7 @@
  */
 import { basename } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { STATUS_CODES } from 'node:http'
 import { gunzipSync, brotliDecompressSync, inflateSync, inflateRawSync } from 'node:zlib'
 import { request as undiciRequest, Agent, ProxyAgent } from 'undici'
 import type { Dispatcher } from 'undici'
@@ -638,9 +639,12 @@ export async function runRequest(
   let initialUrl: string
   try {
     initialUrl = buildUrl(spec.url, spec.query ?? [])
-  } catch (err) {
+  } catch {
+    // Node's URL error message is itself just "Invalid URL", which would read as
+    // "Invalid URL: Invalid URL" — show the offending value instead.
+    const shown = (spec.url ?? '').trim()
     return errorResult(
-      { kind: 'protocol', message: `Invalid URL: ${(err as Error).message}`, code: 'ERR_INVALID_URL' },
+      { kind: 'protocol', message: shown ? `Invalid URL: ${shown}` : 'The request URL is empty', code: 'ERR_INVALID_URL' },
       startedAt,
       spec.url ?? '',
       []
@@ -940,58 +944,31 @@ async function finalizeResponse(
  * Status text (undici only exposes the numeric code)
  * ============================================================ */
 
-const STATUS_TEXT: Record<number, string> = {
-  100: 'Continue',
-  101: 'Switching Protocols',
-  200: 'OK',
-  201: 'Created',
-  202: 'Accepted',
-  203: 'Non-Authoritative Information',
-  204: 'No Content',
-  205: 'Reset Content',
-  206: 'Partial Content',
-  300: 'Multiple Choices',
-  301: 'Moved Permanently',
-  302: 'Found',
-  303: 'See Other',
-  304: 'Not Modified',
-  307: 'Temporary Redirect',
-  308: 'Permanent Redirect',
-  400: 'Bad Request',
-  401: 'Unauthorized',
-  402: 'Payment Required',
-  403: 'Forbidden',
-  404: 'Not Found',
-  405: 'Method Not Allowed',
-  406: 'Not Acceptable',
-  407: 'Proxy Authentication Required',
-  408: 'Request Timeout',
-  409: 'Conflict',
-  410: 'Gone',
-  411: 'Length Required',
-  412: 'Precondition Failed',
-  413: 'Payload Too Large',
-  414: 'URI Too Long',
-  415: 'Unsupported Media Type',
-  416: 'Range Not Satisfiable',
-  417: 'Expectation Failed',
-  418: "I'm a Teapot",
-  422: 'Unprocessable Entity',
-  425: 'Too Early',
-  426: 'Upgrade Required',
-  428: 'Precondition Required',
-  429: 'Too Many Requests',
-  431: 'Request Header Fields Too Large',
-  451: 'Unavailable For Legal Reasons',
-  500: 'Internal Server Error',
-  501: 'Not Implemented',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-  504: 'Gateway Timeout',
-  505: 'HTTP Version Not Supported',
-  511: 'Network Authentication Required'
+/**
+ * Reason phrase for a status code. Uses Node's complete `http.STATUS_CODES`
+ * table (every standard 1xx–5xx code), with a couple of common non-standard
+ * extensions servers use, so the response viewer never shows a bare number.
+ */
+const EXTRA_STATUS_TEXT: Record<number, string> = {
+  419: 'Authentication Timeout',
+  420: 'Enhance Your Calm',
+  430: 'Request Header Fields Too Large',
+  440: 'Login Time-out',
+  444: 'No Response',
+  449: 'Retry With',
+  450: 'Blocked by Parental Controls',
+  498: 'Invalid Token',
+  499: 'Client Closed Request',
+  509: 'Bandwidth Limit Exceeded',
+  520: 'Web Server Returned an Unknown Error',
+  521: 'Web Server Is Down',
+  522: 'Connection Timed Out',
+  523: 'Origin Is Unreachable',
+  524: 'A Timeout Occurred',
+  525: 'SSL Handshake Failed',
+  526: 'Invalid SSL Certificate'
 }
 
 function statusTextFor(status: number): string {
-  return STATUS_TEXT[status] ?? ''
+  return STATUS_CODES[status] ?? EXTRA_STATUS_TEXT[status] ?? ''
 }

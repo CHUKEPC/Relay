@@ -8,6 +8,7 @@ import { useResponse } from '@renderer/store/response'
 import { useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
+import { MOD } from '@renderer/lib/platform'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
 
@@ -86,7 +87,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
             <Icon name="plus" size={15} />
           </button>
         )}
-        <button className="icon-btn" onClick={onClose} title="Скрыть панель (⌘J)">
+        <button className="icon-btn" onClick={onClose} title={`Скрыть панель (${MOD}J)`}>
           <Icon name="close" size={15} />
         </button>
       </div>

@@ -8,6 +8,7 @@ import { Field, IconButton, Modal, Segmented } from '@renderer/components/primit
 import { monaco } from '@renderer/lib/monaco'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
+import { kbd } from '@renderer/lib/platform'
 import { VisualizerTab } from './VisualizerTab'
 import { CookieManager } from '@renderer/features/cookies/CookieManager'
 import type { ResponseResult, HttpErrorKind } from '@shared/types'
@@ -48,26 +49,28 @@ function prettyValue(text: string, language: string): string {
   }
 }
 
-/** Human title for a network/transport error. */
+/** Localized label per transport-error kind (shared by the pill and the body). */
+const ERROR_KIND_LABEL: Record<HttpErrorKind, string> = {
+  dns: 'DNS — хост не найден',
+  connect: 'Не удалось подключиться',
+  tls: 'Ошибка TLS / сертификата',
+  timeout: 'Превышено время ожидания',
+  abort: 'Запрос отменён',
+  protocol: 'Ошибка протокола',
+  unknown: 'Ошибка сети'
+}
+
+/** Human title for a response or a network/transport error. */
 function errorTitle(result: ResponseResult): string {
   if (result.status > 0) return `${result.status} ${result.statusText}`.trim()
   const kind = result.error?.kind
-  const byKind: Record<HttpErrorKind, string> = {
-    dns: 'DNS — хост не найден',
-    connect: 'Не удалось подключиться',
-    tls: 'Ошибка TLS / сертификата',
-    timeout: 'Превышено время ожидания',
-    abort: 'Запрос отменён',
-    protocol: 'Ошибка протокола',
-    unknown: 'Ошибка сети'
-  }
-  return kind ? byKind[kind] : 'Ошибка сети'
+  return kind ? ERROR_KIND_LABEL[kind] : 'Ошибка сети'
 }
 
-/** Status-pill label: real status line, or a localized network-error label. */
+/** Status-pill label: real status line, or the SAME error-kind label as the body. */
 function statusLabel(result: ResponseResult): string {
   if (result.status > 0) return `${result.status} ${result.statusText}`.trim()
-  return 'Ошибка сети'
+  return errorTitle(result)
 }
 
 /* ============================================================
@@ -468,7 +471,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
             <h3>Готов отправить запрос</h3>
             <p>
               Нажмите <b style={{ color: 'var(--tx-0)' }}>Отправить</b> или{' '}
-              <span className="kbd">⌘↵</span> — ответ появится здесь.
+              <span className="kbd">{kbd('↵')}</span> — ответ появится здесь.
             </p>
           </div>
         </div>

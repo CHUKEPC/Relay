@@ -1,15 +1,16 @@
 import { Kbd } from '@renderer/components/primitives'
+import { MOD } from '@renderer/lib/platform'
 
-/** Static reference list of the app's keyboard shortcuts. */
+/** Static reference list of the app's keyboard shortcuts (modifier per platform). */
 const SHORTCUTS: { label: string; keys: string[] }[] = [
-  { label: 'Командная палитра', keys: ['⌘', 'K'] },
-  { label: 'Отправить запрос', keys: ['⌘', '↵'] },
-  { label: 'Новый запрос', keys: ['⌘', 'N'] },
-  { label: 'Открыть/скрыть AI', keys: ['⌘', 'J'] },
-  { label: 'Настройки', keys: ['⌘', ','] },
-  { label: 'Поиск в ответе', keys: ['⌘', 'F'] },
-  { label: 'Закрыть вкладку', keys: ['⌘', 'W'] },
-  { label: 'Сохранить', keys: ['⌘', 'S'] }
+  { label: 'Командная палитра', keys: [MOD, 'K'] },
+  { label: 'Отправить запрос', keys: [MOD, '↵'] },
+  { label: 'Новый запрос', keys: [MOD, 'N'] },
+  { label: 'Открыть/скрыть AI', keys: [MOD, 'J'] },
+  { label: 'Настройки', keys: [MOD, ','] },
+  { label: 'Поиск в ответе', keys: [MOD, 'F'] },
+  { label: 'Закрыть вкладку', keys: [MOD, 'W'] },
+  { label: 'Сохранить', keys: [MOD, 'S'] }
 ]
 
 export function ShortcutsSection(): JSX.Element {

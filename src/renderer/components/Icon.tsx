@@ -41,7 +41,9 @@ const PATHS: Record<string, string> = {
   stop: 'M6.5 6.5h7v7h-7z',
   code2: 'M7 6 3 10l4 4M13 6l4 4-4 4',
   download: 'M10 3v9M6 8.5l4 4 4-4M4 16h12',
-  upload: 'M10 13V4M6 7.5l4-4 4 4M4 16h12'
+  upload: 'M10 13V4M6 7.5l4-4 4 4M4 16h12',
+  winMin: 'M4 10h12',
+  winMax: 'M5.5 5.5h9v9h-9z'
 }
 
 const FILLED: Record<string, boolean> = { send: true, play: true, sparkle: true, bolt: true, stop: true }

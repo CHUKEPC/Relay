@@ -11,6 +11,8 @@ import { useResponse } from './store/response'
 import { useAi } from './store/ai'
 import { bootstrap } from './store/bootstrap'
 import { sendActiveRequest, currentScope, currentSecretValues } from './lib/request-runner'
+import { saveActiveRequest } from './lib/save'
+import { kbd, MOD } from './lib/platform'
 import { buildContextSnapshot } from './lib/ai-context'
 import { interpolate } from '@shared/interpolate'
 import { Sidebar } from './features/sidebar/Sidebar'
@@ -23,17 +25,18 @@ import { SettingsScreen } from './features/settings/SettingsScreen'
 import { SaveDialog } from './features/collections/SaveDialog'
 import { ToolConfirmModal } from './features/ai/ToolConfirmModal'
 import { RunnerPanel } from './features/runner/RunnerPanel'
+import { ConsolePanel } from './features/console/ConsolePanel'
 import { WorkspaceSwitcher } from './features/workspaces/WorkspaceSwitcher'
 import { useWorkspaces } from './store/workspaces'
 
 export function App() {
   const [ready, setReady] = useState(false)
-  const [saveOpen, setSaveOpen] = useState(false)
 
   const aiOpen = useUi((s) => s.aiOpen)
   const settingsOpen = useUi((s) => s.settingsOpen)
   const settingsSection = useUi((s) => s.settingsSection)
   const paletteOpen = useUi((s) => s.paletteOpen)
+  const saveOpen = useUi((s) => s.saveDialogOpen)
   const toast = useUi((s) => s.toast)
 
   useEffect(() => {
@@ -42,18 +45,6 @@ export function App() {
       .catch((err) => console.error('bootstrap failed', err))
       .finally(() => setReady(true))
   }, [])
-
-  const saveActive = () => {
-    const tab = useTabs.getState().activeTab()
-    if (!tab) return
-    if (tab.savedRequestId) {
-      useCollections.getState().updateRequest(tab.savedRequestId, tab.request)
-      useTabs.getState().markSaved(tab.id, tab.savedRequestId)
-      useUi.getState().showToast('Сохранено')
-    } else {
-      setSaveOpen(true)
-    }
-  }
 
   const onSaveAs = (parentId: string, name: string) => {
     const tab = useTabs.getState().activeTab()
@@ -87,7 +78,7 @@ export function App() {
         useTabs.getState().openNew()
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        saveActive()
+        saveActiveRequest()
       } else if (mod && e.key.toLowerCase() === 'w') {
         const tab = useTabs.getState().activeTab()
         if (tab) {
@@ -134,7 +125,13 @@ export function App() {
       {paletteOpen && <CommandPalette />}
       <ToolConfirmModal />
       <RunnerPanel />
-      <SaveDialog open={saveOpen} initialName={useTabs.getState().activeTab()?.request.name ?? 'Untitled'} onOpenChange={setSaveOpen} onSave={onSaveAs} />
+      <ConsolePanel />
+      <SaveDialog
+        open={saveOpen}
+        initialName={useTabs.getState().activeTab()?.request.name ?? 'Untitled'}
+        onOpenChange={(v) => useUi.getState().setSaveDialogOpen(v)}
+        onSave={onSaveAs}
+      />
 
       {toast && (
         <div className="toast-host">
@@ -159,14 +156,18 @@ function Titlebar() {
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
   const activeEnv = environments.find((e) => e.id === activeEnvId)
 
+  const isMac = window.api.platform === 'darwin'
+
   return (
     <div className="titlebar drag-region">
-      <div className="win-dots nodrag">
-        <i title="Закрыть" onClick={() => void window.api.closeWindow()} />
-        <i title="Свернуть" onClick={() => void window.api.minimizeWindow()} />
-        <i title="Развернуть" onClick={() => void window.api.maximizeWindow()} />
-      </div>
-      <div className="brand" style={{ marginLeft: 6 }}>
+      {isMac && (
+        <div className="win-dots nodrag">
+          <i title="Закрыть" onClick={() => void window.api.closeWindow()} />
+          <i title="Свернуть" onClick={() => void window.api.minimizeWindow()} />
+          <i title="Развернуть" onClick={() => void window.api.maximizeWindow()} />
+        </div>
+      )}
+      <div className="brand" style={{ marginLeft: isMac ? 6 : 4 }}>
         <div className="brand-mark">
           <Icon name="bolt" size={13} style={{ color: '#fff' }} />
         </div>
@@ -177,7 +178,7 @@ function Titlebar() {
       <div className="global-search nodrag" onClick={() => useUi.getState().setPaletteOpen(true)}>
         <Icon name="search" size={14} />
         <span className="ph">Поиск или команда…</span>
-        <span className="kbd">⌘K</span>
+        <span className="kbd">{kbd('K')}</span>
       </div>
       <div className="grow" />
 
@@ -215,9 +216,24 @@ function Titlebar() {
           <Icon name="moon" size={14} />
         </button>
       </div>
-      <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} onClick={() => useUi.getState().toggleAi()} title="AI-ассистент (⌘J)">
+      <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} onClick={() => useUi.getState().toggleAi()} title={`AI-ассистент (${MOD}J)`}>
         <Icon name="sparkle" size={16} />
       </button>
+
+      {/* Windows / Linux native-style window controls (macOS uses the dots above). */}
+      {!isMac && (
+        <div className="win-controls nodrag">
+          <button className="wc" title="Свернуть" onClick={() => void window.api.minimizeWindow()}>
+            <Icon name="winMin" size={14} />
+          </button>
+          <button className="wc" title="Развернуть" onClick={() => void window.api.maximizeWindow()}>
+            <Icon name="winMax" size={12} />
+          </button>
+          <button className="wc close" title="Закрыть" onClick={() => void window.api.closeWindow()}>
+            <Icon name="close" size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -236,11 +252,13 @@ function TabStrip() {
         <div key={t.id} className={`rtab ${activeTabId === t.id ? 'on' : ''}`} onClick={() => setActive(t.id)}>
           <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
           <span className="label">{t.request.name || 'Untitled'}</span>
-          {t.dirty ? (
-            <span className="dirty" title="Несохранённые изменения" />
-          ) : (
+          {/* Dirty dot shows when there are unsaved changes; on hover it is
+              replaced by the close X, so every tab is closable with the mouse. */}
+          <span className="tab-end">
+            {t.dirty && <span className="dirty" title="Несохранённые изменения" />}
             <span
               className="x"
+              title={`Закрыть (${MOD}W)`}
               onClick={(e) => {
                 e.stopPropagation()
                 closeTab(t.id)
@@ -248,10 +266,10 @@ function TabStrip() {
             >
               <Icon name="close" size={12} />
             </span>
-          )}
+          </span>
         </div>
       ))}
-      <button className="icon-btn" style={{ alignSelf: 'center', marginLeft: 4 }} onClick={() => openNew()} title="Новый запрос (⌘N)">
+      <button className="icon-btn" style={{ alignSelf: 'center', marginLeft: 4 }} onClick={() => openNew()} title={`Новый запрос (${MOD}N)`}>
         <Icon name="plus" size={16} />
       </button>
     </div>

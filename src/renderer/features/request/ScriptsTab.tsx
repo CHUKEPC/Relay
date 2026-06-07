@@ -15,12 +15,13 @@ export function ScriptsTab({ req }: { req: RequestModel }) {
             Pre-request
           </button>
           <button className={which === 'test' ? 'on' : ''} onClick={() => setWhich('test')}>
-            Tests
+            Post-response
           </button>
         </div>
         <span className="label" style={{ marginLeft: 'auto' }}>
-          API: <span className="mono">pm.environment</span>, <span className="mono">pm.response</span>, <span className="mono">pm.test</span>,{' '}
-          <span className="mono">pm.expect</span>
+          {which === 'pre' ? 'Выполняется ДО отправки' : 'Выполняется ПОСЛЕ ответа (тесты)'} · API:{' '}
+          <span className="mono">pm.environment</span>, <span className="mono">pm.response</span>, <span className="mono">pm.test</span>,{' '}
+          <span className="mono">pm.visualizer</span>
         </span>
       </div>
       {which === 'pre' ? (

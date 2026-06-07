@@ -33,6 +33,9 @@ export function KVTable({
   keyAutocomplete
 }: KVTableProps) {
   const listId = keyAutocomplete ? `kv-keys-${Math.abs(hash(keyAutocomplete.join(',')))}` : undefined
+  // Column template — 4 cols (no description) keeps the Headers/Params tables
+  // from showing a confusing empty trailing input.
+  const gridStyle = { gridTemplateColumns: showDescription ? '26px 1fr 1.3fr 1fr 28px' : '26px 1fr 1.3fr 28px' }
 
   // Bulk-edit mode is purely local UI state; table mode is the default.
   const [bulk, setBulk] = useState(false)
@@ -93,15 +96,17 @@ export function KVTable({
             </datalist>
           )}
           <div className="kv-table">
-            <div className="kv-head">
+            {/* Drop the description column entirely when it's not used (e.g. the
+                Headers tab) so there is no confusing empty trailing input. */}
+            <div className="kv-head" style={gridStyle}>
               <span />
               <span>Ключ</span>
               <span>Значение</span>
-              <span>{showDescription ? 'Описание' : ''}</span>
+              {showDescription && <span>Описание</span>}
               <span />
             </div>
             {rows.map((r, i) => (
-              <div key={r.id ?? i} className={`kv-row ${r.enabled ? '' : 'off'}`}>
+              <div key={r.id ?? i} className={`kv-row ${r.enabled ? '' : 'off'}`} style={gridStyle}>
                 <Checkbox on={r.enabled} onClick={() => update(i, { enabled: !r.enabled })} />
                 <div className="kv-cell k">
                   <input
@@ -120,19 +125,21 @@ export function KVTable({
                     onChange={(v) => update(i, { value: v })}
                   />
                 </div>
-                <div className="kv-cell">
-                  <input
-                    value={r.description ?? ''}
-                    placeholder={showDescription ? 'описание' : ''}
-                    onChange={(e) => update(i, { description: e.target.value })}
-                  />
-                </div>
+                {showDescription && (
+                  <div className="kv-cell">
+                    <input
+                      value={r.description ?? ''}
+                      placeholder="описание"
+                      onChange={(e) => update(i, { description: e.target.value })}
+                    />
+                  </div>
+                )}
                 <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => remove(i)} title="Удалить">
                   <Icon name="close" size={13} />
                 </button>
               </div>
             ))}
-            <div className="kv-row" style={{ cursor: 'pointer' }} onClick={add}>
+            <div className="kv-row" style={{ ...gridStyle, cursor: 'pointer' }} onClick={add}>
               <span />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--tx-2)', fontSize: 12, height: 30, paddingLeft: 9 }}>
                 <Icon name="plus" size={13} />

@@ -6,8 +6,33 @@ import { useEnvironments } from '../store/environments'
 import { useSettings } from '../store/settings'
 import { useResponse } from '../store/response'
 import { useHistory } from '../store/history'
+import { useConsole } from '../store/console'
 import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
+
+/** Short, readable body preview for the console log. */
+function consoleBodyPreview(body: RequestModel['body']): string | undefined {
+  switch (body.type) {
+    case 'raw':
+      return body.text || undefined
+    case 'graphql':
+      return body.query || undefined
+    case 'urlencoded':
+      return body.items
+        .filter((i) => i.enabled && i.key)
+        .map((i) => `${i.key}=${i.value}`)
+        .join('&')
+    case 'formdata':
+      return body.items
+        .filter((i) => i.enabled && i.key)
+        .map((i) => `${i.key}=${i.type === 'file' ? `<file ${i.fileName ?? ''}>` : i.value}`)
+        .join('\n')
+    case 'binary':
+      return body.fileName ? `<binary ${body.fileName}>` : '<binary>'
+    default:
+      return undefined
+  }
+}
 
 export function settingsToRequestSettings(): RequestSettings {
   const s = useSettings.getState().settings
@@ -122,6 +147,22 @@ export async function sendActiveRequest(): Promise<void> {
   }
 
   const result = await window.api.sendRequest(spec, { requestId })
+
+  // Log every completed send to the Console (Postman-style request log).
+  useConsole.getState().add({
+    method: spec.method,
+    url: spec.url,
+    status: result.status,
+    ok: result.ok,
+    timeMs: result.timings.totalMs,
+    sizeBytes: result.body.sizeBytes,
+    requestHeaders: spec.headers.filter((h) => h.enabled && h.key).map((h) => [h.key, h.value] as [string, string]),
+    responseHeaders: result.headers,
+    requestBody: consoleBodyPreview(spec.body),
+    responseBody: result.body.text,
+    error: result.error?.message
+  })
+
   useResponse.getState().setResult(tab.id, requestId, result)
 
   // If a newer request superseded this tab while we awaited, stop here — don't add
