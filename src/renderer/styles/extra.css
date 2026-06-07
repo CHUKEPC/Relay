@@ -810,7 +810,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 22px; /* clears a ~22px status bar; harmless if there is none */
+  bottom: 0; /* pinned to the very bottom — there is no status bar to clear */
   height: 38vh;
   min-height: 200px;
   max-height: 70vh;
@@ -1102,3 +1102,22 @@
 }
 .tree-row:hover .row-action { opacity: 1; }
 .tree-row .row-action:hover { color: var(--tx-0); background: var(--bg-active); }
+
+/* ============================================================
+   Scripts → test snippets panel
+   ============================================================ */
+.snippet-panel {
+  width: 250px; flex: none; margin-right: 14px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--bg-1); overflow-y: auto; max-height: 300px; padding: 6px;
+}
+.snippet-head {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--tx-3); padding: 4px 6px 6px;
+}
+.snippet-item {
+  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  padding: 6px 7px; border-radius: var(--radius-sm); color: var(--tx-1); font-size: 12px;
+  transition: background .12s, color .12s;
+}
+.snippet-item:hover { background: var(--bg-hover); color: var(--tx-0); }
+.snippet-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

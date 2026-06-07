@@ -10,6 +10,11 @@ files:
   - out/**/*
   - package.json
 
+# Keep the sql.js WebAssembly binary as a real on-disk file so emscripten can
+# read it at runtime (it's pure-WASM, not a native Node addon).
+asarUnpack:
+  - "**/node_modules/sql.js/dist/*.wasm"
+
 # No native modules are used (JSON storage), so no rebuild step is required.
 npmRebuild: false
 

@@ -104,7 +104,8 @@ export function defaultSettings(): SettingsDoc {
     autoApplyAiTools: false,
     defaultProviderId: 'anthropic',
     proxy: { enabled: false, url: '', bypass: [] },
-    clientCerts: []
+    clientCerts: [],
+    http2: false
   }
 }
 

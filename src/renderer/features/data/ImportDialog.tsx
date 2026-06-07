@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { ImportKind } from '@shared/types'
+import type { CollectionNode, ImportKind } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { Modal, Segmented } from '@renderer/components/primitives'
 import { useCollections } from '@renderer/store/collections'
@@ -14,6 +14,12 @@ function cleanError(msg: string): string {
     .replace(/^Error invoking remote method '[^']*':\s*/i, '')
     .replace(/^Error:\s*/i, '')
     .trim()
+}
+
+/** Count request leaves in a collection/folder subtree. */
+function countRequests(node: CollectionNode): number {
+  if (node.type === 'request') return 1
+  return node.children.reduce((n, c) => n + countRequests(c), 0)
 }
 
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -43,7 +49,17 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     try {
       const results = await window.api.importData(kind, text)
       if (!results.length) {
-        setError('Не удалось распознать формат')
+        setError(
+          'Не удалось распознать формат. Поддерживаются: коллекция Postman v2.1, OpenAPI 3.x и команда cURL. ' +
+            'Убедитесь, что вы вставили именно файл коллекции, а не произвольный JSON.'
+        )
+        return
+      }
+      // A recognized-but-empty collection is almost always a wrong-file paste —
+      // tell the user instead of silently adding an empty node.
+      const totalReqs = results.reduce((n, r) => n + (r.collection ? countRequests(r.collection) : 0), 0)
+      if (results.every((r) => r.kind === 'collection') && totalReqs === 0) {
+        setError('Файл распознан как коллекция, но в нём нет запросов. Проверьте, что выбрали правильный файл.')
         return
       }
       const warnings: string[] = []
@@ -64,7 +80,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         }
       }
       const parts = [
-        collections && `коллекций: ${collections}`,
+        collections && `коллекций: ${collections}${totalReqs ? ` (запросов: ${totalReqs})` : ''}`,
         requests && `запросов: ${requests}`,
         environments && `сред: ${environments}`
       ].filter(Boolean)

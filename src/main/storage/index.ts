@@ -131,7 +131,7 @@ export class StorageManager {
     }
     const doc: WorkspacesDoc = {
       version: STORAGE_VERSION,
-      workspaces: [{ id: defaultId, name: 'Default' }],
+      workspaces: [{ id: defaultId, name: 'Личное' }],
       activeWorkspaceId: defaultId
     }
     this.writeMeta(doc)

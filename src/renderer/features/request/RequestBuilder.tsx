@@ -12,6 +12,7 @@ import { BodyTab } from './BodyTab'
 import { AuthTab } from './AuthTab'
 import { ScriptsTab } from './ScriptsTab'
 import { ExamplesTab } from './ExamplesTab'
+import { GrpcBuilder } from '@renderer/features/grpc/GrpcBuilder'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
 
 type Tab = 'params' | 'auth' | 'headers' | 'body' | 'scripts' | 'examples'
@@ -41,6 +42,20 @@ export function RequestBuilder() {
   }
 
   const mode: RequestMode = req.mode ?? 'http'
+
+  // gRPC has a bespoke builder (proto + service/method + message) instead of the
+  // HTTP params/headers/body tabs.
+  if (mode === 'grpc') {
+    return (
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <UrlBar req={req} />
+        <div style={{ overflowY: 'auto', minHeight: 0 }}>
+          <GrpcBuilder req={req} />
+        </div>
+      </div>
+    )
+  }
+
   const exampleCount = req.examples?.length ?? 0
   const counts: Partial<Record<Tab, number>> = {
     params: req.query.filter((p) => p.enabled && p.key).length,
@@ -49,21 +64,22 @@ export function RequestBuilder() {
   }
   const bodyDot = req.body.type !== 'none'
 
-  // WebSocket/SSE only use the URL, query, and handshake headers.
-  const tabs: { id: Tab; label: string }[] =
-    mode === 'http'
-      ? [
-          { id: 'params', label: 'Params' },
-          { id: 'auth', label: 'Authorization' },
-          { id: 'headers', label: 'Headers' },
-          { id: 'body', label: 'Body' },
-          { id: 'scripts', label: 'Scripts' },
-          { id: 'examples', label: 'Examples' }
-        ]
-      : [
-          { id: 'params', label: 'Params' },
-          { id: 'headers', label: 'Headers' }
-        ]
+  // HTTP & GraphQL get the full builder; realtime modes only use the URL, query,
+  // and handshake headers.
+  const httpLike = mode === 'http' || mode === 'graphql'
+  const tabs: { id: Tab; label: string }[] = httpLike
+    ? [
+        { id: 'params', label: 'Params' },
+        { id: 'auth', label: 'Authorization' },
+        { id: 'headers', label: 'Headers' },
+        { id: 'body', label: 'Body' },
+        { id: 'scripts', label: 'Scripts' },
+        { id: 'examples', label: 'Examples' }
+      ]
+    : [
+        { id: 'params', label: 'Params' },
+        { id: 'headers', label: 'Headers' }
+      ]
 
   // If the active sub-tab isn't valid for the current mode, fall back to Params.
   const activeSubTab: Tab = tabs.some((t) => t.id === tab) ? tab : 'params'
@@ -80,7 +96,7 @@ export function RequestBuilder() {
           </button>
         ))}
         <div style={{ marginLeft: 'auto' }} />
-        <button className="btn ghost" style={{ height: 28 }} onClick={() => saveActiveRequest()} title="Сохранить (⌘S / Ctrl+S)">
+        <button className="btn primary" style={{ height: 28 }} onClick={() => saveActiveRequest()} title="Сохранить (⌘S / Ctrl+S)">
           <Icon name="save" size={14} />
           Сохранить
         </button>
@@ -88,15 +104,15 @@ export function RequestBuilder() {
           className="btn ghost"
           style={{ height: 28 }}
           onClick={() => openSaveAsDialog()}
-          title="Сохранить как… (в коллекцию)"
+          title="Сохранить как новый запрос в коллекции"
         >
           <Icon name="copy" size={14} />
-          Save As
+          Сохранить как…
         </button>
-        {mode === 'http' && (
+        {httpLike && (
           <button className="btn ghost" style={{ height: 28 }} onClick={() => setCodeGenOpen(true)} title="Сгенерировать код">
             <Icon name="code2" size={14} />
-            Code
+            Код
           </button>
         )}
       </div>

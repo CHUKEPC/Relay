@@ -1,11 +1,25 @@
 import { useState } from 'react'
 import type { RequestModel } from '@shared/types'
 import { CodeEditor } from '@renderer/components/CodeEditor'
+import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
+import { SNIPPETS } from '@renderer/lib/snippets'
 
 export function ScriptsTab({ req }: { req: RequestModel }) {
   const patch = useTabs((s) => s.patchActive)
   const [which, setWhich] = useState<'pre' | 'test'>('pre')
+  const [showSnippets, setShowSnippets] = useState(true)
+
+  const field = which === 'pre' ? 'preRequestScript' : 'testScript'
+  const value = (which === 'pre' ? req.preRequestScript : req.testScript) ?? ''
+
+  // Snippets for the current phase (phase 'both' shows in either).
+  const snippets = SNIPPETS.filter((s) => s.phase === 'both' || s.phase === which)
+
+  const insert = (code: string): void => {
+    const next = value.trim() ? `${value.replace(/\s*$/, '')}\n\n${code}` : code
+    patch({ [field]: next } as Partial<RequestModel>)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -18,25 +32,37 @@ export function ScriptsTab({ req }: { req: RequestModel }) {
             Post-response
           </button>
         </div>
-        <span className="label" style={{ marginLeft: 'auto' }}>
+        <span className="label">
           {which === 'pre' ? 'Выполняется ДО отправки' : 'Выполняется ПОСЛЕ ответа (тесты)'} · API:{' '}
-          <span className="mono">pm.environment</span>, <span className="mono">pm.response</span>, <span className="mono">pm.test</span>,{' '}
-          <span className="mono">pm.visualizer</span>
+          <span className="mono">pm.test</span>, <span className="mono">pm.expect</span>, <span className="mono">pm.response</span>
         </span>
+        <button
+          className={`btn ghost ${showSnippets ? 'on' : ''}`}
+          style={{ height: 26, marginLeft: 'auto' }}
+          onClick={() => setShowSnippets((v) => !v)}
+          title="Готовые сниппеты тестов"
+        >
+          <Icon name="code2" size={13} />
+          Сниппеты
+        </button>
       </div>
-      {which === 'pre' ? (
-        <div className="code-editor" style={{ height: 300 }}>
-          <CodeEditor
-            value={req.preRequestScript ?? ''}
-            language="javascript"
-            onChange={(v) => patch({ preRequestScript: v })}
-          />
+
+      <div style={{ display: 'flex', gap: 0, minHeight: 0 }}>
+        <div className="code-editor" style={{ height: 300, flex: 1, marginRight: showSnippets ? 8 : 14 }}>
+          <CodeEditor value={value} language="javascript" onChange={(v) => patch({ [field]: v } as Partial<RequestModel>)} />
         </div>
-      ) : (
-        <div className="code-editor" style={{ height: 300 }}>
-          <CodeEditor value={req.testScript ?? ''} language="javascript" onChange={(v) => patch({ testScript: v })} />
-        </div>
-      )}
+        {showSnippets && (
+          <div className="snippet-panel">
+            <div className="snippet-head">Сниппеты</div>
+            {snippets.map((s) => (
+              <button key={s.id} className="snippet-item" title="Вставить сниппет" onClick={() => insert(s.code)}>
+                <Icon name="plus" size={12} />
+                <span>{s.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

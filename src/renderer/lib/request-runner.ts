@@ -43,7 +43,8 @@ export function settingsToRequestSettings(): RequestSettings {
     rejectUnauthorized: s.rejectUnauthorized,
     // Global network config threaded to the engine (proxy bypass + per-host certs).
     proxy: s.proxy && s.proxy.enabled ? s.proxy : null,
-    clientCerts: s.clientCerts ?? []
+    clientCerts: s.clientCerts ?? [],
+    allowH2: s.http2 === true
   }
 }
 

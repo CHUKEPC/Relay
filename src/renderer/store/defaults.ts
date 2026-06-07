@@ -28,7 +28,8 @@ export function defaultSettingsDoc(): SettingsDoc {
     autoApplyAiTools: false,
     defaultProviderId: null,
     proxy: { enabled: false, url: '', bypass: [] },
-    clientCerts: []
+    clientCerts: [],
+    http2: false
   }
 }
 

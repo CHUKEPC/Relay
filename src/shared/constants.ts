@@ -21,7 +21,8 @@ export const DEFAULT_SETTINGS = {
   sendAiContext: true,
   autoApplyAiTools: false,
   proxy: { enabled: false, url: '', bypass: [] as string[] },
-  clientCerts: [] as import('./types').ClientCert[]
+  clientCerts: [] as import('./types').ClientCert[],
+  http2: false
 }
 
 export type AppSettings = typeof DEFAULT_SETTINGS

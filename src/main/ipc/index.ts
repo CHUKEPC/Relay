@@ -12,6 +12,8 @@ import { registerDataHandlers } from '../data'
 import { registerScriptHandlers } from '../scripting'
 import { registerOAuthHandlers } from '../auth/oauth'
 import { registerRealtimeHandlers } from '../realtime'
+import { registerGrpcHandlers } from '../grpc'
+import { registerSqliteHandlers } from '../sqlite'
 
 /** Max size of a user-picked text file the renderer may read (runner data files). */
 const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
@@ -39,6 +41,12 @@ export function registerIpc(ctx: IpcContext): void {
 
   // Realtime: WebSocket + SSE clients (streamed to the renderer per connection).
   registerRealtimeHandlers(ipcMain, ctx.getWindow)
+
+  // gRPC client (proto parse + unary/streaming calls, streamed per call).
+  registerGrpcHandlers(ipcMain, ctx.getWindow)
+
+  // SQLite backup (optional, pure-WASM sql.js) — export/import a workspace.
+  registerSqliteHandlers(ipcMain)
 
   // Multi-provider AI — secrets + provider config resolved from storage.
   registerAiHandlers(ipcMain, {

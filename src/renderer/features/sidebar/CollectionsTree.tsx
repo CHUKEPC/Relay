@@ -26,14 +26,31 @@ const dragState: { id: string | null } = { id: null }
 export function CollectionsTree({ query }: { query: string }) {
   const collections = useCollections((s) => s.doc.collections)
   const addCollection = useCollections((s) => s.addCollection)
+  const setAll = useCollections((s) => s.setAll)
   const [renameId, setRenameId] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+
+  const deleteAll = () => {
+    const n = collections.length
+    if (n === 0) return
+    if (window.confirm(`Удалить все коллекции (${n})? Это действие необратимо.`)) setAll([])
+  }
 
   return (
     <>
       <div className="side-section-head">
         <span>Коллекции</span>
         <div style={{ display: 'flex', gap: 2 }}>
+          {collections.length > 0 && (
+            <button
+              className="icon-btn"
+              style={{ width: 22, height: 22 }}
+              title="Удалить все коллекции"
+              onClick={deleteAll}
+            >
+              <Icon name="trash" size={14} />
+            </button>
+          )}
           <button className="icon-btn" style={{ width: 22, height: 22 }} title="Импорт" onClick={() => setImportOpen(true)}>
             <Icon name="download" size={14} />
           </button>

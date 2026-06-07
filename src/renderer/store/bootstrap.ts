@@ -6,6 +6,7 @@ import { useTabs } from './tabs'
 import { useAi } from './ai'
 import { useResponse } from './response'
 import { useRealtime } from './realtime'
+import { useGrpc } from './grpc'
 import { useRunner } from './runner'
 import { flushPersist } from './persist'
 import {
@@ -69,6 +70,8 @@ export async function bootstrap(): Promise<void> {
 export async function reloadWorkspace(): Promise<void> {
   // Tear down volatile UI state tied to the previous workspace's tabs/collections.
   useRealtime.getState().disconnectAll()
+  for (const id of Object.keys(useGrpc.getState().byTab)) useGrpc.getState().cancel(id)
+  useGrpc.setState({ byTab: {} })
   useResponse.setState({ byTab: {} })
   // The runner's target points at the previous workspace's collection nodes.
   useRunner.getState().close()

@@ -106,6 +106,15 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       round-trips to/from Postman v2.1 `item.response[]`).
 - [x] **Bulk edit** for params/headers (key:value text mode; `//` disables a row; blank lines
       ignored; lossless two-way, preserving enabled state + descriptions).
+- [x] **Extended auth types** (pure `node:crypto`, vector-tested): **JWT Bearer** (HS/RS/PS),
+      **OAuth 1.0a** (HMAC-SHA1/256, PLAINTEXT), **AWS Signature v4** (incl. UNSIGNED-PAYLOAD for
+      multipart), **Hawk**, **Akamai EdgeGrid**, **ASAP**. Token-style auth attaches a header;
+      request-bound auth is signed after the body is assembled. (NTLM deferred — needs MD4 + a
+      multi-step handshake.)
+- [x] **Test snippets** — a Snippets panel in the Scripts editor inserts ready `pm.test`/`pm.expect`
+      boilerplate (status code, response time, body contains/equals/JSON value, header checks,
+      set/get env vars, …).
+- [x] **HTTP/2** — optional ALPN negotiation (undici `allowH2`), toggle in Settings → Network.
 - [x] **Search** across collections/requests; **command palette** (Cmd/Ctrl+K).
 - [x] Keyboard shortcuts (Send = Cmd/Ctrl+Enter, new tab ⌘N, save ⌘S, close tab ⌘W, AI ⌘J, settings ⌘,).
 - [x] **AI tool-calling**: assistant can read/modify the current request, set variables, and send the
@@ -131,14 +140,23 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Workspaces** (local, multiple): each its own isolated collections/environments/globals/
       history/tabs/cookies under a per-workspace dir; titlebar switcher (create/rename/delete/
       switch) with hot-reload on switch. App-level settings, AI providers and secrets are shared.
-- [ ] **Socket.IO** — deferred: it is a protocol layer on top of WebSocket and its official client
-      pulls in a non-trivial dependency; raw WebSocket + SSE cover the core need. Revisit if a
-      pure-JS, build-safe path is confirmed.
-- [ ] **gRPC** — deferred: needs proto tooling/heavy deps and doesn't fit the "no native modules,
-      local-first, one-shot reliable build" constraint.
-- [ ] **SQLite storage backend** — intentionally NOT used: CLAUDE.md locks the JSON document store
-      and marks SQLite (`better-sqlite3`, a native module) as a documented future upgrade requiring
-      explicit approval, to keep the one-shot cross-platform build reliable.
+- [x] **GraphQL** request mode (HTTP POST with a `{query, variables}` body editor; selectable from
+      the protocol dropdown).
+- [x] **Socket.IO** client (pure-JS `socket.io-client` in main; connect, emit events, listen, with
+      bounded reconnection) — a realtime mode with an event + payload composer.
+- [x] **MQTT** client (pure-JS `mqtt.js` in main; connect over mqtt(s)/ws(s), subscribe, publish) —
+      a realtime mode with topic subscribe + publish composer.
+- [x] **gRPC** client (pure-JS `@grpc/grpc-js` + `@grpc/proto-loader`, no native modules): paste or
+      upload a `.proto`, parse it into services/methods, pick a method, edit the request message as
+      JSON, set call metadata, and invoke. Supports **unary, server-streaming, client-streaming and
+      bidi**; plaintext (h2c) or TLS; results stream into a live log (with a Send/Finish composer for
+      client-/bidi-streams). A request "mode" like the realtime protocols.
+- [x] **SQLite** backup (optional, pure-WASM `sql.js`, no native modules): export the current
+      workspace (collections, environments, globals, history) to a portable `.sqlite` file and import
+      it back (Settings → Данные). The file is a real SQLite database with readable columns plus
+      lossless `json` columns. NOTE: per CLAUDE.md the **JSON document store remains the canonical
+      backend** — SQLite is a backup/interchange format here, NOT a replacement storage engine
+      (`better-sqlite3`, a native module, is still intentionally avoided to keep the build green).
 
 ## Out of scope (needs a hosted backend)
 

@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RealtimeKind, RealtimeMessage } from '@shared/types'
+import type { RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { useRealtime, type RealtimeStatus } from '@renderer/store/realtime'
+import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/realtime'
 
-/** Bottom-panel view for WebSocket / SSE connections (replaces the HTTP response). */
+/** Bottom-panel view for WebSocket / SSE / Socket.IO / MQTT (replaces the HTTP response). */
+
+const KIND_LABEL: Record<RtKind, string> = {
+  websocket: 'WebSocket',
+  sse: 'Server-Sent Events',
+  socketio: 'Socket.IO',
+  mqtt: 'MQTT'
+}
 
 const STATUS_LABEL: Record<RealtimeStatus, string> = {
   idle: 'Не подключено',
@@ -44,11 +51,17 @@ function MessageRow({ m }: { m: RealtimeMessage }): JSX.Element {
   )
 }
 
-export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKind }): JSX.Element {
+export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }): JSX.Element {
   const rt = useRealtime((s) => s.byTab[tabId]) ?? { status: 'idle' as RealtimeStatus, messages: [] }
   const send = useRealtime((s) => s.send)
+  const emit = useRealtime((s) => s.emit)
+  const publish = useRealtime((s) => s.publish)
+  const subscribe = useRealtime((s) => s.subscribe)
   const clear = useRealtime((s) => s.clear)
   const [draft, setDraft] = useState('')
+  const [event, setEvent] = useState('message')
+  const [topic, setTopic] = useState('')
+  const [subTopic, setSubTopic] = useState('')
   const logRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to the newest message.
@@ -58,12 +71,21 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKi
   }, [rt.messages.length])
 
   const sc = statusColor(rt.status)
-  const canSend = kind === 'websocket' && rt.status === 'open'
+  const open = rt.status === 'open'
 
   const doSend = (): void => {
-    if (!draft.trim() && draft.length === 0) return
-    send(tabId, draft)
-    setDraft('')
+    if (kind === 'websocket') {
+      send(tabId, draft)
+      setDraft('')
+    } else if (kind === 'socketio') {
+      if (!event.trim()) return
+      emit(tabId, event.trim(), draft)
+      setDraft('')
+    } else if (kind === 'mqtt') {
+      if (!topic.trim()) return
+      publish(tabId, topic.trim(), draft)
+      setDraft('')
+    }
   }
 
   return (
@@ -74,7 +96,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKi
           {STATUS_LABEL[rt.status]}
         </span>
         <div className="resp-meta">
-          <span>{kind === 'websocket' ? 'WebSocket' : 'SSE'}</span>
+          <span>{KIND_LABEL[kind]}</span>
           <span className="sep">•</span>
           <span>{rt.messages.filter((m) => m.dir !== 'system').length} сообщений</span>
         </div>
@@ -94,9 +116,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKi
                 <Icon name="bolt" size={22} />
               </div>
               <p style={{ marginBottom: 0 }}>
-                {kind === 'websocket'
-                  ? 'Подключитесь, чтобы обмениваться сообщениями по WebSocket.'
-                  : 'Подключитесь, чтобы получать события Server-Sent Events.'}
+                Подключитесь, чтобы {kind === 'sse' ? 'получать события' : 'обмениваться сообщениями'} по {KIND_LABEL[kind]}.
               </p>
             </div>
           </div>
@@ -105,12 +125,63 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKi
         )}
       </div>
 
-      {kind === 'websocket' && (
+      {/* MQTT: a subscribe row above the publish composer. */}
+      {kind === 'mqtt' && (
+        <div className="rt-composer" style={{ borderTop: '1px solid var(--line)', paddingBottom: 0 }}>
+          <input
+            className="input mono"
+            placeholder="Топик для подписки, напр. sensors/#"
+            value={subTopic}
+            disabled={!open}
+            onChange={(e) => setSubTopic(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && subTopic.trim()) {
+                subscribe(tabId, subTopic.trim())
+                setSubTopic('')
+              }
+            }}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn"
+            disabled={!open || !subTopic.trim()}
+            onClick={() => {
+              subscribe(tabId, subTopic.trim())
+              setSubTopic('')
+            }}
+            style={{ alignSelf: 'flex-end' }}
+          >
+            Подписаться
+          </button>
+        </div>
+      )}
+
+      {kind !== 'sse' && (
         <div className="rt-composer">
+          {kind === 'socketio' && (
+            <input
+              className="input mono"
+              placeholder="event"
+              value={event}
+              disabled={!open}
+              onChange={(e) => setEvent(e.target.value)}
+              style={{ width: 140, alignSelf: 'flex-end' }}
+            />
+          )}
+          {kind === 'mqtt' && (
+            <input
+              className="input mono"
+              placeholder="топик для публикации"
+              value={topic}
+              disabled={!open}
+              onChange={(e) => setTopic(e.target.value)}
+              style={{ width: 200, alignSelf: 'flex-end' }}
+            />
+          )}
           <textarea
             value={draft}
-            placeholder={canSend ? 'Сообщение… (Ctrl/⌘+Enter — отправить)' : 'Подключитесь, чтобы отправлять'}
-            disabled={!canSend}
+            placeholder={open ? 'Сообщение… (Ctrl/⌘+Enter — отправить)' : 'Подключитесь, чтобы отправлять'}
+            disabled={!open}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -119,8 +190,8 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RealtimeKi
               }
             }}
           />
-          <button className="btn primary" disabled={!canSend} onClick={doSend} style={{ alignSelf: 'flex-end' }}>
-            Отправить
+          <button className="btn primary" disabled={!open} onClick={doSend} style={{ alignSelf: 'flex-end' }}>
+            {kind === 'socketio' ? 'Emit' : kind === 'mqtt' ? 'Publish' : 'Отправить'}
             <Icon name="send" size={14} />
           </button>
         </div>

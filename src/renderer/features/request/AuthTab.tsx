@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Auth, OAuth2Grant, RequestModel } from '@shared/types'
+import type { Auth, JwtAlg, OAuth2Grant, RequestModel } from '@shared/types'
 import { Field, Segmented } from '@renderer/components/primitives'
 import { HighlightedInput } from '@renderer/components/HighlightedInput'
 import { useTabs } from '@renderer/store/tabs'
@@ -13,8 +13,16 @@ const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
   { id: 'basic', label: 'Basic' },
   { id: 'apikey', label: 'API Key' },
   { id: 'oauth2', label: 'OAuth 2.0' },
-  { id: 'digest', label: 'Digest' }
+  { id: 'digest', label: 'Digest' },
+  { id: 'jwt', label: 'JWT' },
+  { id: 'oauth1', label: 'OAuth 1.0' },
+  { id: 'aws', label: 'AWS Signature' },
+  { id: 'hawk', label: 'Hawk' },
+  { id: 'akamai', label: 'Akamai' },
+  { id: 'asap', label: 'ASAP' }
 ]
+
+const JWT_ALGS: JwtAlg[] = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512']
 
 export function AuthTab({ req }: { req: RequestModel }) {
   const patch = useTabs((s) => s.patchActive)
@@ -41,6 +49,31 @@ export function AuthTab({ req }: { req: RequestModel }) {
         return setAuth({ type: 'oauth2', grant: 'client_credentials', accessToken: '', headerPrefix: 'Bearer' })
       case 'digest':
         return setAuth({ type: 'digest', username: '', password: '' })
+      case 'jwt':
+        return setAuth({
+          type: 'jwt',
+          algorithm: 'HS256',
+          secret: '',
+          payload: '{\n  "sub": "1234567890"\n}',
+          headerPrefix: 'Bearer',
+          addTo: 'header'
+        })
+      case 'oauth1':
+        return setAuth({
+          type: 'oauth1',
+          consumerKey: '',
+          consumerSecret: '',
+          signatureMethod: 'HMAC-SHA1',
+          addTo: 'header'
+        })
+      case 'aws':
+        return setAuth({ type: 'aws', accessKey: '', secretKey: '', region: 'us-east-1', service: '', sessionToken: '' })
+      case 'hawk':
+        return setAuth({ type: 'hawk', id: '', key: '', algorithm: 'sha256' })
+      case 'akamai':
+        return setAuth({ type: 'akamai', clientToken: '', clientSecret: '', accessToken: '' })
+      case 'asap':
+        return setAuth({ type: 'asap', issuer: '', audience: '', keyId: '', privateKey: '' })
     }
   }
 
@@ -125,6 +158,191 @@ export function AuthTab({ req }: { req: RequestModel }) {
       )}
 
       {auth.type === 'oauth2' && <OAuth2Fields auth={auth} setAuth={setAuth} />}
+
+      {auth.type === 'jwt' && (
+        <>
+          <Field label="Алгоритм">
+            <select className="input mono" value={auth.algorithm} onChange={(e) => setAuth({ ...auth, algorithm: e.target.value as JwtAlg })}>
+              {JWT_ALGS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Secret или приватный ключ (PEM для RS/PS)">
+            <textarea
+              className="input mono"
+              value={auth.secret}
+              onChange={(e) => setAuth({ ...auth, secret: e.target.value })}
+              rows={5}
+              spellCheck={false}
+              style={{ resize: 'vertical', minHeight: 84 }}
+            />
+          </Field>
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: -6, marginBottom: 8 }}>
+            Для HS* — общий секрет, для RS*/PS* — PEM приватный ключ.
+          </div>
+          <Field label="Payload (JSON)">
+            <textarea
+              className="input mono"
+              value={auth.payload}
+              onChange={(e) => setAuth({ ...auth, payload: e.target.value })}
+              rows={6}
+              spellCheck={false}
+              style={{ resize: 'vertical', minHeight: 96 }}
+            />
+          </Field>
+          <Field label="Префикс заголовка">
+            <input className="input mono" value={auth.headerPrefix} onChange={(e) => setAuth({ ...auth, headerPrefix: e.target.value })} placeholder="Bearer" />
+          </Field>
+          <Field label="Добавить в">
+            <Segmented
+              value={auth.addTo}
+              onChange={(addTo) => setAuth({ ...auth, addTo })}
+              options={[
+                { value: 'header', label: 'Header' },
+                { value: 'query', label: 'Query Params' }
+              ]}
+            />
+          </Field>
+          {auth.addTo === 'query' && (
+            <Field label="Имя query-параметра">
+              <input className="input mono" value={auth.queryParamName ?? ''} onChange={(e) => setAuth({ ...auth, queryParamName: e.target.value })} placeholder="token" />
+            </Field>
+          )}
+        </>
+      )}
+
+      {auth.type === 'oauth1' && (
+        <>
+          <Field label="Consumer Key">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.consumerKey} onChange={(consumerKey) => setAuth({ ...auth, consumerKey })} scope={scope} placeholder="{{consumer_key}}" />
+            </div>
+          </Field>
+          <Field label="Consumer Secret">
+            <input className="input mono" type="password" value={auth.consumerSecret} onChange={(e) => setAuth({ ...auth, consumerSecret: e.target.value })} />
+          </Field>
+          <Field label="Token">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.token ?? ''} onChange={(token) => setAuth({ ...auth, token })} scope={scope} placeholder="(необязательно)" />
+            </div>
+          </Field>
+          <Field label="Token Secret">
+            <input className="input mono" type="password" value={auth.tokenSecret ?? ''} onChange={(e) => setAuth({ ...auth, tokenSecret: e.target.value })} placeholder="(необязательно)" />
+          </Field>
+          <Field label="Signature Method">
+            <Segmented
+              value={auth.signatureMethod}
+              onChange={(signatureMethod) => setAuth({ ...auth, signatureMethod })}
+              options={[
+                { value: 'HMAC-SHA1', label: 'HMAC-SHA1' },
+                { value: 'HMAC-SHA256', label: 'HMAC-SHA256' },
+                { value: 'PLAINTEXT', label: 'PLAINTEXT' }
+              ]}
+            />
+          </Field>
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
+            Подпись добавляется в заголовок <span className="mono">Authorization: OAuth …</span>.
+          </div>
+        </>
+      )}
+
+      {auth.type === 'aws' && (
+        <>
+          <Field label="Access Key">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.accessKey} onChange={(accessKey) => setAuth({ ...auth, accessKey })} scope={scope} placeholder="{{aws_access_key}}" />
+            </div>
+          </Field>
+          <Field label="Secret Key">
+            <input className="input mono" type="password" value={auth.secretKey} onChange={(e) => setAuth({ ...auth, secretKey: e.target.value })} />
+          </Field>
+          <Field label="Region">
+            <input className="input mono" value={auth.region} onChange={(e) => setAuth({ ...auth, region: e.target.value })} placeholder="us-east-1" />
+          </Field>
+          <Field label="Service">
+            <input className="input mono" value={auth.service} onChange={(e) => setAuth({ ...auth, service: e.target.value })} placeholder="s3 / execute-api" />
+          </Field>
+          <Field label="Session Token">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.sessionToken ?? ''} onChange={(sessionToken) => setAuth({ ...auth, sessionToken })} scope={scope} placeholder="(необязательно)" />
+            </div>
+          </Field>
+        </>
+      )}
+
+      {auth.type === 'hawk' && (
+        <>
+          <Field label="Hawk Auth ID">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.id} onChange={(id) => setAuth({ ...auth, id })} scope={scope} placeholder="{{hawk_id}}" />
+            </div>
+          </Field>
+          <Field label="Hawk Auth Key">
+            <input className="input mono" type="password" value={auth.key} onChange={(e) => setAuth({ ...auth, key: e.target.value })} />
+          </Field>
+          <Field label="Algorithm">
+            <Segmented
+              value={auth.algorithm}
+              onChange={(algorithm) => setAuth({ ...auth, algorithm })}
+              options={[
+                { value: 'sha256', label: 'sha256' },
+                { value: 'sha1', label: 'sha1' }
+              ]}
+            />
+          </Field>
+          <Field label="Ext">
+            <input className="input mono" value={auth.ext ?? ''} onChange={(e) => setAuth({ ...auth, ext: e.target.value })} placeholder="(необязательно)" />
+          </Field>
+        </>
+      )}
+
+      {auth.type === 'akamai' && (
+        <>
+          <Field label="Client Token">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.clientToken} onChange={(clientToken) => setAuth({ ...auth, clientToken })} scope={scope} placeholder="{{client_token}}" />
+            </div>
+          </Field>
+          <Field label="Client Secret">
+            <input className="input mono" type="password" value={auth.clientSecret} onChange={(e) => setAuth({ ...auth, clientSecret: e.target.value })} />
+          </Field>
+          <Field label="Access Token">
+            <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
+              <HighlightedInput value={auth.accessToken} onChange={(accessToken) => setAuth({ ...auth, accessToken })} scope={scope} placeholder="{{access_token}}" />
+            </div>
+          </Field>
+        </>
+      )}
+
+      {auth.type === 'asap' && (
+        <>
+          <Field label="Issuer">
+            <input className="input mono" value={auth.issuer} onChange={(e) => setAuth({ ...auth, issuer: e.target.value })} />
+          </Field>
+          <Field label="Audience">
+            <input className="input mono" value={auth.audience} onChange={(e) => setAuth({ ...auth, audience: e.target.value })} />
+          </Field>
+          <Field label="Key ID">
+            <input className="input mono" value={auth.keyId} onChange={(e) => setAuth({ ...auth, keyId: e.target.value })} />
+          </Field>
+          <Field label="Private Key (PEM)">
+            <textarea
+              className="input mono"
+              value={auth.privateKey}
+              onChange={(e) => setAuth({ ...auth, privateKey: e.target.value })}
+              rows={6}
+              spellCheck={false}
+              style={{ resize: 'vertical', minHeight: 96 }}
+            />
+          </Field>
+          <Field label="Subject">
+            <input className="input mono" value={auth.subject ?? ''} onChange={(e) => setAuth({ ...auth, subject: e.target.value })} placeholder="(необязательно)" />
+          </Field>
+        </>
+      )}
     </div>
   )
 }

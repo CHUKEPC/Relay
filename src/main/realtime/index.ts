@@ -11,14 +11,30 @@
  */
 import { Agent, request as undiciRequest, WebSocket } from 'undici'
 import type { Dispatcher } from 'undici'
+import { io } from 'socket.io-client'
+import mqtt from 'mqtt'
 import type { BrowserWindow, IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { makeId } from '@shared/id'
-import type { KV, RealtimeEvent, SseConnectSpec, WsConnectSpec } from '@shared/types'
+import type {
+  KV,
+  MqttConnectSpec,
+  RealtimeEvent,
+  SocketIoConnectSpec,
+  SseConnectSpec,
+  WsConnectSpec
+} from '@shared/types'
 
 interface LiveConn {
-  kind: 'ws' | 'sse'
+  kind: 'ws' | 'sse' | 'socketio' | 'mqtt'
+  /** ws text send */
   send?: (data: string) => void
+  /** socket.io emit(event, data) */
+  emit?: (event: string, data: string) => void
+  /** mqtt publish(topic, payload) */
+  publish?: (topic: string, payload: string) => void
+  /** mqtt subscribe(topic) */
+  subscribe?: (topic: string) => void
   close: () => void
 }
 
@@ -277,6 +293,145 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /* ============================================================
+ * Socket.IO
+ * ============================================================ */
+
+/** Best-effort JSON parse for emitted/received payloads (falls back to string). */
+function tryJson(s: string): unknown {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return s
+  }
+}
+
+function stringifyArgs(args: unknown[]): string {
+  const v = args.length <= 1 ? args[0] : args
+  if (typeof v === 'string') return v
+  try {
+    return JSON.stringify(v)
+  } catch {
+    return String(v)
+  }
+}
+
+function connectSocketIo(spec: SocketIoConnectSpec, emit: (e: RealtimeEvent) => void): LiveConn {
+  if (!/^(https?|wss?):\/\//i.test(spec.url)) {
+    emit({ type: 'error', error: 'Socket.IO URL must start with http(s):// or ws(s)://' })
+    return { kind: 'socketio', close: () => {} }
+  }
+  let socket: ReturnType<typeof io>
+  try {
+    socket = io(spec.url, {
+      transports: ['websocket', 'polling'],
+      extraHeaders: headersFromKV(spec.headers),
+      rejectUnauthorized: spec.rejectUnauthorized !== false,
+      reconnection: true,
+      // Bound the retries — socket.io defaults reconnectionAttempts to Infinity.
+      reconnectionAttempts: 10,
+      forceNew: true
+    })
+  } catch (err) {
+    emit({ type: 'error', error: err instanceof Error ? err.message : String(err) })
+    return { kind: 'socketio', close: () => {} }
+  }
+
+  socket.on('connect', () => emit({ type: 'open', protocol: socket.id }))
+  socket.on('disconnect', (reason: string) => emit({ type: 'close', reason }))
+  socket.on('connect_error', (err: Error) => emit({ type: 'error', error: err?.message ?? 'connect_error' }))
+  socket.io.on('reconnect_attempt', (attempt: number) => emit({ type: 'reconnecting', attempt, delayMs: 0 }))
+
+  const listen = spec.listenEvents?.filter(Boolean) ?? []
+  if (listen.length) {
+    for (const ev of listen) socket.on(ev, (...args: unknown[]) => emit(msg('in', stringifyArgs(args), ev)))
+  } else {
+    socket.onAny((ev: string, ...args: unknown[]) => emit(msg('in', stringifyArgs(args), ev)))
+  }
+
+  return {
+    kind: 'socketio',
+    emit: (event: string, data: string) => {
+      try {
+        socket.emit(event, tryJson(data))
+      } catch (err) {
+        emit({ type: 'error', error: err instanceof Error ? err.message : 'emit failed' })
+      }
+    },
+    close: () => {
+      try {
+        socket.close()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/* ============================================================
+ * MQTT
+ * ============================================================ */
+
+function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): LiveConn {
+  if (!/^(mqtts?|wss?|tcp):\/\//i.test(spec.url)) {
+    emit({ type: 'error', error: 'MQTT URL must start with mqtt(s)://, ws(s):// or tcp://' })
+    return { kind: 'mqtt', close: () => {} }
+  }
+  let client: ReturnType<typeof mqtt.connect>
+  try {
+    client = mqtt.connect(spec.url, {
+      username: spec.username || undefined,
+      password: spec.password || undefined,
+      clientId: spec.clientId || undefined,
+      rejectUnauthorized: spec.rejectUnauthorized !== false,
+      reconnectPeriod: 3000,
+      connectTimeout: 15000
+    })
+  } catch (err) {
+    emit({ type: 'error', error: err instanceof Error ? err.message : String(err) })
+    return { kind: 'mqtt', close: () => {} }
+  }
+
+  client.on('connect', () => {
+    emit({ type: 'open' })
+    for (const t of spec.subscribeTopics?.filter(Boolean) ?? []) {
+      client.subscribe(t, (err) => emit(msg('system', err ? `subscribe ${t} failed: ${err.message}` : `subscribed to ${t}`, 'system')))
+    }
+  })
+  client.on('message', (topic: string, payload: Buffer) => emit(msg('in', payload.toString('utf8'), topic)))
+  client.on('error', (err: Error) => emit({ type: 'error', error: err?.message ?? 'mqtt error' }))
+  client.on('reconnect', () => emit({ type: 'reconnecting', attempt: 0, delayMs: 3000 }))
+  client.on('close', () => emit({ type: 'close' }))
+
+  return {
+    kind: 'mqtt',
+    publish: (topic: string, payload: string) => {
+      try {
+        client.publish(topic, payload)
+        emit(msg('out', payload, topic))
+      } catch (err) {
+        emit({ type: 'error', error: err instanceof Error ? err.message : 'publish failed' })
+      }
+    },
+    subscribe: (topic: string) => {
+      try {
+        client.subscribe(topic, (err) =>
+          emit(msg('system', err ? `subscribe ${topic} failed: ${err.message}` : `subscribed to ${topic}`, 'system'))
+        )
+      } catch (err) {
+        emit({ type: 'error', error: err instanceof Error ? err.message : 'subscribe failed' })
+      }
+    },
+    close: () => {
+      try {
+        client.end(true)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/* ============================================================
  * IPC wiring
  * ============================================================ */
 
@@ -310,6 +465,31 @@ export function registerRealtimeHandlers(ipcMain: IpcMain, getWindow: GetWindow)
   })
 
   ipcMain.handle(IPC.realtime.sseClose, async (_e, connId: string) => {
+    closeConn(connId)
+  })
+
+  ipcMain.handle(IPC.realtime.socketioConnect, async (_e, spec: SocketIoConnectSpec) => {
+    closeConn(spec.connId)
+    conns.set(spec.connId, connectSocketIo(spec, emitter(getWindow, spec.connId)))
+  })
+  ipcMain.handle(IPC.realtime.socketioEmit, async (_e, connId: string, event: string, data: string) => {
+    conns.get(connId)?.emit?.(event, data)
+  })
+  ipcMain.handle(IPC.realtime.socketioClose, async (_e, connId: string) => {
+    closeConn(connId)
+  })
+
+  ipcMain.handle(IPC.realtime.mqttConnect, async (_e, spec: MqttConnectSpec) => {
+    closeConn(spec.connId)
+    conns.set(spec.connId, connectMqtt(spec, emitter(getWindow, spec.connId)))
+  })
+  ipcMain.handle(IPC.realtime.mqttPublish, async (_e, connId: string, topic: string, payload: string) => {
+    conns.get(connId)?.publish?.(topic, payload)
+  })
+  ipcMain.handle(IPC.realtime.mqttSubscribe, async (_e, connId: string, topic: string) => {
+    conns.get(connId)?.subscribe?.(topic)
+  })
+  ipcMain.handle(IPC.realtime.mqttClose, async (_e, connId: string) => {
     closeConn(connId)
   })
 }

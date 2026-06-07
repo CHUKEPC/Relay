@@ -78,6 +78,15 @@ export function NetworkSection(): JSX.Element {
         в основном процессе — в интерфейсе хранятся только пути к файлам.
       </div>
 
+      {/* ============================ HTTP/2 ============================ */}
+      <div className="set-row">
+        <div className="label">
+          <div className="t">HTTP/2</div>
+          <div className="d">Разрешить согласование HTTP/2 (h2) по ALPN, если сервер его поддерживает</div>
+        </div>
+        <Toggle checked={settings.http2} onChange={(v) => update({ http2: v })} />
+      </div>
+
       {/* ============================ PROXY ============================ */}
       <div className="set-group-label">Прокси</div>
 

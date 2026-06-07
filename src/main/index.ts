@@ -7,6 +7,7 @@ import { registerIpc } from './ipc'
 import { abortAllRequests } from './http'
 import { abortAllAiStreams } from './ai'
 import { abortAllRealtime } from './realtime'
+import { abortAllGrpc } from './grpc'
 import { startSandboxHost, stopScriptSandbox } from './scripting'
 
 let mainWindow: BrowserWindow | null = null
@@ -91,6 +92,7 @@ function createWindow(): void {
     abortAllRequests()
     abortAllAiStreams()
     abortAllRealtime()
+    abortAllGrpc()
     mainWindow = null
   })
 }
@@ -133,6 +135,7 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
     abortAllRequests()
     abortAllAiStreams()
     abortAllRealtime()
+    abortAllGrpc()
     stopScriptSandbox()
     e.preventDefault()
     flushing = true

@@ -86,7 +86,8 @@ if (!window.api) {
       autoApplyAiTools: false,
       defaultProviderId: 'anthropic',
       proxy: { enabled: false, url: '', bypass: [] },
-      clientCerts: []
+      clientCerts: [],
+      http2: false
     },
     providers: {
       version: STORAGE_VERSION,
@@ -161,7 +162,25 @@ if (!window.api) {
     wsClose: async () => {},
     sseConnect: async () => {},
     sseClose: async () => {},
+    socketioConnect: async () => {},
+    socketioEmit: async () => {},
+    socketioClose: async () => {},
+    mqttConnect: async () => {},
+    mqttPublish: async () => {},
+    mqttSubscribe: async () => {},
+    mqttClose: async () => {},
     onRealtime: () => () => {},
+    grpcParse: async () => ({ services: [], error: 'gRPC недоступен в web-режиме' }),
+    grpcInvoke: async () => {},
+    grpcSend: async () => {},
+    grpcEnd: async () => {},
+    grpcCancel: async () => {},
+    onGrpc: () => () => {},
+    sqliteExport: async () => '',
+    sqliteImport: async () => ({
+      snapshot: { collections: [], environments: [], activeEnvironmentId: null, globals: [], history: [] },
+      summary: { collections: 0, requests: 0, environments: 0, globals: 0, history: 0 }
+    }),
     workspaceList: async () => ({ workspaces: [{ id: 'default', name: 'Default' }], activeId: 'default' }),
     workspaceCreate: async (name) => ({ id: `ws_${Date.now()}`, name }),
     workspaceRename: async () => {},

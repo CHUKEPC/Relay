@@ -13,6 +13,8 @@ import type {
   EnvironmentsDoc,
   FilePickResult,
   GlobalsDoc,
+  GrpcInvokeSpec,
+  GrpcParseResult,
   HistoryDoc,
   ImportKind,
   ImportResult,
@@ -20,6 +22,7 @@ import type {
   OAuthTokenRequest,
   OAuthTokenResult,
   ProvidersDoc,
+  MqttConnectSpec,
   RealtimeEvent,
   RequestSpec,
   ResponseResult,
@@ -27,6 +30,9 @@ import type {
   ScriptRunRequest,
   ScriptRunResult,
   SettingsDoc,
+  SqliteImportSummary,
+  SqliteSnapshot,
+  SocketIoConnectSpec,
   SseConnectSpec,
   StoredCookie,
   TabsDoc,
@@ -79,8 +85,24 @@ export const IPC = {
     wsClose: 'realtime:wsClose',
     sseConnect: 'realtime:sseConnect',
     sseClose: 'realtime:sseClose',
+    socketioConnect: 'realtime:socketioConnect',
+    socketioEmit: 'realtime:socketioEmit',
+    socketioClose: 'realtime:socketioClose',
+    mqttConnect: 'realtime:mqttConnect',
+    mqttPublish: 'realtime:mqttPublish',
+    mqttSubscribe: 'realtime:mqttSubscribe',
+    mqttClose: 'realtime:mqttClose',
     /** event channel suffix; full channel = `${realtime.event}:${connId}` */
     event: 'realtime:event'
+  },
+  grpc: {
+    parse: 'grpc:parse',
+    invoke: 'grpc:invoke',
+    send: 'grpc:send',
+    end: 'grpc:end',
+    cancel: 'grpc:cancel',
+    /** event channel suffix; full channel = `${grpc.event}:${connId}` */
+    event: 'grpc:event'
   },
   workspace: {
     list: 'workspace:list',
@@ -88,6 +110,10 @@ export const IPC = {
     rename: 'workspace:rename',
     delete: 'workspace:delete',
     switch: 'workspace:switch'
+  },
+  sqlite: {
+    export: 'sqlite:export',
+    import: 'sqlite:import'
   },
   dialog: {
     openFile: 'dialog:openFile',
@@ -184,8 +210,29 @@ export interface RelayApi {
   wsClose(connId: string): Promise<void>
   sseConnect(spec: SseConnectSpec): Promise<void>
   sseClose(connId: string): Promise<void>
+  socketioConnect(spec: SocketIoConnectSpec): Promise<void>
+  socketioEmit(connId: string, event: string, data: string): Promise<void>
+  socketioClose(connId: string): Promise<void>
+  mqttConnect(spec: MqttConnectSpec): Promise<void>
+  mqttPublish(connId: string, topic: string, payload: string): Promise<void>
+  mqttSubscribe(connId: string, topic: string): Promise<void>
+  mqttClose(connId: string): Promise<void>
   /** Subscribe to events for a connection. Returns an unsubscribe fn. */
   onRealtime(connId: string, cb: (event: RealtimeEvent) => void): () => void
+
+  /* ---- gRPC ---- */
+  /** Parse a .proto document into its services/methods (no network). */
+  grpcParse(proto: string): Promise<GrpcParseResult>
+  /** Start a gRPC call; results stream over the grpc event channel. */
+  grpcInvoke(spec: GrpcInvokeSpec): Promise<void>
+  /** Write a message into a client-/bidi-streaming call. */
+  grpcSend(connId: string, message: string): Promise<void>
+  /** Half-close (finish sending) a client-/bidi-streaming call. */
+  grpcEnd(connId: string): Promise<void>
+  /** Cancel an in-flight call. */
+  grpcCancel(connId: string): Promise<void>
+  /** Subscribe to gRPC events for a call. Returns an unsubscribe fn. */
+  onGrpc(connId: string, cb: (event: RealtimeEvent) => void): () => void
 
   /* ---- local workspaces ---- */
   workspaceList(): Promise<{ workspaces: WorkspaceMeta[]; activeId: string }>
@@ -193,6 +240,12 @@ export interface RelayApi {
   workspaceRename(id: string, name: string): Promise<void>
   workspaceDelete(id: string): Promise<void>
   workspaceSwitch(id: string): Promise<void>
+
+  /* ---- SQLite backup (optional, pure-WASM) ---- */
+  /** Build a .sqlite of the snapshot; returns base64 bytes to save via the dialog. */
+  sqliteExport(snapshot: SqliteSnapshot): Promise<string>
+  /** Read a user-picked .sqlite path; returns the parsed snapshot + counts. */
+  sqliteImport(path: string): Promise<{ snapshot: SqliteSnapshot; summary: SqliteImportSummary }>
 
   /* ---- dialogs / fs ---- */
   openFile(opts: OpenFileOptions): Promise<FilePickResult[] | null>

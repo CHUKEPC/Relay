@@ -20,7 +20,7 @@ export function WorkspaceSwitcher(): JSX.Element {
         <DropdownMenu.Trigger asChild>
           <div className="env-pill nodrag" title="Рабочее пространство" style={{ background: 'var(--bg-1)' }}>
             <Icon name="grid" size={13} style={{ color: 'var(--tx-3)' }} />
-            {active?.name ?? 'Workspace'}
+            {active?.name ?? 'Пространство'}
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)' }} />
           </div>
         </DropdownMenu.Trigger>

@@ -1,12 +1,14 @@
 import { create } from 'zustand'
-import type { KV, RealtimeEvent, RealtimeKind, RealtimeMessage } from '@shared/types'
+import type { KV, RealtimeEvent, RealtimeMessage } from '@shared/types'
 import { makeId } from '@shared/id'
 
 export type RealtimeStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
+/** Connection kinds handled by the realtime panel. */
+export type RtKind = 'websocket' | 'sse' | 'socketio' | 'mqtt'
 
 export interface TabRealtime {
   status: RealtimeStatus
-  kind?: RealtimeKind
+  kind?: RtKind
   connId?: string
   url?: string
   messages: RealtimeMessage[]
@@ -21,7 +23,7 @@ const MAX_MESSAGES = 2000
 const subs = new Map<string, () => void>()
 
 export interface ConnectOpts {
-  kind: RealtimeKind
+  kind: RtKind
   url: string
   headers: KV[]
   rejectUnauthorized: boolean
@@ -33,7 +35,14 @@ interface RealtimeState {
   connect: (tabId: string, opts: ConnectOpts) => void
   disconnect: (tabId: string) => void
   disconnectAll: () => void
+  /** WebSocket: send a text frame. */
   send: (tabId: string, data: string) => void
+  /** Socket.IO: emit an event. */
+  emit: (tabId: string, event: string, data: string) => void
+  /** MQTT: publish to a topic. */
+  publish: (tabId: string, topic: string, payload: string) => void
+  /** MQTT: subscribe to a topic. */
+  subscribe: (tabId: string, topic: string) => void
   clear: (tabId: string) => void
 }
 
@@ -57,7 +66,7 @@ export const useRealtime = create<RealtimeState>((set, get) => {
     switch (ev.type) {
       case 'open':
         patch(tabId, { status: 'open', error: undefined })
-        append(tabId, sys(ev.protocol ? `Connected (protocol: ${ev.protocol})` : 'Connected'))
+        append(tabId, sys(ev.protocol ? `Connected (${ev.protocol})` : 'Connected'))
         break
       case 'message':
         append(tabId, ev.message)
@@ -76,12 +85,14 @@ export const useRealtime = create<RealtimeState>((set, get) => {
     }
   }
 
+  const fail = (tabId: string, err: unknown): void =>
+    onEvent(tabId, { type: 'error', error: err instanceof Error ? err.message : String(err) })
+
   return {
     byTab: {},
     get: (tabId) => get().byTab[tabId] ?? EMPTY,
 
     connect: (tabId, opts) => {
-      // Tear down any existing connection on this tab first.
       get().disconnect(tabId)
       const connId = makeId('rtc')
       set((s) => ({
@@ -92,14 +103,21 @@ export const useRealtime = create<RealtimeState>((set, get) => {
       }))
       const unsub = window.api.onRealtime(connId, (ev) => onEvent(tabId, ev))
       subs.set(tabId, unsub)
-      if (opts.kind === 'websocket') {
-        void window.api
-          .wsConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: opts.rejectUnauthorized })
-          .catch((err) => onEvent(tabId, { type: 'error', error: err instanceof Error ? err.message : String(err) }))
-      } else {
-        void window.api
-          .sseConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: opts.rejectUnauthorized })
-          .catch((err) => onEvent(tabId, { type: 'error', error: err instanceof Error ? err.message : String(err) }))
+      const ru = opts.rejectUnauthorized
+      const guard = (p: Promise<void>): void => void p.catch((err) => fail(tabId, err))
+      switch (opts.kind) {
+        case 'websocket':
+          guard(window.api.wsConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
+          break
+        case 'sse':
+          guard(window.api.sseConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
+          break
+        case 'socketio':
+          guard(window.api.socketioConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
+          break
+        case 'mqtt':
+          guard(window.api.mqttConnect({ connId, url: opts.url, rejectUnauthorized: ru }))
+          break
       }
     },
 
@@ -112,10 +130,19 @@ export const useRealtime = create<RealtimeState>((set, get) => {
         subs.delete(tabId)
       }
       if (connId) {
-        if (cur?.kind === 'sse') void window.api.sseClose(connId).catch(() => {})
-        else void window.api.wsClose(connId).catch(() => {})
+        const close =
+          cur?.kind === 'sse'
+            ? window.api.sseClose
+            : cur?.kind === 'socketio'
+              ? window.api.socketioClose
+              : cur?.kind === 'mqtt'
+                ? window.api.mqttClose
+                : window.api.wsClose
+        void close(connId).catch(() => {})
       }
-      if (cur && (cur.status === 'open' || cur.status === 'connecting')) {
+      // Reset to 'closed' from ANY active/errored state (incl. 'error', where
+      // socket.io/mqtt may still be retrying) so the button returns to "Connect".
+      if (cur && cur.status !== 'idle' && cur.status !== 'closed') {
         patch(tabId, { status: 'closed' })
       }
     },
@@ -130,6 +157,27 @@ export const useRealtime = create<RealtimeState>((set, get) => {
       if (!cur || cur.status !== 'open' || !cur.connId || cur.kind !== 'websocket') return
       void window.api.wsSend(cur.connId, data).catch(() => {})
       append(tabId, { id: makeId('rt'), dir: 'out', data, at: Date.now(), kind: 'text' })
+    },
+
+    emit: (tabId, event, data) => {
+      const cur = get().byTab[tabId]
+      if (!cur || cur.status !== 'open' || !cur.connId || cur.kind !== 'socketio') return
+      void window.api.socketioEmit(cur.connId, event, data).catch(() => {})
+      append(tabId, { id: makeId('rt'), dir: 'out', data, at: Date.now(), kind: event })
+    },
+
+    publish: (tabId, topic, payload) => {
+      const cur = get().byTab[tabId]
+      if (!cur || cur.status !== 'open' || !cur.connId || cur.kind !== 'mqtt') return
+      // The main MQTT engine echoes published messages into the log, so don't
+      // append here to avoid duplicates.
+      void window.api.mqttPublish(cur.connId, topic, payload).catch(() => {})
+    },
+
+    subscribe: (tabId, topic) => {
+      const cur = get().byTab[tabId]
+      if (!cur || cur.status !== 'open' || !cur.connId || cur.kind !== 'mqtt') return
+      void window.api.mqttSubscribe(cur.connId, topic).catch(() => {})
     },
 
     clear: (tabId) => patch(tabId, { messages: [] })

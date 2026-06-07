@@ -4,12 +4,15 @@ import type { OpenFileOptions, RelayApi, SaveFileOptions, StorageKey, StorageMap
 import type {
   AiChatStart,
   AiStreamEvent,
+  GrpcInvokeSpec,
   ImportKind,
+  MqttConnectSpec,
   OAuthTokenRequest,
   RealtimeEvent,
   RequestSpec,
   RunOptions,
   ScriptRunRequest,
+  SocketIoConnectSpec,
   SseConnectSpec,
   StoredCookie,
   WsConnectSpec
@@ -76,8 +79,30 @@ const api: RelayApi = {
   wsClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.wsClose, connId),
   sseConnect: (spec: SseConnectSpec) => ipcRenderer.invoke(IPC.realtime.sseConnect, spec),
   sseClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.sseClose, connId),
+  socketioConnect: (spec: SocketIoConnectSpec) => ipcRenderer.invoke(IPC.realtime.socketioConnect, spec),
+  socketioEmit: (connId: string, event: string, data: string) =>
+    ipcRenderer.invoke(IPC.realtime.socketioEmit, connId, event, data),
+  socketioClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.socketioClose, connId),
+  mqttConnect: (spec: MqttConnectSpec) => ipcRenderer.invoke(IPC.realtime.mqttConnect, spec),
+  mqttPublish: (connId: string, topic: string, payload: string) =>
+    ipcRenderer.invoke(IPC.realtime.mqttPublish, connId, topic, payload),
+  mqttSubscribe: (connId: string, topic: string) => ipcRenderer.invoke(IPC.realtime.mqttSubscribe, connId, topic),
+  mqttClose: (connId: string) => ipcRenderer.invoke(IPC.realtime.mqttClose, connId),
   onRealtime: (connId: string, cb: (event: RealtimeEvent) => void) => {
     const channel = `${IPC.realtime.event}:${connId}`
+    const handler = (_e: unknown, event: RealtimeEvent) => cb(event)
+    ipcRenderer.on(channel, handler)
+    return () => ipcRenderer.removeListener(channel, handler)
+  },
+
+  /* ---- gRPC ---- */
+  grpcParse: (proto: string) => ipcRenderer.invoke(IPC.grpc.parse, proto),
+  grpcInvoke: (spec: GrpcInvokeSpec) => ipcRenderer.invoke(IPC.grpc.invoke, spec),
+  grpcSend: (connId: string, message: string) => ipcRenderer.invoke(IPC.grpc.send, connId, message),
+  grpcEnd: (connId: string) => ipcRenderer.invoke(IPC.grpc.end, connId),
+  grpcCancel: (connId: string) => ipcRenderer.invoke(IPC.grpc.cancel, connId),
+  onGrpc: (connId: string, cb: (event: RealtimeEvent) => void) => {
+    const channel = `${IPC.grpc.event}:${connId}`
     const handler = (_e: unknown, event: RealtimeEvent) => cb(event)
     ipcRenderer.on(channel, handler)
     return () => ipcRenderer.removeListener(channel, handler)
@@ -89,6 +114,10 @@ const api: RelayApi = {
   workspaceRename: (id: string, name: string) => ipcRenderer.invoke(IPC.workspace.rename, id, name),
   workspaceDelete: (id: string) => ipcRenderer.invoke(IPC.workspace.delete, id),
   workspaceSwitch: (id: string) => ipcRenderer.invoke(IPC.workspace.switch, id),
+
+  /* ---- SQLite backup ---- */
+  sqliteExport: (snapshot) => ipcRenderer.invoke(IPC.sqlite.export, snapshot),
+  sqliteImport: (path: string) => ipcRenderer.invoke(IPC.sqlite.import, path),
 
   /* ---- dialogs / fs ---- */
   openFile: (opts: OpenFileOptions) => ipcRenderer.invoke(IPC.dialog.openFile, opts),

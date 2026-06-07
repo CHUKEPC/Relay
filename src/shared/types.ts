@@ -73,6 +73,71 @@ export type Auth =
       password: string
       algorithm?: 'MD5' | 'SHA-256' | 'MD5-sess' | 'SHA-256-sess'
     }
+  | {
+      /** JWT Bearer — Relay signs a JWT from the payload and attaches it. */
+      type: 'jwt'
+      algorithm: JwtAlg
+      secret: string
+      /** JSON object string for the claims payload */
+      payload: string
+      headerPrefix: string
+      addTo: ApiKeyLocation
+      queryParamName?: string
+    }
+  | {
+      /** OAuth 1.0a request signing */
+      type: 'oauth1'
+      consumerKey: string
+      consumerSecret: string
+      token?: string
+      tokenSecret?: string
+      signatureMethod: 'HMAC-SHA1' | 'HMAC-SHA256' | 'PLAINTEXT'
+      addTo: 'header' | 'query'
+    }
+  | {
+      /** AWS Signature v4 */
+      type: 'aws'
+      accessKey: string
+      secretKey: string
+      region: string
+      service: string
+      sessionToken?: string
+    }
+  | {
+      /** Hawk (holder-of-key) */
+      type: 'hawk'
+      id: string
+      key: string
+      algorithm: 'sha256' | 'sha1'
+      ext?: string
+    }
+  | {
+      /** Akamai EdgeGrid */
+      type: 'akamai'
+      clientToken: string
+      clientSecret: string
+      accessToken: string
+    }
+  | {
+      /** Atlassian ASAP (signed JWT) */
+      type: 'asap'
+      issuer: string
+      audience: string
+      keyId: string
+      privateKey: string
+      subject?: string
+    }
+
+export type JwtAlg =
+  | 'HS256'
+  | 'HS384'
+  | 'HS512'
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
 
 /**
  * Outbound HTTP/HTTPS proxy configuration. Applied via undici's ProxyAgent.
@@ -116,6 +181,8 @@ export interface RequestSettings {
   proxy?: ProxyConfig | null
   /** client certs available to match this request's host (paths only) */
   clientCerts?: ClientCert[]
+  /** allow HTTP/2 (undici negotiates h2 via ALPN when the server supports it) */
+  allowH2?: boolean
 }
 
 /** A fully-resolved (variables already interpolated) request ready for the engine. */
@@ -228,7 +295,7 @@ export interface DocEnvelope {
 }
 
 /** Protocol mode of a request tab. Defaults to `http` when absent. */
-export type RequestMode = 'http' | 'websocket' | 'sse'
+export type RequestMode = 'http' | 'graphql' | 'websocket' | 'sse' | 'socketio' | 'mqtt' | 'grpc'
 
 /** A saved request — the editable unit shown in a tab. */
 export interface RequestModel {
@@ -245,6 +312,8 @@ export interface RequestModel {
   mode?: RequestMode
   /** websocket message draft + saved messages composer text */
   wsMessage?: string
+  /** gRPC mode config (proto text, target, selected service/method, message) */
+  grpc?: GrpcConfig
   /** pre-request and test scripts (P1) */
   preRequestScript?: string
   testScript?: string
@@ -348,6 +417,8 @@ export interface SettingsDoc extends DocEnvelope {
   proxy: ProxyConfig
   /** client TLS certificates matched by host (paths only; bytes read in main) */
   clientCerts: ClientCert[]
+  /** allow HTTP/2 negotiation for outbound requests */
+  http2: boolean
 }
 
 /* ============================================================
@@ -597,6 +668,92 @@ export interface SseConnectSpec {
   rejectUnauthorized?: boolean
 }
 
+export interface SocketIoConnectSpec {
+  connId: string
+  url: string
+  /** extra handshake headers (already interpolated) */
+  headers: KV[]
+  /** event names to listen for; empty → listen to all events */
+  listenEvents?: string[]
+  rejectUnauthorized?: boolean
+}
+
+export interface MqttConnectSpec {
+  connId: string
+  url: string
+  username?: string
+  password?: string
+  clientId?: string
+  /** topics to subscribe to on connect */
+  subscribeTopics?: string[]
+  rejectUnauthorized?: boolean
+}
+
+/* ============================================================
+ * gRPC — P2 (pure-JS @grpc/grpc-js + @grpc/proto-loader)
+ * ============================================================ */
+
+/** Streaming shape of a gRPC method, derived from the proto. */
+export type GrpcMethodKind = 'unary' | 'server_stream' | 'client_stream' | 'bidi'
+
+export interface GrpcMethodInfo {
+  /** simple method name, e.g. "SayHello" */
+  name: string
+  /** fully-qualified "package.Service/Method" path used to invoke */
+  path: string
+  kind: GrpcMethodKind
+  requestType: string
+  responseType: string
+}
+
+export interface GrpcServiceInfo {
+  /** fully-qualified service name, e.g. "helloworld.Greeter" */
+  name: string
+  methods: GrpcMethodInfo[]
+}
+
+/** Result of parsing a .proto document (in main, via proto-loader). */
+export interface GrpcParseResult {
+  services: GrpcServiceInfo[]
+  error?: string
+}
+
+/** Per-request gRPC configuration persisted on the RequestModel. */
+export interface GrpcConfig {
+  /** raw .proto source text */
+  proto?: string
+  /** host:port target (no scheme) */
+  address?: string
+  /** selected fully-qualified service name */
+  service?: string
+  /** selected method name */
+  method?: string
+  /** streaming kind of the selected method (cached from the last parse) */
+  methodKind?: GrpcMethodKind
+  /** request message as JSON text (the composer draft) */
+  message?: string
+  /** call metadata (key/value, interpolated before invoke) */
+  metadata?: KV[]
+  /** use plaintext (h2c) instead of TLS */
+  plaintext?: boolean
+}
+
+/** Start a gRPC call. Streams results over `grpc:event:<connId>`. */
+export interface GrpcInvokeSpec {
+  connId: string
+  proto: string
+  address: string
+  /** fully-qualified service name */
+  service: string
+  /** method name within the service */
+  method: string
+  /** request message JSON (unary / client-stream first message) */
+  message: string
+  metadata: KV[]
+  plaintext?: boolean
+  rejectUnauthorized?: boolean
+}
+
 /* ============================================================
  * Local workspaces — P2
  * ============================================================ */
@@ -611,4 +768,26 @@ export interface WorkspacesDoc {
   version: number
   workspaces: WorkspaceMeta[]
   activeWorkspaceId: string
+}
+
+/* ============================================================
+ * SQLite backup (optional, pure-WASM sql.js) — P2
+ * The JSON store stays the canonical backend (CLAUDE.md); this is an
+ * import/export of a workspace's data to a portable .sqlite file.
+ * ============================================================ */
+
+export interface SqliteSnapshot {
+  collections: CollectionFolderNode[]
+  environments: Environment[]
+  activeEnvironmentId: string | null
+  globals: VariableDef[]
+  history: HistoryEntry[]
+}
+
+export interface SqliteImportSummary {
+  collections: number
+  requests: number
+  environments: number
+  globals: number
+  history: number
 }

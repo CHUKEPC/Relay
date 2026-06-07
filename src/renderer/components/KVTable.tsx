@@ -73,7 +73,7 @@ export function KVTable({
           title={bulk ? 'Вернуться к таблице' : 'Массовое редактирование'}
         >
           <Icon name={bulk ? 'grid' : 'code2'} size={14} />
-          {bulk ? 'Таблица' : 'Bulk Edit'}
+          {bulk ? 'Таблица' : 'Текстом'}
         </button>
       </div>
 

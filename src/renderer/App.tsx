@@ -19,6 +19,7 @@ import { Sidebar } from './features/sidebar/Sidebar'
 import { RequestBuilder } from './features/request/RequestBuilder'
 import { ResponsePanel } from './features/response/ResponsePanel'
 import { RealtimePanel } from './features/realtime/RealtimePanel'
+import { GrpcResponse } from './features/grpc/GrpcResponse'
 import { AiPanel } from './features/ai/AiPanel'
 import { CommandPalette } from './features/palette/CommandPalette'
 import { SettingsScreen } from './features/settings/SettingsScreen'
@@ -339,10 +340,12 @@ function Workspace() {
           }
         >
           {activeTabId &&
-            (activeMode === 'http' ? (
-              <ResponsePanel key={activeTabId} tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />
+            (activeMode === 'websocket' || activeMode === 'sse' || activeMode === 'socketio' || activeMode === 'mqtt' ? (
+              <RealtimePanel key={activeTabId} tabId={activeTabId} kind={activeMode} />
+            ) : activeMode === 'grpc' ? (
+              <GrpcResponse key={activeTabId} tabId={activeTabId} />
             ) : (
-              <RealtimePanel key={activeTabId} tabId={activeTabId} kind={activeMode === 'websocket' ? 'websocket' : 'sse'} />
+              <ResponsePanel key={activeTabId} tabId={activeTabId} onAskAI={() => askAiAboutResponse()} />
             ))}
         </div>
       </div>

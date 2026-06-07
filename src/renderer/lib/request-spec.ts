@@ -46,6 +46,43 @@ function resolveAuth(auth: Auth, scope: VariableScope, unresolved: Set<string>):
       return { ...auth, accessToken: res(auth.accessToken, scope, unresolved) }
     case 'digest':
       return { ...auth, username: res(auth.username, scope, unresolved), password: res(auth.password, scope, unresolved) }
+    case 'jwt':
+      return { ...auth, secret: res(auth.secret, scope, unresolved), payload: res(auth.payload, scope, unresolved) }
+    case 'oauth1':
+      return {
+        ...auth,
+        consumerKey: res(auth.consumerKey, scope, unresolved),
+        consumerSecret: res(auth.consumerSecret, scope, unresolved),
+        token: auth.token ? res(auth.token, scope, unresolved) : auth.token,
+        tokenSecret: auth.tokenSecret ? res(auth.tokenSecret, scope, unresolved) : auth.tokenSecret
+      }
+    case 'aws':
+      return {
+        ...auth,
+        accessKey: res(auth.accessKey, scope, unresolved),
+        secretKey: res(auth.secretKey, scope, unresolved),
+        region: res(auth.region, scope, unresolved),
+        service: res(auth.service, scope, unresolved),
+        sessionToken: auth.sessionToken ? res(auth.sessionToken, scope, unresolved) : auth.sessionToken
+      }
+    case 'hawk':
+      return { ...auth, id: res(auth.id, scope, unresolved), key: res(auth.key, scope, unresolved), ext: auth.ext ? res(auth.ext, scope, unresolved) : auth.ext }
+    case 'akamai':
+      return {
+        ...auth,
+        clientToken: res(auth.clientToken, scope, unresolved),
+        clientSecret: res(auth.clientSecret, scope, unresolved),
+        accessToken: res(auth.accessToken, scope, unresolved)
+      }
+    case 'asap':
+      return {
+        ...auth,
+        issuer: res(auth.issuer, scope, unresolved),
+        audience: res(auth.audience, scope, unresolved),
+        keyId: res(auth.keyId, scope, unresolved),
+        privateKey: res(auth.privateKey, scope, unresolved),
+        subject: auth.subject ? res(auth.subject, scope, unresolved) : auth.subject
+      }
     default:
       return auth
   }

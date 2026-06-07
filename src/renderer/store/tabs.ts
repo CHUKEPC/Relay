@@ -5,6 +5,7 @@ import { makeId } from '@shared/id'
 import { emptyTabs } from './defaults'
 import { emptyRequest } from './collections'
 import { useRealtime } from './realtime'
+import { useGrpc } from './grpc'
 import { useResponse } from './response'
 import { persist } from './persist'
 
@@ -66,6 +67,7 @@ export const useTabs = create<TabsState>((set, get) => {
       // Tear down any live WebSocket/SSE connection + drop volatile per-tab state
       // so closing a realtime tab doesn't leak a socket/IPC listener.
       useRealtime.getState().disconnect(id)
+      useGrpc.getState().cancel(id)
       useResponse.setState((s) => {
         if (!(id in s.byTab)) return s
         const { [id]: _drop, ...rest } = s.byTab
