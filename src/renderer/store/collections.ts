@@ -321,17 +321,17 @@ function applyVarDefUpdates(existing: VariableDef[], updates: Record<string, str
 function cloneNodeWithNewIds(node: CollectionNode): CollectionNode {
   if (node.type === 'request') {
     const id = makeId('req')
-    return { id, type: 'request', request: { ...node.request, id, name: `${node.request.name} copy` } }
+    return { id, type: 'request', request: { ...node.request, id, name: `${node.request.name} (копия)` } }
   }
   return {
     ...node,
     id: makeId(node.type === 'collection' ? 'col' : 'fld'),
-    name: `${node.name} copy`,
+    name: `${node.name} (копия)`,
     children: node.children.map(cloneNodeWithNewIds)
   }
 }
 
-export function emptyRequest(name = 'Untitled'): RequestModel {
+export function emptyRequest(name = 'Без названия'): RequestModel {
   return {
     id: makeId('req'),
     name,

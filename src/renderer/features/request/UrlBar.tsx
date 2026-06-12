@@ -11,9 +11,9 @@ import { useResponse } from '@renderer/store/response'
 import { useRealtime } from '@renderer/store/realtime'
 import { useGrpc } from '@renderer/store/grpc'
 import { useSettings } from '@renderer/store/settings'
-import { useScope, useActiveTab } from '@renderer/lib/hooks'
+import { useScope } from '@renderer/lib/hooks'
 import { joinUrl, mergeQueryFromUrl } from '@renderer/lib/url'
-import { sendActiveRequest, cancelActiveRequest } from '@renderer/lib/request-runner'
+import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { parseCurl } from '@shared/curl'
 import { useUi } from '@renderer/store/ui'
 
@@ -65,16 +65,15 @@ function adaptScheme(url: string, mode: RequestMode): string {
   return url.replace(/^ws:\/\//i, 'http://').replace(/^wss:\/\//i, 'https://')
 }
 
-export function UrlBar({ req }: { req: RequestModel }) {
-  const scope = useScope()
-  const tab = useActiveTab()
-  const sending = useResponse((s) => (tab ? s.byTab[tab.id]?.status === 'loading' : false))
-  const rtStatus = useRealtime((s) => (tab ? s.byTab[tab.id]?.status : undefined))
-  const patch = useTabs((s) => s.patchActive)
+export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
+  const scope = useScope(tabId)
+  const sending = useResponse((s) => s.byTab[tabId]?.status === 'loading')
+  const rtStatus = useRealtime((s) => s.byTab[tabId]?.status)
+  const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
 
   const mode: RequestMode = req.mode ?? 'http'
   const isGrpc = mode === 'grpc'
-  const grpcStatus = useGrpc((s) => (tab ? s.byTab[tab.id]?.status : undefined))
+  const grpcStatus = useGrpc((s) => s.byTab[tabId]?.status)
   const displayUrl = joinUrl(req.url, req.query)
 
   const onUrlChange = (value: string) => {
@@ -86,10 +85,8 @@ export function UrlBar({ req }: { req: RequestModel }) {
     if (next === mode) return
     // Drop any live realtime/gRPC work on this tab before changing protocol so a
     // switched-away connection/call doesn't linger with a stale status.
-    if (tab) {
-      useRealtime.getState().disconnect(tab.id)
-      useGrpc.getState().cancel(tab.id)
-    }
+    useRealtime.getState().disconnect(tabId)
+    useGrpc.getState().cancel(tabId)
     // gRPC keeps its own address/proto state on `req.grpc` and ignores the URL.
     if (next === 'grpc') {
       patch({ mode: next, grpc: req.grpc ?? { message: '{}', plaintext: true } })
@@ -109,7 +106,6 @@ export function UrlBar({ req }: { req: RequestModel }) {
   const grpcBusy = grpcStatus === 'running'
 
   const invokeGrpc = () => {
-    if (!tab) return
     const g = req.grpc ?? {}
     // With reflection the descriptors are fetched server-side, so a pasted .proto
     // is not required — only a selected service/method.
@@ -126,7 +122,7 @@ export function UrlBar({ req }: { req: RequestModel }) {
     const metadata = (g.metadata ?? [])
       .filter((h) => h.enabled && h.key)
       .map((h) => ({ key: interpolate(h.key, scope), value: interpolate(h.value, scope), enabled: true }))
-    useGrpc.getState().invoke(tab.id, {
+    useGrpc.getState().invoke(tabId, {
       proto: g.proto ?? '',
       address: interpolate(grpcAddress, scope).replace(/^[a-z]+:\/\//i, ''),
       service: g.service,
@@ -155,12 +151,12 @@ export function UrlBar({ req }: { req: RequestModel }) {
   }
 
   const connectRealtime = () => {
-    if (!tab || !isRealtimeMode(mode)) return
+    if (!isRealtimeMode(mode)) return
     const url = interpolate(displayUrl, scope)
     const headers = req.headers
       .filter((h) => h.enabled && h.key)
       .map((h) => ({ key: interpolate(h.key, scope), value: interpolate(h.value, scope), enabled: true }))
-    useRealtime.getState().connect(tab.id, {
+    useRealtime.getState().connect(tabId, {
       kind: mode as 'websocket' | 'sse' | 'socketio' | 'mqtt',
       url,
       headers,
@@ -168,6 +164,15 @@ export function UrlBar({ req }: { req: RequestModel }) {
       // MQTT-only: carry the per-request QoS + Last-Will config into the connection.
       ...(mode === 'mqtt' ? { qos: req.mqtt?.qos, lwt: req.mqtt?.lwt } : {})
     })
+  }
+
+  const send = () => {
+    void sendActiveRequest(tabId)
+  }
+
+  const cancelSend = () => {
+    const { requestId } = useResponse.getState().get(tabId)
+    if (requestId) void window.api.cancelRequest(requestId)
   }
 
   const isHttpLike = mode === 'http' || mode === 'graphql'
@@ -244,19 +249,19 @@ export function UrlBar({ req }: { req: RequestModel }) {
 
       {isHttpLike ? (
         sending ? (
-          <button className="btn send-btn" onClick={() => cancelActiveRequest()} style={{ minWidth: 120, justifyContent: 'center' }}>
+          <button className="btn send-btn" onClick={cancelSend} style={{ minWidth: 120, justifyContent: 'center' }}>
             <Spinner size={15} />
             Отмена
           </button>
         ) : (
-          <button className="btn primary send-btn" onClick={() => void sendActiveRequest()}>
+          <button className="btn primary send-btn" data-tour="send" onClick={send}>
             Отправить
             <Icon name="send" size={14} />
           </button>
         )
       ) : isGrpc ? (
         grpcBusy ? (
-          <button className="btn send-btn" onClick={() => tab && useGrpc.getState().cancel(tab.id)} style={{ minWidth: 120, justifyContent: 'center' }}>
+          <button className="btn send-btn" onClick={() => useGrpc.getState().cancel(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
             <Icon name="stop" size={13} />
             Отмена
           </button>
@@ -267,7 +272,7 @@ export function UrlBar({ req }: { req: RequestModel }) {
           </button>
         )
       ) : realtimeBusy ? (
-        <button className="btn send-btn" onClick={() => tab && useRealtime.getState().disconnect(tab.id)} style={{ minWidth: 120, justifyContent: 'center' }}>
+        <button className="btn send-btn" onClick={() => useRealtime.getState().disconnect(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
           <Icon name="stop" size={13} />
           Отключить
         </button>

@@ -1,0 +1,54 @@
+/* ============================================================
+   RELAY — resizable walls (sidebar / AI panel) + footer row fix
+   Loaded after the base stylesheets; overrides are intentional.
+   ============================================================ */
+
+/* Anchor for the absolutely-positioned drag handles. */
+.sidebar,
+.ai-panel {
+  position: relative;
+}
+
+/* 6px invisible grab strip hugging the panel edge; straddles the
+   1px border so it is hittable from both sides of the wall. */
+.wall-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 30;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s;
+}
+.wall-handle.right {
+  right: -3px;
+}
+.wall-handle.left {
+  left: -3px;
+}
+.wall-handle:hover,
+.wall-handle.dragging {
+  background: var(--accent-soft-2);
+}
+
+/* While dragging: keep the resize cursor everywhere and stop text
+   selection so the drag does not highlight panel content. */
+body.wall-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body.wall-resizing * {
+  cursor: col-resize !important;
+}
+
+/* Sidebar footer buttons («Консоль», «Настройки»): <button> inherits
+   text-align: center, which floats the label away from the icon. */
+button.tree-row {
+  text-align: left;
+}
+.tree-row .name {
+  flex: 1;
+  text-align: left;
+}

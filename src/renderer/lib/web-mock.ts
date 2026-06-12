@@ -6,7 +6,7 @@
  */
 import type { RelayApi } from '@shared/ipc-contract'
 import type { AiStreamEvent, ResponseResult } from '@shared/types'
-import { STORAGE_VERSION } from '@shared/constants'
+import { APP_VERSION, STORAGE_VERSION } from '@shared/constants'
 
 if (!window.api) {
   const mem: Record<string, unknown> = {
@@ -195,6 +195,8 @@ if (!window.api) {
     minimizeWindow: async () => {},
     maximizeWindow: async () => {},
     closeWindow: async () => {},
+    getAppVersion: async () => APP_VERSION,
+    checkUpdates: async () => ({ ok: false, error: 'web-mode' }),
     openExternal: async () => {},
     onNativeThemeChange: () => () => {}
   }

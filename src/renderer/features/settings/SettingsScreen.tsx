@@ -7,8 +7,13 @@ import { GeneralSection } from './GeneralSection'
 import { NetworkSection } from './NetworkSection'
 import { DataSection } from './DataSection'
 import { ShortcutsSection } from './ShortcutsSection'
+import { HelpSection } from './HelpSection'
+import { AboutSection } from './AboutSection'
+import type { SettingsSection } from '@renderer/store/ui'
+import '@renderer/styles/feat-help.css'
 
-export type SettingsSection = 'providers' | 'appearance' | 'general' | 'network' | 'data' | 'shortcuts'
+// Re-export so existing importers of this module keep working.
+export type { SettingsSection }
 
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: 'providers', label: 'AI-провайдеры', icon: 'sparkle' },
@@ -16,7 +21,9 @@ const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: 'general', label: 'Основные', icon: 'settings' },
   { id: 'network', label: 'Сеть', icon: 'link' },
   { id: 'data', label: 'Данные', icon: 'download' },
-  { id: 'shortcuts', label: 'Горячие клавиши', icon: 'bolt' }
+  { id: 'shortcuts', label: 'Горячие клавиши', icon: 'bolt' },
+  { id: 'help', label: 'Справка', icon: 'book' },
+  { id: 'about', label: 'О приложении', icon: 'info' }
 ]
 
 export function SettingsScreen({
@@ -82,6 +89,8 @@ export function SettingsScreen({
             {section === 'network' && <NetworkSection />}
             {section === 'data' && <DataSection />}
             {section === 'shortcuts' && <ShortcutsSection />}
+            {section === 'help' && <HelpSection />}
+            {section === 'about' && <AboutSection />}
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { useResponse } from './response'
 import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useRunner } from './runner'
+import { useUi } from './ui'
 import { flushPersist } from './persist'
 import {
   defaultSettingsDoc,
@@ -59,6 +60,28 @@ export async function bootstrap(): Promise<void> {
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 
   watchSystemTheme()
+  scheduleUpdateCheck()
+}
+
+/**
+ * Fire-and-forget version check against GitHub Releases, a few seconds after
+ * launch so it never competes with startup work. Failures are silently ignored
+ * — this must never block or break bootstrap.
+ */
+function scheduleUpdateCheck(): void {
+  if (!useSettings.getState().settings.updateCheckEnabled) return
+  window.setTimeout(() => {
+    void window.api
+      .checkUpdates()
+      .then((res) => {
+        if (res.ok && res.updateAvailable) {
+          useUi.getState().showToast('Доступна новая версия ' + res.latestVersion + ' — Настройки → О приложении')
+        }
+      })
+      .catch(() => {
+        /* ignore — opportunistic check only */
+      })
+  }, 3500)
 }
 
 /**

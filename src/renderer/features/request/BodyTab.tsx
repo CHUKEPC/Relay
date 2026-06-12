@@ -28,9 +28,9 @@ function monacoLang(l: RawLanguage): string {
   return l === 'text' ? 'plaintext' : l === 'javascript' ? 'javascript' : l
 }
 
-export function BodyTab({ req }: { req: RequestModel }) {
-  const patch = useTabs((s) => s.patchActive)
-  const scope = useScope()
+export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
+  const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
+  const scope = useScope(tabId)
   const body = req.body
 
   const setBody = (b: RequestBody) => patch({ body: b })
@@ -278,7 +278,7 @@ function SchemaType({ type, roots }: { type: GraphqlTypeInfo; roots: string[] })
 function FormDataTable({
   items,
   onChange,
-  scope
+  scope: _scope
 }: {
   items: FormDataField[]
   onChange: (items: FormDataField[]) => void

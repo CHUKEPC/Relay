@@ -4,6 +4,7 @@ import type {
   RequestSpec,
   ScriptRunResult,
   StoredCookie,
+  TabModel,
   VariableDef,
   VariableScope
 } from '@shared/types'
@@ -157,10 +158,16 @@ function testScriptBodies(workingReq: RequestModel, savedRequestId: string | nul
   return out
 }
 
-/** Run the active tab's request end-to-end: pre-request script → send → tests → history. */
-export async function sendActiveRequest(): Promise<void> {
-  const tabsStore = useTabs.getState()
-  const tab = tabsStore.activeTab()
+/** Resolve a tab by id, defaulting to the active one (split-screen panes pass ids). */
+function tabFor(tabId?: string): TabModel | null {
+  const s = useTabs.getState()
+  if (!tabId) return s.activeTab()
+  return s.doc.tabs.find((t) => t.id === tabId) ?? null
+}
+
+/** Run a tab's request end-to-end (pre-request script → send → tests → history); defaults to the active tab. */
+export async function sendActiveRequest(tabId?: string): Promise<void> {
+  const tab = tabFor(tabId)
   if (!tab) return
 
   const collections = useCollections.getState()
@@ -301,16 +308,16 @@ export async function sendActiveRequest(): Promise<void> {
   }
 }
 
-export function cancelActiveRequest(): void {
-  const tab = useTabs.getState().activeTab()
+export function cancelActiveRequest(tabId?: string): void {
+  const tab = tabFor(tabId)
   if (!tab) return
   const resp = useResponse.getState().get(tab.id)
   if (resp.requestId) void window.api.cancelRequest(resp.requestId)
 }
 
-/** Build the current variable scope for the active tab (used by hover-resolution + AI context). */
-export function currentScope(): VariableScope {
-  const tab = useTabs.getState().activeTab()
+/** Variable scope for a tab (defaults to active) — used by hover-resolution + AI context. */
+export function currentScope(tabId?: string): VariableScope {
+  const tab = tabFor(tabId)
   const collections = useCollections.getState()
   const envStore = useEnvironments.getState()
   return {
@@ -321,10 +328,10 @@ export function currentScope(): VariableScope {
 }
 
 /** Literal values of secret-flagged variables (collection + env + globals), to redact from AI context. */
-export function currentSecretValues(): string[] {
+export function currentSecretValues(tabId?: string): string[] {
   const envStore = useEnvironments.getState()
   const active = envStore.activeEnv()
-  const tab = useTabs.getState().activeTab()
+  const tab = tabFor(tabId)
   const collectionSecrets = useCollections.getState().collectionSecretValues(tab?.savedRequestId ?? null)
   const envGlobalSecrets = [...(active?.variables ?? []), ...envStore.globals.variables]
     .filter((v) => v.secret && v.enabled)

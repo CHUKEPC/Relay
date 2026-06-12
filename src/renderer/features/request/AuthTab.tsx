@@ -3,7 +3,7 @@ import type { Auth, JwtAlg, OAuth2Grant, RequestModel } from '@shared/types'
 import { Field, Segmented } from '@renderer/components/primitives'
 import { HighlightedInput } from '@renderer/components/HighlightedInput'
 import { useTabs } from '@renderer/store/tabs'
-import { useScope, useActiveTab } from '@renderer/lib/hooks'
+import { useScope, useTab } from '@renderer/lib/hooks'
 import { useCollections } from '@renderer/store/collections'
 
 const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
@@ -25,10 +25,10 @@ const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
 
 const JWT_ALGS: JwtAlg[] = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512']
 
-export function AuthTab({ req }: { req: RequestModel }) {
-  const patch = useTabs((s) => s.patchActive)
-  const scope = useScope()
-  const tab = useActiveTab()
+export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
+  const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
+  const scope = useScope(tabId)
+  const tab = useTab(tabId)
   const inheritedAuth = useCollections((s) => s.inheritedAuthFor(tab?.savedRequestId ?? null))
   const auth = req.auth
 

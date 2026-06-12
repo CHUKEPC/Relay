@@ -1,0 +1,42 @@
+/* Tab strip improvements: overflow scrolling + shrinking tabs + context menu.
+   Loaded after the base stylesheets — overrides .tabstrip/.rtab from components.css. */
+
+/* The strip itself no longer scrolls; an inner scroller holds the tabs so the
+   '+' button stays visible at the right edge regardless of tab count. */
+.tabstrip-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+.tabstrip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tabs shrink down to a readable floor, then the scroller takes over. */
+.rtab {
+  flex: 0 1 auto;
+  min-width: 104px;
+  max-width: 200px;
+}
+.rtab .label {
+  flex: 1 1 auto;
+  min-width: 0; /* lets the ellipsis kick in inside a shrinking flex item */
+}
+
+.tabstrip-add {
+  flex: none;
+  align-self: center;
+  margin-left: 4px;
+}
+
+/* Radix sets data-disabled on disabled context-menu items; base .pop-item
+   has no disabled state, so define one here. */
+.pop-item[data-disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}

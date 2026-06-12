@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IPC, type OpenFileOptions, type SaveFileOptions } from '@shared/ipc-contract'
 import type { FilePickResult } from '@shared/types'
 import { registerHttpHandlers } from '../http'
@@ -15,6 +15,7 @@ import { registerGraphqlHandlers } from '../graphql'
 import { registerRealtimeHandlers } from '../realtime'
 import { registerGrpcHandlers } from '../grpc'
 import { registerSqliteHandlers } from '../sqlite'
+import { checkForUpdate } from '../update'
 
 /** Max size of a user-picked text file the renderer may read (runner data files). */
 const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
@@ -131,4 +132,8 @@ export function registerIpc(ctx: IpcContext): void {
     else win.maximize()
   })
   ipcMain.handle(IPC.app.close, () => ctx.getWindow()?.close())
+  ipcMain.handle(IPC.app.getVersion, () => app.getVersion())
+
+  // Update checker — GitHub Releases, no own backend. Never throws.
+  ipcMain.handle(IPC.update.check, () => checkForUpdate())
 }

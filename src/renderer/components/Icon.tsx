@@ -43,7 +43,15 @@ const PATHS: Record<string, string> = {
   download: 'M10 3v9M6 8.5l4 4 4-4M4 16h12',
   upload: 'M10 13V4M6 7.5l4-4 4 4M4 16h12',
   winMin: 'M4 10h12',
-  winMax: 'M5.5 5.5h9v9h-9z'
+  winMax: 'M5.5 5.5h9v9h-9z',
+  book: 'M10 6.5C8.4 5 6.2 4.5 3 4.5v11c3.2 0 5.4.5 7 2 1.6-1.5 3.8-2 7-2v-11c-3.2 0-5.4.5-7 2ZM10 6.5v11',
+  layoutGrid: 'M3.5 3.5H9V9H3.5V3.5ZM11 3.5h5.5V9H11V3.5ZM3.5 11H9v5.5H3.5V11ZM11 11h5.5v5.5H11V11Z',
+  dockBottom: 'M3.5 4.5h13a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM2.5 11.5h15M5.5 13.5h9',
+  dockLeft: 'M3.5 4.5h13a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM7 4.5v11M4.5 7.5h.8M4.5 10h.8',
+  dockRight: 'M3.5 4.5h13a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM13 4.5v11M14.7 7.5h.8M14.7 10h.8',
+  floatWin: 'M7 7V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M4 7h8a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z',
+  pencil: 'M3.5 16.5l.6-3.1L13.6 4a1.9 1.9 0 0 1 2.7 2.7l-9.5 9.4-3.3.4ZM12.3 5.3l2.7 2.7',
+  mail: 'M3.5 5h13a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM3 6l7 5.5L17 6'
 }
 
 const FILLED: Record<string, boolean> = { send: true, play: true, sparkle: true, bolt: true, stop: true }

@@ -21,7 +21,7 @@ export function EnvList() {
           style={{ width: 22, height: 22 }}
           title="Новая среда"
           onClick={() => {
-            const id = createEnv('New Environment')
+            const id = createEnv('Новая среда')
             setEditor({ kind: 'env', id })
           }}
         >
@@ -34,7 +34,7 @@ export function EnvList() {
           onClick={() => setActiveEnv(null)}
         >
           <Icon name="env" size={15} style={{ color: 'var(--tx-3)', opacity: 0.9 }} />
-          <span className="ename">No Environment</span>
+          <span className="ename">Без окружения</span>
           {env.activeEnvironmentId === null && <Icon name="check" size={14} style={{ color: 'var(--accent)' }} />}
         </div>
 

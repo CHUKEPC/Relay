@@ -52,8 +52,8 @@ export function SaveDialog({
 
   const confirm = () => {
     let target = parentId
-    if (!target) target = addCollection('My Collection')
-    onSave(target, name.trim() || 'Untitled')
+    if (!target) target = addCollection('Моя коллекция')
+    onSave(target, name.trim() || 'Без названия')
     onOpenChange(false)
   }
 
@@ -74,7 +74,7 @@ export function SaveDialog({
             ))}
           </select>
         ) : (
-          <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>Коллекций нет — будет создана новая «My Collection».</div>
+          <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>Коллекций нет — будет создана новая «Моя коллекция».</div>
         )}
       </div>
       <div className="modal-foot">

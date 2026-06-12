@@ -1,0 +1,140 @@
+/* ============================================================
+   FEAT-THEMES — brand theme presets (Postman / Insomnia) and
+   appearance-settings UI (preset cards + custom theme editor).
+   Loaded after the base stylesheets; overrides base.css tokens.
+   ============================================================ */
+
+/* ---------- PRESET: Postman ---------- */
+:root[data-preset='postman'][data-theme='dark'] {
+  --bg-0: #161616;
+  --bg-1: #1c1c1c;
+  --bg-2: #212121;
+  --bg-3: #2b2b2b;
+  --bg-hover: rgb(255 255 255 / 0.05);
+  --bg-active: rgb(255 255 255 / 0.085);
+
+  --line: rgb(255 255 255 / 0.11);
+  --line-2: rgb(255 255 255 / 0.17);
+
+  --tx-0: #f3f3f3;
+  --tx-1: #bdbdbd;
+  --tx-2: #8e8e8e;
+  --tx-3: #6d6d6d;
+
+  --code-bg: #141414;
+}
+
+:root[data-preset='postman'][data-theme='light'] {
+  --bg-0: #f7f6f5;
+  --bg-1: #efeeec;
+  --bg-2: #ffffff;
+  --bg-3: #f4f3f1;
+  --bg-hover: rgb(33 28 24 / 0.05);
+  --bg-active: rgb(33 28 24 / 0.085);
+
+  --line: rgb(33 28 24 / 0.13);
+  --line-2: rgb(33 28 24 / 0.2);
+
+  --tx-0: #212121;
+  --tx-1: #4a4641;
+  --tx-2: #6b6660;
+  --tx-3: #8d8780;
+
+  --code-bg: #f3f2f0;
+}
+
+/* ---------- PRESET: Insomnia ---------- */
+:root[data-preset='insomnia'][data-theme='dark'] {
+  --bg-0: #13111c;
+  --bg-1: #191623;
+  --bg-2: #201c2e;
+  --bg-3: #2a2440;
+  --bg-hover: rgb(155 109 255 / 0.08);
+  --bg-active: rgb(155 109 255 / 0.14);
+
+  --line: rgb(190 170 255 / 0.13);
+  --line-2: rgb(190 170 255 / 0.2);
+
+  --tx-0: #ece9f7;
+  --tx-1: #b8b1cf;
+  --tx-2: #8e86ab;
+  --tx-3: #6d6589;
+
+  --code-bg: #110f19;
+}
+
+:root[data-preset='insomnia'][data-theme='light'] {
+  --bg-0: #faf9fd;
+  --bg-1: #f2effa;
+  --bg-2: #ffffff;
+  --bg-3: #f6f4fb;
+  --bg-hover: rgb(116 0 225 / 0.05);
+  --bg-active: rgb(116 0 225 / 0.09);
+
+  --line: rgb(64 32 116 / 0.13);
+  --line-2: rgb(64 32 116 / 0.2);
+
+  --tx-0: #2a2240;
+  --tx-1: #4d4368;
+  --tx-2: #70678e;
+  --tx-3: #968eb2;
+
+  --code-bg: #f5f3fa;
+}
+
+/* ---------- Brand preset cards (settings → Appearance) ---------- */
+.brand-theme-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.brand-theme-row .theme-swatch { width: 104px; }
+.brand-theme-row .lab { display: flex; align-items: center; gap: 6px; }
+.brand-theme-row .lab .accent-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex: none; margin-left: auto;
+}
+.brand-theme-row .prev.custom-prev {
+  display: grid; place-items: center;
+  background: var(--bg-2); color: var(--tx-2);
+}
+
+/* ---------- Custom theme editor ---------- */
+.custom-theme-editor {
+  margin-top: 14px;
+  max-width: 460px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+}
+.cte-base-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.cte-base-btn {
+  padding: 5px 14px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--tx-1);
+  background: var(--bg-2);
+  transition: border-color 0.14s, color 0.14s;
+}
+.cte-base-btn.on { border-color: var(--accent); color: var(--tx-0); background: var(--accent-soft); }
+.cte-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.cte-row .cte-label { flex: 1; font-size: 12.5px; color: var(--tx-1); }
+.cte-color {
+  width: 36px; height: 26px;
+  padding: 0; border: 1px solid var(--line-2);
+  border-radius: 6px; background: none; cursor: pointer;
+}
+.cte-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.cte-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+.cte-hex {
+  width: 92px;
+  padding: 4px 8px;
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--tx-0);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.cte-hex:focus { border-color: var(--accent); }
+.cte-actions { display: flex; gap: 8px; margin-top: 14px; }
+
+/* Custom RGB accent control under the hue swatches */
+.accent-custom-row { max-width: 340px; margin-top: 10px; }

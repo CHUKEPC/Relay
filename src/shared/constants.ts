@@ -4,6 +4,14 @@
  */
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
+/** Keep in sync with package.json `version`. */
+export const APP_VERSION = '0.6.0'
+export const FEEDBACK_EMAIL = 'chukepc.best@gmail.com'
+/**
+ * GitHub owner/repo used for release update checks; placeholder until the app
+ * is published — the checker must fail gracefully.
+ */
+export const UPDATE_REPO = 'chukepc/relay'
 
 export const STORAGE_VERSION = 1
 

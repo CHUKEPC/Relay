@@ -7,6 +7,7 @@ import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
+import { exportRequestJson } from '@renderer/lib/export'
 import { MOD } from '@renderer/lib/platform'
 
 interface Item {
@@ -55,6 +56,16 @@ export function CommandPalette() {
     const actions: Item[] = [
       { id: 'new', title: 'Новый запрос', icon: 'plus', kbd: [MOD, 'N'], run: () => openNew() },
       { id: 'send', title: 'Отправить текущий запрос', icon: 'send', kbd: [MOD, '↵'], run: () => void sendActiveRequest() },
+      { id: 'import', title: 'Импортировать…', icon: 'download', run: () => {
+        useUi.getState().setSideTab('collections') // ImportDialog lives in the collections tree
+        useUi.getState().setImportOpen(true)
+      } },
+      { id: 'export-request', title: 'Экспортировать текущий запрос (JSON)', icon: 'upload', run: () => {
+        const req = useTabs.getState().activeRequest()
+        if (!req) useUi.getState().showToast('Нет активного запроса', 'error')
+        else void exportRequestJson(req)
+      } },
+      { id: 'export-data', title: 'Экспорт данных (бэкап)…', icon: 'upload', run: () => useUi.getState().openSettings('data') },
       { id: 'ai', title: 'Открыть AI-ассистента', icon: 'sparkle', kbd: [MOD, 'J'], run: () => useUi.getState().setAiOpen(true) },
       { id: 'settings', title: 'Открыть настройки', icon: 'settings', kbd: [MOD, ','], run: () => useUi.getState().openSettings() },
       { id: 'theme', title: 'Переключить тему', icon: 'moon', run: () => {

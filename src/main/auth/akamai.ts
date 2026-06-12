@@ -75,11 +75,6 @@ function hmacBase64(key: string | Buffer, data: string): string {
   return createHmac('sha256', key).update(data, 'utf8').digest('base64')
 }
 
-/** base64( SHA-256(data) ) */
-function sha256Base64(data: string): string {
-  return createHash('sha256').update(data, 'utf8').digest('base64')
-}
-
 /**
  * Canonicalize the headers to sign, per EdgeGrid:
  *   - only headers named in `headersToSign` are included, in that order

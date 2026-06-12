@@ -8,6 +8,7 @@ import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useRunner } from '@renderer/store/runner'
 import { ImportDialog } from '@renderer/features/data/ImportDialog'
+import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
 
 function MethodTag({ m }: { m: string }) {
   return <span className={`method-tag mtag m-${m}`}>{m === 'DELETE' ? 'DEL' : m}</span>
@@ -28,7 +29,9 @@ export function CollectionsTree({ query }: { query: string }) {
   const addCollection = useCollections((s) => s.addCollection)
   const setAll = useCollections((s) => s.setAll)
   const [renameId, setRenameId] = useState<string | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
+  // Global so the command palette can open the dialog too.
+  const importOpen = useUi((s) => s.importOpen)
+  const setImportOpen = useUi((s) => s.setImportOpen)
 
   const deleteAll = () => {
     const n = collections.length
@@ -59,7 +62,7 @@ export function CollectionsTree({ query }: { query: string }) {
             style={{ width: 22, height: 22 }}
             title="Новая коллекция"
             onClick={() => {
-              const id = addCollection('New Collection')
+              const id = addCollection('Новая коллекция')
               setRenameId(id)
             }}
           >
@@ -153,7 +156,6 @@ function TreeNode({
   const openSaved = useTabs((s) => s.openSaved)
   const activeSavedId = useTabs((s) => s.doc.tabs.find((t) => t.id === s.doc.activeTabId)?.savedRequestId ?? null)
   const store = useCollections()
-  const showToast = useUi((s) => s.showToast)
 
   if (!nodeMatches(node, query)) return null
   const expanded = query ? true : open
@@ -165,18 +167,6 @@ function TreeNode({
   const commitRename = (value: string) => {
     if (value.trim()) store.renameNode(node.id, value.trim())
     setRenameId(null)
-  }
-
-  // Export this collection to a Postman v2.1 JSON file (shared by the context
-  // menu and the always-visible hover button on collection rows).
-  const doExport = async (): Promise<void> => {
-    const json = await window.api.exportCollection(JSON.stringify(node))
-    const saved = await window.api.saveFile({
-      defaultName: `${name}.postman_collection.json`,
-      content: json,
-      filters: [{ name: 'Postman Collection', extensions: ['json'] }]
-    })
-    if (saved) showToast('Коллекция экспортирована')
   }
 
   // --- Drag & drop ---------------------------------------------------------
@@ -278,6 +268,9 @@ function TreeNode({
         <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
           <Icon name="copy" size={14} /> Дублировать
         </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => void exportRequestJson(node.request)}>
+          <Icon name="download" size={14} /> Экспорт
+        </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => setRenameId(node.id)}>
           <Icon name="doc" size={14} /> Переименовать
         </ContextMenu.Item>
@@ -291,7 +284,7 @@ function TreeNode({
         <ContextMenu.Item
           className="pop-item"
           onSelect={() => {
-            const r = emptyRequest('New Request')
+            const r = emptyRequest('Новый запрос')
             store.addRequest(node.id, r)
             openSaved(r, r.id)
           }}
@@ -301,7 +294,7 @@ function TreeNode({
         <ContextMenu.Item
           className="pop-item"
           onSelect={() => {
-            const id = store.addFolder(node.id, 'New Folder')
+            const id = store.addFolder(node.id, 'Новая папка')
             setRenameId(id)
           }}
         >
@@ -313,14 +306,12 @@ function TreeNode({
         <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
           <Icon name="copy" size={14} /> Дублировать
         </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => void exportFolderJson(node)}>
+          <Icon name="download" size={14} /> {node.type === 'collection' ? 'Экспорт (Postman v2.1)' : 'Экспорт'}
+        </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => useRunner.getState().openFor(node)}>
           <Icon name="play" size={14} /> Запустить
         </ContextMenu.Item>
-        {node.type === 'collection' && (
-          <ContextMenu.Item className="pop-item" onSelect={() => void doExport()}>
-            <Icon name="download" size={14} /> Экспорт (Postman v2.1)
-          </ContextMenu.Item>
-        )}
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item
           className="pop-item"
@@ -378,7 +369,7 @@ function TreeNode({
             title="Экспорт коллекции (Postman v2.1)"
             onClick={(e) => {
               e.stopPropagation()
-              void doExport()
+              void exportFolderJson(node)
             }}
           >
             <Icon name="download" size={13} />

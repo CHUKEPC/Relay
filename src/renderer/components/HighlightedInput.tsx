@@ -16,7 +16,6 @@ function parse(value: string, scope?: VariableScope): Segment[] {
   for (const p of parts) {
     if (!p) continue
     if (/^\{\{[^}]+\}\}$/.test(p)) {
-      const name = p.slice(2, -2).trim()
       const t = scope ? resolveString(p, scope).tokens[0] : undefined
       segs.push({ text: p, isVar: true, resolved: t?.value ?? null, source: t?.source })
     } else {

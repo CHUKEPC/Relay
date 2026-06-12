@@ -196,7 +196,7 @@ export function Modal({
         <DialogPrimitive.Overlay className="modal-scrim" />
         <DialogPrimitive.Content className="modal" style={{ width }} aria-describedby={undefined}>
           {title && <DialogPrimitive.Title className="modal-title">{title}</DialogPrimitive.Title>}
-          {!title && <DialogPrimitive.Title style={{ display: 'none' }}>Dialog</DialogPrimitive.Title>}
+          {!title && <DialogPrimitive.Title style={{ display: 'none' }}>Диалог</DialogPrimitive.Title>}
           {children}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

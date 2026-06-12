@@ -28,9 +28,10 @@ service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply);
 }`
 
-export function GrpcBuilder({ req }: { req: RequestModel }): JSX.Element {
-  const patch = useTabs((s) => s.patchActive)
-  const scope = useScope()
+export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }): JSX.Element {
+  // Patch THIS builder's tab — patchActive would hit the wrong tab in split-screen.
+  const patch = (p: Partial<RequestModel>): void => useTabs.getState().patchTab(tabId, p)
+  const scope = useScope(tabId)
   const grpc: GrpcConfig = req.grpc ?? {}
   const [services, setServices] = useState<GrpcServiceInfo[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
@@ -139,7 +140,7 @@ export function GrpcBuilder({ req }: { req: RequestModel }): JSX.Element {
         </label>
         {useReflection ? (
           <button className="btn" style={{ height: 26 }} disabled={discovering} onClick={() => void doReflect()}>
-            {discovering ? 'Discover…' : 'Discover'}
+            {discovering ? 'Обнаружение…' : 'Обнаружить'}
           </button>
         ) : (
           <>
@@ -170,7 +171,7 @@ export function GrpcBuilder({ req }: { req: RequestModel }): JSX.Element {
       </div>
       {useReflection ? (
         <div style={{ padding: '0 14px 4px', fontSize: 12, color: 'var(--tx-3)' }}>
-          Дескрипторы запрашиваются у сервера по адресу выше. Нажмите Discover.
+          Дескрипторы запрашиваются у сервера по адресу выше. Нажмите «Обнаружить».
         </div>
       ) : (
         <div style={{ height: 160, padding: '0 14px' }}>

@@ -135,9 +135,22 @@ export const IPC = {
     minimize: 'app:minimize',
     maximize: 'app:maximize',
     close: 'app:close',
-    openExternal: 'app:openExternal'
+    openExternal: 'app:openExternal',
+    getVersion: 'app:getVersion'
+  },
+  update: {
+    check: 'update:check'
   }
 } as const
+
+/**
+ * Result of asking GitHub Releases for the latest version. Never a rejected
+ * promise — network/parse failures come back as `ok: false` with a short
+ * machine-readable error string.
+ */
+export type UpdateCheckResult =
+  | { ok: true; currentVersion: string; latestVersion: string; updateAvailable: boolean; url: string }
+  | { ok: false; error: string }
 
 /** Type-safe map of persisted documents keyed by storage name. */
 export interface StorageMap {
@@ -274,6 +287,11 @@ export interface RelayApi {
   minimizeWindow(): Promise<void>
   maximizeWindow(): Promise<void>
   closeWindow(): Promise<void>
+
+  /* ---- updates ---- */
+  getAppVersion(): Promise<string>
+  /** Check GitHub Releases for a newer version. Resolves, never rejects. */
+  checkUpdates(): Promise<UpdateCheckResult>
 
   /* ---- misc ---- */
   openExternal(url: string): Promise<void>

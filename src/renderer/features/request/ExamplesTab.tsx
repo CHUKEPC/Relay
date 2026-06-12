@@ -2,9 +2,10 @@ import type { RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { restoreExample, deleteExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
+import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
-export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string | null }): JSX.Element {
+export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }): JSX.Element {
   const examples = req.examples ?? []
 
   if (examples.length === 0) {
@@ -34,9 +35,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string |
             <button
               className="btn ghost"
               style={{ height: 28 }}
-              disabled={!tabId}
               onClick={() => {
-                if (!tabId) return
                 restoreExample(tabId, ex)
                 useUi.getState().showToast('Пример показан в панели ответа')
               }}
@@ -48,7 +47,11 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string |
             <button
               className="icon-btn"
               style={{ width: 28, height: 28 }}
-              onClick={() => deleteExample(ex.id)}
+              onClick={() => {
+                // deleteExample() edits the ACTIVE tab's request — activate ours first.
+                if (useTabs.getState().doc.activeTabId !== tabId) useTabs.getState().setActive(tabId)
+                deleteExample(ex.id)
+              }}
               title="Удалить пример"
             >
               <Icon name="trash" size={14} />

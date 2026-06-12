@@ -1,0 +1,128 @@
+/* ============================================================
+   Console docking — overrides for .console-drawer (extra.css).
+   Loaded after the base stylesheets via ConsolePanel.tsx import.
+   Modes: dock-bottom | dock-left | dock-right | dock-float.
+   Sizes/positions come from inline styles (ui store values);
+   these rules only set anchoring, borders and chrome.
+   ============================================================ */
+
+/* Inline style is the single source of size truth in every mode. */
+.console-drawer {
+  min-height: 0;
+  max-height: none;
+}
+
+/* ---------- bottom (default): inline height ---------- */
+.console-drawer.dock-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+}
+
+/* ---------- side docks: below titlebar (44px) + tabstrip (38px) ----------
+   Top offset 82px keeps the draggable titlebar fully uncovered. */
+.console-drawer.dock-left,
+.console-drawer.dock-right {
+  top: 82px;
+  bottom: 0;
+  height: auto;
+  border-top: none;
+}
+.console-drawer.dock-left {
+  left: 0;
+  right: auto;
+  border-right: 1px solid var(--line-2);
+}
+.console-drawer.dock-right {
+  left: auto;
+  right: 0;
+  border-left: 1px solid var(--line-2);
+}
+
+/* ---------- float: inline left/top/width/height ---------- */
+.console-drawer.dock-float {
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3), 0 0 0 1px oklch(0 0 0 / 0.04);
+  overflow: hidden; /* clip header/list to the rounded corners */
+  z-index: 95; /* above docked chrome */
+}
+.console-drawer.dock-float .console-head {
+  cursor: grab;
+  user-select: none;
+}
+.console-drawer.dock-float .console-head:active {
+  cursor: grabbing;
+}
+
+/* ---------- resize handles ---------- */
+.console-resize {
+  position: absolute;
+  z-index: 3;
+  transition: background 0.12s;
+}
+.console-resize:hover,
+.console-resize:active {
+  background: var(--accent-soft-2);
+}
+.dock-bottom .console-resize {
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+}
+.dock-left .console-resize {
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+.dock-right .console-resize {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+}
+
+/* float: bottom-right corner grip */
+.console-float-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  z-index: 3;
+  /* two diagonal hairlines as the visual grip */
+  background:
+    linear-gradient(135deg, transparent 6px, var(--tx-3) 6px, var(--tx-3) 7px, transparent 7px),
+    linear-gradient(135deg, transparent 10px, var(--tx-3) 10px, var(--tx-3) 11px, transparent 11px);
+  opacity: 0.7;
+}
+.console-float-grip:hover {
+  opacity: 1;
+}
+
+/* ---------- dock-mode switcher buttons in the header ---------- */
+.console-dock-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 4px;
+}
+.console-dock-btn {
+  width: 26px;
+  height: 26px;
+}
+.console-dock-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

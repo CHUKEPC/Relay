@@ -104,8 +104,8 @@ export const useRunner = create<RunnerState>((set, get) => ({
   loadDataFile: async () => {
     const picked = await window.api.openFile({
       filters: [
-        { name: 'Data files', extensions: ['csv', 'json'] },
-        { name: 'All files', extensions: ['*'] }
+        { name: 'Файлы данных', extensions: ['csv', 'json'] },
+        { name: 'Все файлы', extensions: ['*'] }
       ]
     })
     if (!picked || !picked[0]) return

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { KV, RequestMode } from '@shared/types'
+import type { KV, RequestMode, RequestModel } from '@shared/types'
 import { COMMON_HEADER_NAMES } from '@shared/constants'
 import { Icon } from '@renderer/components/Icon'
 import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
-import { useScope, useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
+import { useScope, useTab } from '@renderer/lib/hooks'
 import { detectPathVars } from '@renderer/lib/url'
 import { saveActiveRequest, openSaveAsDialog } from '@renderer/lib/save'
 import { UrlBar } from './UrlBar'
@@ -12,22 +12,24 @@ import { BodyTab } from './BodyTab'
 import { AuthTab } from './AuthTab'
 import { ScriptsTab } from './ScriptsTab'
 import { ExamplesTab } from './ExamplesTab'
+import { RequestMeta } from './RequestMeta'
 import { GrpcBuilder } from '@renderer/features/grpc/GrpcBuilder'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
 
 type Tab = 'params' | 'auth' | 'headers' | 'body' | 'scripts' | 'examples'
 
-export function RequestBuilder() {
-  const req = useActiveRequest()
-  const activeTab = useActiveTab()
-  const patch = useTabs((s) => s.patchActive)
-  const scope = useScope()
-  const [tab, setTab] = useState<Tab>('params')
+/** Builds the request of `tabId` when given, else the active tab (split-screen). */
+export function RequestBuilder({ tabId }: { tabId?: string }) {
+  const tab = useTab(tabId)
+  const scope = useScope(tabId)
+  const [subTab, setSubTab] = useState<Tab>('params')
   const [codeGenOpen, setCodeGenOpen] = useState(false)
 
-  const pathVars = useMemo(() => (req ? detectPathVars(req.url) : []), [req?.url])
+  const req = tab?.request ?? null
+  const reqUrl = req?.url ?? null
+  const pathVars = useMemo(() => (reqUrl !== null ? detectPathVars(reqUrl) : []), [reqUrl])
 
-  if (!req) {
+  if (!tab || !req) {
     return (
       <div className="empty" style={{ flex: 1 }}>
         <div className="empty-card">
@@ -43,14 +45,22 @@ export function RequestBuilder() {
 
   const mode: RequestMode = req.mode ?? 'http'
 
+  const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tab.id, p)
+
+  // save/save-as/codegen helpers operate on the ACTIVE tab; activate this
+  // builder's tab first so they target it (split-screen support).
+  const activateThis = () => {
+    if (useTabs.getState().doc.activeTabId !== tab.id) useTabs.getState().setActive(tab.id)
+  }
+
   // gRPC has a bespoke builder (proto + service/method + message) instead of the
   // HTTP params/headers/body tabs.
   if (mode === 'grpc') {
     return (
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <UrlBar req={req} />
+        <UrlBar req={req} tabId={tab.id} />
         <div style={{ overflowY: 'auto', minHeight: 0 }}>
-          <GrpcBuilder req={req} />
+          <GrpcBuilder req={req} tabId={tab.id} />
         </div>
       </div>
     )
@@ -82,35 +92,57 @@ export function RequestBuilder() {
       ]
 
   // If the active sub-tab isn't valid for the current mode, fall back to Params.
-  const activeSubTab: Tab = tabs.some((t) => t.id === tab) ? tab : 'params'
+  const activeSubTab: Tab = tabs.some((t) => t.id === subTab) ? subTab : 'params'
 
   return (
     <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <UrlBar req={req} />
+      <RequestMeta tab={tab} />
+      <UrlBar req={req} tabId={tab.id} />
       <div className="req-tabs">
         {tabs.map((t) => (
-          <button key={t.id} className={`tab ${activeSubTab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={`tab ${activeSubTab === t.id ? 'on' : ''}`} onClick={() => setSubTab(t.id)}>
             {t.label}
             {counts[t.id] != null && counts[t.id]! > 0 && <span className="count">{counts[t.id]}</span>}
             {t.id === 'body' && bodyDot && <span className="dirty" style={{ width: 5, height: 5 }} />}
           </button>
         ))}
         <div style={{ marginLeft: 'auto' }} />
-        <button className="btn primary" style={{ height: 28 }} onClick={() => saveActiveRequest()} title="Сохранить (⌘S / Ctrl+S)">
+        <button
+          className="btn primary"
+          data-tour="save"
+          style={{ height: 28 }}
+          onClick={() => {
+            activateThis()
+            saveActiveRequest()
+          }}
+          title="Сохранить (⌘S / Ctrl+S)"
+        >
           <Icon name="save" size={14} />
           Сохранить
         </button>
         <button
           className="btn ghost"
           style={{ height: 28 }}
-          onClick={() => openSaveAsDialog()}
+          onClick={() => {
+            activateThis()
+            openSaveAsDialog()
+          }}
           title="Сохранить как новый запрос в коллекции"
         >
           <Icon name="copy" size={14} />
           Сохранить как…
         </button>
         {httpLike && (
-          <button className="btn ghost" style={{ height: 28 }} onClick={() => setCodeGenOpen(true)} title="Сгенерировать код">
+          <button
+            className="btn ghost"
+            style={{ height: 28 }}
+            onClick={() => {
+              // CodeGenModal reads the active request — activate ours first.
+              activateThis()
+              setCodeGenOpen(true)
+            }}
+            title="Сгенерировать код"
+          >
             <Icon name="code2" size={14} />
             Код
           </button>
@@ -139,10 +171,10 @@ export function RequestBuilder() {
             </div>
           </>
         )}
-        {activeSubTab === 'auth' && <AuthTab req={req} />}
-        {activeSubTab === 'body' && <BodyTab req={req} />}
-        {activeSubTab === 'scripts' && <ScriptsTab req={req} />}
-        {activeSubTab === 'examples' && <ExamplesTab req={req} tabId={activeTab?.id ?? null} />}
+        {activeSubTab === 'auth' && <AuthTab req={req} tabId={tab.id} />}
+        {activeSubTab === 'body' && <BodyTab req={req} tabId={tab.id} />}
+        {activeSubTab === 'scripts' && <ScriptsTab req={req} tabId={tab.id} />}
+        {activeSubTab === 'examples' && <ExamplesTab req={req} tabId={tab.id} />}
       </div>
     </div>
   )
@@ -152,7 +184,7 @@ function PathVarsTable({
   detected,
   pathVariables,
   onChange,
-  scope
+  scope: _scope
 }: {
   detected: string[]
   pathVariables: KV[]

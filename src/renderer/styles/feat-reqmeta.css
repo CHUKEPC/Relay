@@ -1,0 +1,81 @@
+/* Request name + description block (Postman-style), above the URL bar. */
+
+.reqmeta {
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+
+.reqmeta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 8px 14px;
+}
+
+.reqmeta-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-0);
+  cursor: text;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  margin-left: -4px;
+}
+.reqmeta-name:hover { background: var(--bg-hover); }
+.reqmeta-name.placeholder { color: var(--tx-3); font-weight: 500; }
+
+.reqmeta-input {
+  height: 26px;
+  flex: 0 1 420px;
+  min-width: 200px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-0);
+  background: var(--bg-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.reqmeta-edit { width: 24px; height: 24px; flex: none; }
+
+/* Same dot as the unsaved marker on workspace tabs (.rtab .dirty). */
+.reqmeta-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.reqmeta-desc-btn { height: 26px; margin-left: auto; flex: none; }
+
+.reqmeta-desc { padding: 0 14px 10px; }
+.reqmeta-desc textarea {
+  display: block;
+  width: 100%;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 70px; /* ~3 rows */
+  max-height: 160px; /* ~8 rows; autosized via JS */
+  overflow-y: auto;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--tx-1);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+.reqmeta-desc textarea:focus { border-color: var(--accent); }
+.reqmeta-desc textarea::placeholder { color: var(--tx-3); }

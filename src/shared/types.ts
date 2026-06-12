@@ -436,9 +436,25 @@ export interface TabsDoc extends DocEnvelope {
   activeTabId: string | null
 }
 
+export type ThemePreset = 'relay' | 'postman' | 'insomnia' | 'custom'
+
+/** User-defined theme: a base palette plus CSS variable overrides. */
+export interface CustomTheme {
+  base: 'light' | 'dark'
+  vars: Record<string, string>
+}
+
 export interface SettingsDoc extends DocEnvelope {
   theme: 'light' | 'dark' | 'system'
   accentHue: number
+  /** hex like '#ff6c37'; null = derive from accentHue */
+  accentColor: string | null
+  themePreset: ThemePreset
+  customTheme: CustomTheme | null
+  /** actionId -> combo like 'mod+shift+k' */
+  keybindings: Record<string, string>
+  updateCheckEnabled: boolean
+  onboardingDone: boolean
   requestTimeoutMs: number
   followRedirects: boolean
   maxRedirects: number

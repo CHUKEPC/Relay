@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { Popover } from '@renderer/components/primitives'
 import { useAi } from '@renderer/store/ai'
+import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { useEnvironments } from '@renderer/store/environments'
 import { useResponse } from '@renderer/store/response'
@@ -9,6 +10,7 @@ import { useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
 import { MOD } from '@renderer/lib/platform'
+import { trackDrag } from '@renderer/lib/drag'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
 
@@ -29,6 +31,43 @@ function shortPath(url: string): string {
 export function AiPanel({ onClose, onConnect }: { onClose: () => void; onConnect: () => void }) {
   const isConnected = useAi((s) => s.activeProvider()?.hasKey || false)
   return isConnected ? <AiPanelConnected onClose={onClose} /> : <AiPanelEmpty onClose={onClose} onConnect={onConnect} />
+}
+
+/** The .ai-panel aside with a draggable left wall (width lives in the ui store). */
+function ResizableAiAside({ children }: { children: ReactNode }) {
+  const aiWidth = useUi((s) => s.aiWidth)
+  const setAiWidth = useUi((s) => s.setAiWidth)
+  const panelRef = useRef<HTMLElement>(null)
+
+  const onHandleDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const panel = panelRef.current
+    if (!panel) return
+    // Right edge is anchored to the window; capture once so the math stays stable mid-drag.
+    const right = panel.getBoundingClientRect().right
+    const handle = e.currentTarget
+    handle.classList.add('dragging')
+    document.body.classList.add('wall-resizing')
+    trackDrag((ev) => setAiWidth(right - ev.clientX), {
+      onEnd: () => {
+        handle.classList.remove('dragging')
+        document.body.classList.remove('wall-resizing')
+      }
+    })
+  }
+
+  return (
+    <aside className="ai-panel" ref={panelRef} style={{ width: aiWidth }}>
+      <div
+        className="wall-handle left"
+        aria-hidden="true"
+        onMouseDown={onHandleDown}
+        onDoubleClick={() => setAiWidth(384)}
+        title="Перетащите, чтобы изменить ширину · двойной клик — сброс"
+      />
+      {children}
+    </aside>
+  )
 }
 
 function AiPanelConnected({ onClose }: { onClose: () => void }) {
@@ -73,7 +112,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <aside className="ai-panel">
+    <ResizableAiAside>
       <div className="ai-head">
         <div className="ai-title">
           <span className="ai-spark">
@@ -195,7 +234,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
-    </aside>
+    </ResizableAiAside>
   )
 }
 
@@ -261,7 +300,7 @@ function ModelPill() {
 
 function AiPanelEmpty({ onClose, onConnect }: { onClose: () => void; onConnect: () => void }) {
   return (
-    <aside className="ai-panel">
+    <ResizableAiAside>
       <div className="ai-head">
         <div className="ai-title">
           <span className="ai-spark">
@@ -288,6 +327,6 @@ function AiPanelEmpty({ onClose, onConnect }: { onClose: () => void; onConnect: 
           </div>
         </div>
       </div>
-    </aside>
+    </ResizableAiAside>
   )
 }

@@ -18,6 +18,11 @@ interface TabsState {
   openSaved: (request: RequestModel, savedRequestId: string) => void
   openNew: (request?: RequestModel) => string
   closeTab: (id: string) => void
+  closeOthers: (id: string) => void
+  closeToRight: (id: string) => void
+  closeToLeft: (id: string) => void
+  closeAll: () => void
+  duplicateTab: (id: string) => void
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
   markSaved: (tabId: string, savedRequestId: string) => void
@@ -28,6 +33,34 @@ export const useTabs = create<TabsState>((set, get) => {
     const doc = { ...get().doc, ...next, version: STORAGE_VERSION }
     set({ doc })
     persist('tabs', doc)
+  }
+
+  // Tear down any live WebSocket/SSE connection + drop volatile per-tab state
+  // so closing a realtime tab doesn't leak a socket/IPC listener. Must run for
+  // EVERY closed tab, including bulk closes (close others/right/left/all).
+  const teardownTab = (id: string) => {
+    useRealtime.getState().disconnect(id)
+    useGrpc.getState().cancel(id)
+    useResponse.setState((s) => {
+      if (!(id in s.byTab)) return s
+      const { [id]: _drop, ...rest } = s.byTab
+      return { byTab: rest }
+    })
+  }
+
+  // Shared bulk-close: tear down every dropped tab, keep the rest, and land the
+  // active tab on the anchor when the previously-active tab was closed.
+  const closeWhere = (anchorId: string, drop: (t: TabModel, idx: number) => boolean) => {
+    const prev = get().doc.tabs
+    if (!prev.some((t) => t.id === anchorId)) return
+    const kept = prev.filter((t, i) => !drop(t, i))
+    if (kept.length === prev.length) return
+    prev.forEach((t, i) => {
+      if (drop(t, i)) teardownTab(t.id)
+    })
+    let activeTabId = get().doc.activeTabId
+    if (!kept.some((t) => t.id === activeTabId)) activeTabId = anchorId
+    commit({ tabs: kept, activeTabId })
   }
 
   return {
@@ -64,15 +97,7 @@ export const useTabs = create<TabsState>((set, get) => {
     },
 
     closeTab: (id) => {
-      // Tear down any live WebSocket/SSE connection + drop volatile per-tab state
-      // so closing a realtime tab doesn't leak a socket/IPC listener.
-      useRealtime.getState().disconnect(id)
-      useGrpc.getState().cancel(id)
-      useResponse.setState((s) => {
-        if (!(id in s.byTab)) return s
-        const { [id]: _drop, ...rest } = s.byTab
-        return { byTab: rest }
-      })
+      teardownTab(id)
       const prev = get().doc.tabs
       const idx = prev.findIndex((t) => t.id === id)
       const tabs = prev.filter((t) => t.id !== id)
@@ -83,6 +108,40 @@ export const useTabs = create<TabsState>((set, get) => {
         activeTabId = tabs.length ? (tabs[idx] ?? tabs[idx - 1] ?? tabs[tabs.length - 1]).id : null
       }
       commit({ tabs, activeTabId })
+    },
+
+    closeOthers: (id) => closeWhere(id, (t) => t.id !== id),
+
+    closeToRight: (id) => {
+      const idx = get().doc.tabs.findIndex((t) => t.id === id)
+      if (idx === -1) return
+      closeWhere(id, (_t, i) => i > idx)
+    },
+
+    closeToLeft: (id) => {
+      const idx = get().doc.tabs.findIndex((t) => t.id === id)
+      if (idx <= 0) return
+      closeWhere(id, (_t, i) => i < idx)
+    },
+
+    closeAll: () => {
+      for (const t of get().doc.tabs) teardownTab(t.id)
+      commit({ tabs: [], activeTabId: null })
+    },
+
+    duplicateTab: (id) => {
+      const prev = get().doc.tabs
+      const idx = prev.findIndex((t) => t.id === id)
+      if (idx === -1) return
+      const request = structuredClone(prev[idx].request)
+      request.id = makeId('req')
+      // Regenerate nested ids so the copy doesn't alias the original's items
+      // (prefixes match the creators in lib/examples.ts / RealtimePanel.tsx).
+      request.examples = request.examples?.map((ex) => ({ ...ex, id: makeId('ex') }))
+      request.messageTemplates = request.messageTemplates?.map((t) => ({ ...t, id: makeId('mt') }))
+      // The copy is an unsaved draft: not bound to a collection request, dirty.
+      const tab: TabModel = { id: makeId('tab'), request, savedRequestId: null, dirty: true }
+      commit({ tabs: [...prev.slice(0, idx + 1), tab, ...prev.slice(idx + 1)], activeTabId: tab.id })
     },
 
     patchActive: (patch) => {

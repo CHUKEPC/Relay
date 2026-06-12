@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MessageTemplate, RealtimeMessage } from '@shared/types'
+import type { MessageTemplate, RealtimeMessage, RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
@@ -65,7 +65,8 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
 
   // Subscribe to this tab's request so saved templates + MQTT config stay in sync.
   const req = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request)
-  const patchActive = useTabs((s) => s.patchActive)
+  // Patch THIS panel's tab — patchActive would hit the wrong tab in split-screen.
+  const patchReq = (p: Partial<RequestModel>): void => useTabs.getState().patchTab(tabId, p)
 
   const [draft, setDraft] = useState('')
   const [event, setEvent] = useState('message')
@@ -113,7 +114,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
   const saveTemplate = (): void => {
     const content = draft
     if (!content.trim()) {
-      useUi.getState().showToast('Нечего сохранять — composer пуст', 'error')
+      useUi.getState().showToast('Нечего сохранять — поле сообщения пустое', 'error')
       return
     }
     const name = window.prompt('Название шаблона:')?.trim()
@@ -126,18 +127,18 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
       ...(kind === 'mqtt' && topic.trim() ? { topic: topic.trim() } : {})
     }
     const existing = req?.messageTemplates ?? []
-    patchActive({ messageTemplates: [...existing, tpl] })
+    patchReq({ messageTemplates: [...existing, tpl] })
     useUi.getState().showToast('Шаблон сохранён')
   }
 
   const deleteTemplate = (id: string): void => {
     const existing = req?.messageTemplates ?? []
-    patchActive({ messageTemplates: existing.filter((t) => t.id !== id) })
+    patchReq({ messageTemplates: existing.filter((t) => t.id !== id) })
   }
 
   // Patch the MQTT QoS/LWT config without clobbering the other field.
   const patchMqtt = (next: Partial<NonNullable<typeof mqttCfg>>): void => {
-    patchActive({ mqtt: { ...(req?.mqtt ?? {}), ...next } })
+    patchReq({ mqtt: { ...(req?.mqtt ?? {}), ...next } })
   }
   const patchLwt = (next: Partial<NonNullable<typeof lwt>>): void => {
     const base = lwt ?? { topic: '', payload: '' }

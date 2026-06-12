@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { statusColor } from '@renderer/lib/status-color'
 import { useConsole, type ConsoleEntry } from '@renderer/store/console'
+import { useUi, type ConsoleDock } from '@renderer/store/ui'
+import { trackDrag } from '@renderer/lib/drag'
+import { clamp } from '@renderer/lib/math'
+import '@renderer/styles/feat-console.css'
 
 /* ============================================================
  * Helpers
@@ -156,27 +160,117 @@ function EntryRow({ e }: { e: ConsoleEntry }): JSX.Element {
 }
 
 /* ============================================================
- * ConsolePanel — bottom drawer (request log)
+ * ConsolePanel — dockable drawer (request log)
+ * Dock modes: bottom (default) / left / right / float.
  * ============================================================ */
+
+const DOCK_OPTIONS: { mode: ConsoleDock; icon: string; title: string }[] = [
+  { mode: 'bottom', icon: 'dockBottom', title: 'Закрепить снизу' },
+  { mode: 'left', icon: 'dockLeft', title: 'Закрепить слева' },
+  { mode: 'right', icon: 'dockRight', title: 'Закрепить справа' },
+  { mode: 'float', icon: 'floatWin', title: 'Плавающее окно' }
+]
+
+/** Header height (px) — keep at least this much of the float window on screen. */
+const FLOAT_HEAD_H = 38
+const FLOAT_MIN_W = 380
+const FLOAT_MIN_H = 240
 
 export function ConsolePanel(): JSX.Element | null {
   const open = useConsole((s) => s.open)
   const entries = useConsole((s) => s.entries)
   const clear = useConsole((s) => s.clear)
   const setOpen = useConsole((s) => s.setOpen)
+  const dock = useUi((s) => s.consoleDock)
+  const size = useUi((s) => s.consoleSize)
+  const floatRect = useUi((s) => s.consoleFloat)
+  const setConsoleDock = useUi((s) => s.setConsoleDock)
+  const setConsoleSize = useUi((s) => s.setConsoleSize)
+  const setConsoleFloat = useUi((s) => s.setConsoleFloat)
+
+  // Active-drag cleanup so window listeners never leak past unmount.
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => dragCleanupRef.current?.(), [])
+
+  /** Wire a window-level drag session (shared helper keeps cursor/selection state). */
+  const startDrag = (move: (ev: MouseEvent) => void, cursor: string): void => {
+    dragCleanupRef.current?.()
+    dragCleanupRef.current = trackDrag(move, { cursor, onEnd: () => (dragCleanupRef.current = null) })
+  }
+
+  /** Docked modes: drag the inner edge to resize (store clamps 160..800). */
+  const onResizeDown = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    const mode = dock
+    startDrag((ev) => {
+      if (mode === 'bottom') setConsoleSize(window.innerHeight - ev.clientY)
+      else if (mode === 'left') setConsoleSize(ev.clientX)
+      else setConsoleSize(window.innerWidth - ev.clientX)
+    }, mode === 'bottom' ? 'row-resize' : 'col-resize')
+  }
+
+  /** Float mode: header background drags the window (buttons excluded). */
+  const onHeadDown = (e: React.MouseEvent): void => {
+    if (dock !== 'float') return
+    if ((e.target as HTMLElement).closest('button')) return
+    e.preventDefault()
+    const start = { x: e.clientX, y: e.clientY }
+    const orig = useUi.getState().consoleFloat
+    startDrag((ev) => {
+      // Keep at least 120px of the header horizontally and the full header vertically on screen.
+      const x = clamp(orig.x + ev.clientX - start.x, 120 - orig.w, window.innerWidth - 120)
+      const y = clamp(orig.y + ev.clientY - start.y, 0, window.innerHeight - FLOAT_HEAD_H)
+      setConsoleFloat({ ...orig, x, y })
+    }, 'grabbing')
+  }
+
+  /** Float mode: bottom-right grip resizes width/height. */
+  const onGripDown = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    const start = { x: e.clientX, y: e.clientY }
+    const orig = useUi.getState().consoleFloat
+    startDrag((ev) => {
+      const w = Math.max(FLOAT_MIN_W, orig.w + ev.clientX - start.x)
+      const h = Math.max(FLOAT_MIN_H, orig.h + ev.clientY - start.y)
+      setConsoleFloat({ ...orig, w, h })
+    }, 'nwse-resize')
+  }
 
   if (!open) return null
 
   // Newest first.
   const ordered = [...entries].reverse()
 
+  const rootStyle: React.CSSProperties =
+    dock === 'bottom'
+      ? { height: size }
+      : dock === 'float'
+        ? { left: floatRect.x, top: floatRect.y, width: floatRect.w, height: floatRect.h }
+        : { width: size }
+
   return (
-    <div className="console-drawer" role="region" aria-label="Консоль">
-      <div className="console-head">
+    <div className={`console-drawer dock-${dock}`} style={rootStyle} role="region" aria-label="Консоль">
+      {dock !== 'float' && <div className="console-resize" onMouseDown={onResizeDown} />}
+      <div className="console-head" onMouseDown={onHeadDown}>
         <Icon name="code2" size={15} className="console-head-ico" />
         <span className="console-head-title">Консоль</span>
         <span className="console-head-count">{entries.length}</span>
         <div className="console-head-spacer" />
+        <div className="console-dock-group">
+          {DOCK_OPTIONS.map((o) => (
+            <button
+              key={o.mode}
+              type="button"
+              className={`icon-btn console-dock-btn${dock === o.mode ? ' on' : ''}`}
+              onClick={() => setConsoleDock(o.mode)}
+              title={o.title}
+              aria-label={o.title}
+            >
+              <Icon name={o.icon} size={14} />
+            </button>
+          ))}
+        </div>
         <button type="button" className="btn ghost console-head-btn" onClick={clear} disabled={entries.length === 0}>
           <Icon name="trash" size={14} />
           Очистить
@@ -201,6 +295,8 @@ export function ConsolePanel(): JSX.Element | null {
           ))}
         </div>
       )}
+
+      {dock === 'float' && <div className="console-float-grip" onMouseDown={onGripDown} />}
     </div>
   )
 }

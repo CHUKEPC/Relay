@@ -10,10 +10,28 @@ import { useUi } from '@renderer/store/ui'
 /** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
  *  so the user sees the clean, actionable message. */
 function cleanError(msg: string): string {
-  return msg
+  const cleaned = msg
     .replace(/^Error invoking remote method '[^']*':\s*/i, '')
     .replace(/^Error:\s*/i, '')
     .trim()
+  return localizeError(cleaned)
+}
+
+/** The import engine in the main process throws English messages (artifacts are
+ *  English by project convention) — translate the known shapes for the user.
+ *  Format names (Postman, OpenAPI, HAR…) stay English on purpose. */
+function localizeError(msg: string): string {
+  if (msg.startsWith('Could not detect import format')) {
+    return (
+      'Не удалось распознать формат. Поддерживаются: команда cURL, коллекция Postman v2.1, ' +
+      'OpenAPI 3 / Swagger 2.0 (JSON или YAML), HAR и экспорт Insomnia v4.'
+    )
+  }
+  const badJson = msg.match(/^This doesn't look like valid (.+) JSON\. Check the document\.$/)
+  if (badJson) return `Это не похоже на корректный JSON (${badJson[1]}). Проверьте документ.`
+  const badDoc = msg.match(/^This doesn't look like a valid (.+) document \(JSON or YAML\)\.$/)
+  if (badDoc) return `Это не похоже на корректный документ ${badDoc[1]} (JSON или YAML).`
+  return msg
 }
 
 /** Count request leaves in a collection/folder subtree. */

@@ -1,0 +1,64 @@
+/* Custom keybindings editor (Settings → Shortcuts). Loaded after the base
+   stylesheets; reuses .set-row / .kbd / .btn from base.css + ai.css. */
+
+.keys-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 2px;
+}
+.keys-toolbar .btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.keys-combo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keys-off {
+  font-size: 12px;
+  color: var(--tx-3);
+  font-style: italic;
+}
+
+.keys-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.keys-capture {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--accent);
+  background: var(--accent-soft);
+  animation: keys-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes keys-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.keys-conflict {
+  font-size: 12px;
+  color: var(--m-delete);
+  margin-top: 2px;
+}
+
+.keys-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

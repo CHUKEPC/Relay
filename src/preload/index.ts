@@ -135,6 +135,10 @@ const api: RelayApi = {
   maximizeWindow: () => ipcRenderer.invoke(IPC.app.maximize),
   closeWindow: () => ipcRenderer.invoke(IPC.app.close),
 
+  /* ---- updates ---- */
+  getAppVersion: () => ipcRenderer.invoke(IPC.app.getVersion),
+  checkUpdates: () => ipcRenderer.invoke(IPC.update.check),
+
   /* ---- misc ---- */
   openExternal: (url: string) => ipcRenderer.invoke(IPC.app.openExternal, url),
   onNativeThemeChange: (cb: (theme: 'light' | 'dark') => void) => {

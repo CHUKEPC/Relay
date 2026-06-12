@@ -5,8 +5,8 @@ import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
 import { SNIPPETS } from '@renderer/lib/snippets'
 
-export function ScriptsTab({ req }: { req: RequestModel }) {
-  const patch = useTabs((s) => s.patchActive)
+export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string }) {
+  const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
   const [which, setWhich] = useState<'pre' | 'test'>('pre')
   const [showSnippets, setShowSnippets] = useState(true)
 

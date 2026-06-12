@@ -74,7 +74,7 @@ function operationToRequest(
   op: any,
   inheritedParams: any[],
   globalConsumes: string[],
-  warnings: string[]
+  _warnings: string[]
 ): RequestModel {
   const query: KV[] = []
   const headers: KV[] = []

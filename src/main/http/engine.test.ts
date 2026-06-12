@@ -30,11 +30,6 @@ function spec(partial: Partial<RequestSpec>): RequestSpec {
 
 const OPTS: RunOptions = { requestId: 'test-1' }
 
-/** Find a header value (case-insensitive) inside an EncodedBody-applied record. */
-function ct(record: Record<string, string>): string | undefined {
-  return Object.entries(record).find(([k]) => k.toLowerCase() === 'content-type')?.[1]
-}
-
 /* ============================================================
  * buildUrl — query merge
  * ============================================================ */
