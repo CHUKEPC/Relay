@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { useEnvironments } from '@renderer/store/environments'
+import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd, MOD } from '@renderer/lib/platform'
 import { WorkspaceSwitcher } from '@renderer/features/workspaces/WorkspaceSwitcher'
 
@@ -16,6 +18,9 @@ export function Titlebar() {
   const activeEnvId = useEnvironments((s) => s.env.activeEnvironmentId)
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
   const activeEnv = environments.find((e) => e.id === activeEnvId)
+  const pluginList = usePlugins((s) => s.plugins)
+  const pluginBusy = usePlugins((s) => s.busy)
+  const titlebarButtons = useMemo(() => collectButtons(pluginList, 'titlebar'), [pluginList])
 
   const isMac = window.api.platform === 'darwin'
 
@@ -42,6 +47,21 @@ export function Titlebar() {
         <span className="kbd">{kbd('K')}</span>
       </div>
       <div className="grow" />
+
+      {titlebarButtons.map(({ pluginId, pluginName, button }) => {
+        const busy = !!pluginBusy[`${pluginId}:${button.id}`]
+        return (
+          <button
+            key={`${pluginId}:${button.id}`}
+            className="icon-btn nodrag"
+            title={button.tooltip ?? `${pluginName} — ${button.label}`}
+            disabled={busy}
+            onClick={() => void usePlugins.getState().invokeButtonFromActiveTab(pluginId, button.id)}
+          >
+            <Icon name={busy ? 'refresh' : (button.icon ?? 'bolt')} size={15} className={busy ? 'spin' : undefined} />
+          </button>
+        )
+      })}
 
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

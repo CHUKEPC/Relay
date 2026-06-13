@@ -86,4 +86,15 @@ export class SecretStore {
   delete(ref: string): void {
     if (this.map.delete(ref)) this.persist()
   }
+
+  /** Delete every secret whose ref starts with `prefix` (e.g. a plugin's
+   *  `plugin:<id>:` namespace). Used when a plugin is uninstalled even if its
+   *  manifest is broken and the exact key set is unknown. */
+  deleteByPrefix(prefix: string): void {
+    let changed = false
+    for (const ref of [...this.map.keys()]) {
+      if (ref.startsWith(prefix) && this.map.delete(ref)) changed = true
+    }
+    if (changed) this.persist()
+  }
 }

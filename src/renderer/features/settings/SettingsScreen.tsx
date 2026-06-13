@@ -3,6 +3,7 @@ import { Icon } from '@renderer/components/Icon'
 import { Kbd } from '@renderer/components/primitives'
 import { ProvidersSection } from './ProvidersSection'
 import { AppearanceSection } from './AppearanceSection'
+import { PluginsSection } from './PluginsSection'
 import { GeneralSection } from './GeneralSection'
 import { NetworkSection } from './NetworkSection'
 import { DataSection } from './DataSection'
@@ -18,6 +19,7 @@ export type { SettingsSection }
 const NAV: { id: SettingsSection; label: string; icon: string }[] = [
   { id: 'providers', label: 'AI-провайдеры', icon: 'sparkle' },
   { id: 'appearance', label: 'Внешний вид', icon: 'sun' },
+  { id: 'plugins', label: 'Плагины', icon: 'grid' },
   { id: 'general', label: 'Основные', icon: 'settings' },
   { id: 'network', label: 'Сеть', icon: 'link' },
   { id: 'data', label: 'Данные', icon: 'download' },
@@ -85,6 +87,7 @@ export function SettingsScreen({
           <div className="inner">
             {section === 'providers' && <ProvidersSection />}
             {section === 'appearance' && <AppearanceSection />}
+            {section === 'plugins' && <PluginsSection />}
             {section === 'general' && <GeneralSection />}
             {section === 'network' && <NetworkSection />}
             {section === 'data' && <DataSection />}

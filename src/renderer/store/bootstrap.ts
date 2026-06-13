@@ -8,6 +8,7 @@ import { useResponse } from './response'
 import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useRunner } from './runner'
+import { usePlugins } from './plugins'
 import { useUi } from './ui'
 import { flushPersist } from './persist'
 import {
@@ -58,6 +59,9 @@ export async function bootstrap(): Promise<void> {
   }
 
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
+
+  // Plugins load opportunistically — a broken plugins dir must not stall boot.
+  void usePlugins.getState().init()
 
   watchSystemTheme()
   scheduleUpdateCheck()

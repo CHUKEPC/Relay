@@ -9,6 +9,7 @@ import { abortAllAiStreams } from './ai'
 import { abortAllRealtime } from './realtime'
 import { abortAllGrpc } from './grpc'
 import { startSandboxHost, stopScriptSandbox } from './scripting'
+import { startPluginSandboxHost, stopPluginSandbox } from './plugins/host'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -101,6 +102,9 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
   // This process was re-forked as the isolated pm.* script sandbox — run the
   // host message loop, never the Electron app.
   startSandboxHost()
+} else if (process.env.RELAY_PLUGIN_SANDBOX === '1') {
+  // Re-forked as the isolated plugin sandbox (docs/PLUGINS.md) — same model.
+  startPluginSandboxHost()
 } else {
   app.whenReady().then(async () => {
   // Content Security Policy for all sessions.
@@ -137,6 +141,7 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
     abortAllRealtime()
     abortAllGrpc()
     stopScriptSandbox()
+    stopPluginSandbox()
     e.preventDefault()
     flushing = true
     // Never hang the quit: force-exit if the flush stalls (disk full/stuck fs).

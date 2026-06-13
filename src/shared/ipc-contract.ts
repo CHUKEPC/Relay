@@ -25,6 +25,11 @@ import type {
   ModelInfo,
   OAuthTokenRequest,
   OAuthTokenResult,
+  PluginEventContext,
+  PluginInfo,
+  PluginRunResult,
+  PluginsBroadcastEvent,
+  PluginsStateDoc,
   ProvidersDoc,
   MqttConnectSpec,
   RealtimeEvent,
@@ -120,6 +125,23 @@ export const IPC = {
     delete: 'workspace:delete',
     switch: 'workspace:switch'
   },
+  plugins: {
+    list: 'plugins:list',
+    setEnabled: 'plugins:setEnabled',
+    setConfig: 'plugins:setConfig',
+    setSecret: 'plugins:setSecret',
+    setNetAllowlist: 'plugins:setNetAllowlist',
+    invokeButton: 'plugins:invokeButton',
+    invokePanel: 'plugins:invokePanel',
+    panelMessage: 'plugins:panelMessage',
+    invokeCommand: 'plugins:invokeCommand',
+    openFolder: 'plugins:openFolder',
+    installSample: 'plugins:installSample',
+    installZip: 'plugins:installZip',
+    delete: 'plugins:delete',
+    /** broadcast channel: hot-reload + hook toasts (no per-id suffix) */
+    event: 'plugins:event'
+  },
   sqlite: {
     export: 'sqlite:export',
     import: 'sqlite:import'
@@ -162,6 +184,7 @@ export interface StorageMap {
   settings: SettingsDoc
   providers: ProvidersDoc
   cookies: CookiesDoc
+  plugins: PluginsStateDoc
 }
 
 export type StorageKey = keyof StorageMap
@@ -263,6 +286,38 @@ export interface RelayApi {
   grpcReflect(spec: GrpcReflectSpec): Promise<GrpcParseResult>
   /** Subscribe to gRPC events for a call. Returns an unsubscribe fn. */
   onGrpc(connId: string, cb: (event: RealtimeEvent) => void): () => void
+
+  /* ---- plugins (docs/PLUGINS.md) ---- */
+  pluginsList(): Promise<PluginInfo[]>
+  /** Enable (= grant the manifest permissions) or disable a plugin. Returns the updated list. */
+  pluginsSetEnabled(id: string, enabled: boolean): Promise<PluginInfo[]>
+  /** Persist non-secret string config values. */
+  pluginsSetConfig(id: string, config: Record<string, string>): Promise<void>
+  /** Set/clear a secret config value (stored in safeStorage; '' clears). Returns the updated list. */
+  pluginsSetSecret(id: string, key: string, value: string): Promise<PluginInfo[]>
+  /** Narrow a broad `net` grant to a host allowlist ([] = no restriction). Returns the updated list. */
+  pluginsSetNetAllowlist(id: string, hosts: string[]): Promise<PluginInfo[]>
+  /** Run a contributed button's handler in the plugin sandbox. */
+  pluginsInvokeButton(pluginId: string, buttonId: string, context: PluginEventContext): Promise<PluginRunResult>
+  /** Run a contributed panel's handler; the result's `panelHtml` is rendered in a sandboxed iframe. */
+  pluginsInvokePanel(pluginId: string, panelId: string, context: PluginEventContext): Promise<PluginRunResult>
+  /** Re-dispatch an interactive panel's `postMessage` to its handler; returns the new `panelHtml`. */
+  pluginsPanelMessage(pluginId: string, panelId: string, message: unknown, context: PluginEventContext): Promise<PluginRunResult>
+  /** Run a contributed command (from the palette) with the active tab's context. */
+  pluginsInvokeCommand(pluginId: string, commandId: string, context: PluginEventContext): Promise<PluginRunResult>
+  pluginsOpenFolder(): Promise<void>
+  /**
+   * Write the bundled sample plugin into the plugins folder. When the folder
+   * already exists and `force` is false, nothing is written (`existed: true`).
+   */
+  pluginsInstallSample(force?: boolean): Promise<{ plugins: PluginInfo[]; existed: boolean }>
+  /** Install a plugin from a `.zip` the user picks via a native dialog (no
+   *  renderer-supplied path). The plugin starts DISABLED. Null when cancelled. */
+  pluginsInstallZip(): Promise<{ plugins: PluginInfo[]; id: string } | null>
+  /** Delete a plugin's folder and purge its stored state. Returns the updated list. */
+  pluginsDelete(id: string): Promise<PluginInfo[]>
+  /** Subscribe to plugin broadcasts (hot-reload, hook toasts). Returns an unsubscribe fn. */
+  onPluginsEvent(cb: (event: PluginsBroadcastEvent) => void): () => void
 
   /* ---- local workspaces ---- */
   workspaceList(): Promise<{ workspaces: WorkspaceMeta[]; activeId: string }>

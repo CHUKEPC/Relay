@@ -9,6 +9,7 @@ import { CookieManager, registerCookieHandlers } from '../http/cookies'
 import { registerAiHandlers } from '../ai'
 import { registerStorageHandlers, registerWorkspaceHandlers, type StorageManager } from '../storage'
 import { registerDataHandlers } from '../data'
+import { registerPluginHandlers } from '../plugins'
 import { registerScriptHandlers } from '../scripting'
 import { registerOAuthHandlers } from '../auth/oauth'
 import { registerGraphqlHandlers } from '../graphql'
@@ -37,8 +38,18 @@ export function registerIpc(ctx: IpcContext): void {
   const cookieJar = new CookieManager(ctx.storage)
   void cookieJar.load()
 
-  // Networking core (CORS-free) — built by the http engine module.
-  registerHttpHandlers(ipcMain, cookieJar)
+  // User plugins (docs/PLUGINS.md): discovery, grants, sandboxed dispatch.
+  const plugins = registerPluginHandlers(ipcMain, ctx.storage, ctx.getWindow)
+
+  // Networking core (CORS-free) — built by the http engine module. The plugins'
+  // `request` hook may patch the spec before send (request:write); completed
+  // exchanges feed the `response` hook (fire-and-forget).
+  registerHttpHandlers(
+    ipcMain,
+    cookieJar,
+    (spec, result) => plugins.dispatchResponseHook(spec, result),
+    (spec, signal) => plugins.runRequestHooks(spec, signal)
+  )
   registerCookieHandlers(ipcMain, cookieJar)
 
   // Realtime: WebSocket + SSE clients (streamed to the renderer per connection).

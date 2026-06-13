@@ -442,6 +442,8 @@ export type ThemePreset = 'relay' | 'postman' | 'insomnia' | 'custom'
 export interface CustomTheme {
   base: 'light' | 'dark'
   vars: Record<string, string>
+  /** set when the theme was copied from a plugin contribution (provenance) */
+  source?: { pluginId: string; themeId: string }
 }
 
 export interface SettingsDoc extends DocEnvelope {
@@ -451,6 +453,8 @@ export interface SettingsDoc extends DocEnvelope {
   accentColor: string | null
   themePreset: ThemePreset
   customTheme: CustomTheme | null
+  /** appearance stashed before a plugin theme was applied (for revert) */
+  appearanceSnapshot?: { themePreset: ThemePreset; customTheme: CustomTheme | null } | null
   /** actionId -> combo like 'mod+shift+k' */
   keybindings: Record<string, string>
   updateCheckEnabled: boolean
@@ -628,6 +632,267 @@ export interface ScriptRunResult {
   visualizer?: VisualizerPayload | null
   error?: string
 }
+
+/* ============================================================
+ * Plugins — manifest, grants, sandbox payloads (docs/PLUGINS.md)
+ * ============================================================ */
+
+/** Capability a plugin may request in its manifest and the user may grant. */
+export type PluginPermission =
+  | 'net'
+  | `net:${string}`
+  | 'request:read'
+  | 'response:read'
+  | 'request:write'
+  | 'storage'
+  | 'clipboard'
+  | 'history:read'
+
+/** Current plugin API version. A manifest's `apiVersion`, when present, must be
+ *  ≤ this; future breaking changes bump it so old manifests fail closed. */
+export const PLUGIN_API_VERSION = 1
+
+/** Where a contributed button renders. */
+export type PluginButtonLocation = 'response-toolbar' | 'titlebar' | 'sidebar'
+
+export interface PluginButtonContribution {
+  id: string
+  label: string
+  /** Relay icon name (renderer Icon component); unknown/absent → fallback icon */
+  icon?: string
+  location: PluginButtonLocation
+  tooltip?: string
+}
+
+/** Declarative theme — applied via the existing custom-theme engine, no code. */
+export interface PluginThemeContribution {
+  id: string
+  label: string
+  base: 'light' | 'dark'
+  /** CSS variable overrides; only '--'-prefixed keys are applied */
+  vars: Record<string, string>
+}
+
+/** A panel contributed as a tab. Its HTML is produced by a sandboxed `panel:<id>`
+ *  handler and rendered in a locked-down iframe — see docs §6.3. When
+ *  `interactive` is set the iframe may run scripts (null origin, can't reach the
+ *  app) and postMessage back to a `panel:<id>` handler via `ctx.message`. */
+export interface PluginPanelContribution {
+  id: string
+  label: string
+  icon?: string
+  /** a tab in the response panel */
+  location: 'response-tab'
+  /** allow scripts in the panel iframe + postMessage round-trips (P2) */
+  interactive?: boolean
+}
+
+/** A command contributed to the command palette (Cmd/Ctrl+K). Runs the
+ *  `command:<id>` handler with the active tab's context. */
+export interface PluginCommandContribution {
+  id: string
+  title: string
+  icon?: string
+}
+
+/** Lifecycle hooks a plugin can subscribe to via `contributes.events`.
+ *  `request` fires BEFORE send (needs request:write); `workspace`/`collection`
+ *  fire after the active workspace switches / collections change. */
+export type PluginEventName = 'response' | 'request' | 'workspace' | 'collection'
+
+export interface PluginConfigField {
+  key: string
+  label: string
+  /** 'secret' values are stored in safeStorage (OS keychain) and never sent to
+   *  the renderer in plaintext; 'string' values live in the plugins doc. */
+  type: 'string' | 'secret'
+  placeholder?: string
+  description?: string
+}
+
+export interface PluginContributions {
+  buttons?: PluginButtonContribution[]
+  themes?: PluginThemeContribution[]
+  panels?: PluginPanelContribution[]
+  commands?: PluginCommandContribution[]
+  events?: PluginEventName[]
+}
+
+/** Validated plugin.json. Invalid manifests never produce this shape. */
+export interface PluginManifest {
+  id: string
+  name: string
+  version: string
+  /** plugin API version it targets; defaults to 1, must be ≤ PLUGIN_API_VERSION */
+  apiVersion: number
+  description?: string
+  author?: string
+  /** handler file name inside the plugin folder; default 'main.js' */
+  main?: string
+  permissions: PluginPermission[]
+  contributes: PluginContributions
+  config: PluginConfigField[]
+  /** optional localized label overrides: i18n[locale][key] resolves a `%key%`
+   *  placeholder used in a label/title/description (P2). */
+  i18n?: Record<string, Record<string, string>>
+}
+
+/** Per-plugin user state persisted in the app-level `plugins` document.
+ *  Secret config values are NOT here — they live in safeStorage by ref. */
+export interface PluginStateEntry {
+  id: string
+  enabled: boolean
+  /** permission snapshot taken when the user enabled the plugin */
+  granted: PluginPermission[]
+  config: Record<string, string>
+  /** user-narrowed net allowlist; when non-empty it restricts a broad `net` grant
+   *  to these hosts (exact or `*.suffix`, optional `:port`) at dispatch time */
+  netAllowlist?: string[]
+}
+
+export interface PluginsStateDoc extends DocEnvelope {
+  plugins: PluginStateEntry[]
+}
+
+/** Kind of sandbox run (for lastRun + dispatch). */
+export type PluginRunKind = 'button' | 'response' | 'request' | 'panel' | 'command' | 'workspace' | 'collection'
+
+/** Outcome of a plugin's most recent sandbox run (the v1 debugging surface). */
+export interface PluginLastRun {
+  at: number
+  event: PluginRunKind
+  durationMs: number
+  error?: string
+  /** tail of the captured console output */
+  logs: ScriptConsoleLine[]
+}
+
+/** One discovered plugin as the renderer sees it. */
+export interface PluginInfo {
+  manifest: PluginManifest
+  /** absolute folder path (display only) */
+  dir: string
+  enabled: boolean
+  granted: PluginPermission[]
+  /** non-secret config values only (secret fields never leave main in plaintext) */
+  config: Record<string, string>
+  /** secret config keys that currently have a value stored in safeStorage */
+  secretKeysSet: string[]
+  /** user-narrowed net allowlist (empty/undefined = use the manifest grant as-is) */
+  netAllowlist: string[]
+  /** manifest now asks for more than was granted — disabled until re-approved */
+  needsRegrant: boolean
+  /** validation/load error; an errored plugin cannot be enabled */
+  error?: string
+  /** most recent sandbox run, if any this session */
+  lastRun?: PluginLastRun
+}
+
+/** Redacted request snapshot for plugin handlers (`request:read`). */
+export interface PluginRequestSnapshot {
+  method: string
+  url: string
+  /** sensitive header values (Authorization, Cookie, …) are masked in main */
+  headers: { key: string; value: string }[]
+}
+
+/** Capped response snapshot for plugin handlers (`response:read`). */
+export interface PluginResponseSnapshot {
+  status: number
+  statusText: string
+  headers: [string, string][]
+  contentType: string
+  /** text body, capped in main; absent for binary bodies */
+  bodyText?: string
+  /** true when bodyText was cut at the cap */
+  truncated?: boolean
+  sizeBytes: number
+  timeMs: number
+  finalUrl: string
+}
+
+export type PluginEvent =
+  | { type: 'button'; buttonId: string }
+  | { type: 'response' }
+  | { type: 'request' }
+  | { type: 'panel'; panelId: string }
+  | { type: 'command'; commandId: string }
+  | { type: 'workspace' }
+  | { type: 'collection' }
+
+/** A redacted recent-history entry exposed with `history:read`. */
+export interface PluginHistorySnapshot {
+  method: string
+  url: string
+  status: number
+  ok: boolean
+  timeMs: number
+  at: number
+}
+
+export interface PluginEventContext {
+  request?: PluginRequestSnapshot
+  response?: PluginResponseSnapshot
+  /** recent history (with `history:read`), newest first, redacted + capped */
+  history?: PluginHistorySnapshot[]
+  /** active workspace (on `workspace` events) */
+  workspace?: { id: string; name: string }
+  /** message from an interactive panel iframe (on `panel:<id>` re-dispatch) */
+  message?: unknown
+}
+
+/** Mutations a `request`-event handler asks for (needs request:write). Applied
+ *  to the REAL resolved spec in main — header ops are by name (never a full
+ *  round-trip of the redacted header set) and replayed IN CALL ORDER so a
+ *  set-then-remove of the same header behaves as the author wrote it. */
+export interface PluginRequestPatch {
+  url?: string
+  method?: string
+  /** ordered header mutations: upsert (`value` present) / remove, by case-insensitive name */
+  headerOps?: { op: 'set' | 'remove'; key: string; value?: string }[]
+}
+
+/** Payload sent to the plugin sandbox child for one event dispatch. */
+export interface PluginRunRequest {
+  pluginId: string
+  /** main.js source text */
+  code: string
+  /** the granted permission set (manager intersects + narrows before dispatch) */
+  permissions: PluginPermission[]
+  /** non-secret + resolved-secret config values (secrets injected in main) */
+  config: Record<string, string>
+  /** plugin-scoped KV snapshot (only with the `storage` permission) */
+  storage: Record<string, string>
+  event: PluginEvent
+  context: PluginEventContext
+}
+
+export interface PluginToast {
+  message: string
+  kind: 'ok' | 'error'
+}
+
+export interface PluginRunResult {
+  logs: ScriptConsoleLine[]
+  toast?: PluginToast
+  /** KV mutations from relay.storage.set/delete (null = delete) */
+  storageUpdates?: Record<string, string | null>
+  /** request mutations from a `request`-event handler (request:write) */
+  requestPatch?: PluginRequestPatch
+  /** HTML produced by a `panel:<id>` handler (rendered in a sandboxed iframe) */
+  panelHtml?: string
+  /** text the plugin asked to copy (with the `clipboard` permission) */
+  clipboardWrite?: string
+  error?: string
+}
+
+/** Broadcast events pushed to the renderer over `plugins:event`.
+ *  `changed` = the plugin SET changed (install/edit/delete — rescan needed);
+ *  `lastRun` = one plugin's run outcome updated (merged client-side, no refetch). */
+export type PluginsBroadcastEvent =
+  | { type: 'changed' }
+  | { type: 'lastRun'; pluginId: string; lastRun: PluginLastRun }
+  | { type: 'toast'; pluginId: string; message: string; kind: 'ok' | 'error' }
 
 /* ============================================================
  * Import / export, codegen, dialogs, OAuth, cookies

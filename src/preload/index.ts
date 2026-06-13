@@ -8,6 +8,8 @@ import type {
   ImportKind,
   MqttConnectSpec,
   OAuthTokenRequest,
+  PluginEventContext,
+  PluginsBroadcastEvent,
   RealtimeEvent,
   RequestSpec,
   RunOptions,
@@ -112,6 +114,33 @@ const api: RelayApi = {
     const handler = (_e: unknown, event: RealtimeEvent) => cb(event)
     ipcRenderer.on(channel, handler)
     return () => ipcRenderer.removeListener(channel, handler)
+  },
+
+  /* ---- plugins ---- */
+  pluginsList: () => ipcRenderer.invoke(IPC.plugins.list),
+  pluginsSetEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke(IPC.plugins.setEnabled, id, enabled),
+  pluginsSetConfig: (id: string, config: Record<string, string>) =>
+    ipcRenderer.invoke(IPC.plugins.setConfig, id, config),
+  pluginsSetSecret: (id: string, key: string, value: string) =>
+    ipcRenderer.invoke(IPC.plugins.setSecret, id, key, value),
+  pluginsSetNetAllowlist: (id: string, hosts: string[]) =>
+    ipcRenderer.invoke(IPC.plugins.setNetAllowlist, id, hosts),
+  pluginsInvokeButton: (pluginId: string, buttonId: string, context: PluginEventContext) =>
+    ipcRenderer.invoke(IPC.plugins.invokeButton, pluginId, buttonId, context),
+  pluginsInvokePanel: (pluginId: string, panelId: string, context: PluginEventContext) =>
+    ipcRenderer.invoke(IPC.plugins.invokePanel, pluginId, panelId, context),
+  pluginsPanelMessage: (pluginId: string, panelId: string, message: unknown, context: PluginEventContext) =>
+    ipcRenderer.invoke(IPC.plugins.panelMessage, pluginId, panelId, message, context),
+  pluginsInvokeCommand: (pluginId: string, commandId: string, context: PluginEventContext) =>
+    ipcRenderer.invoke(IPC.plugins.invokeCommand, pluginId, commandId, context),
+  pluginsOpenFolder: () => ipcRenderer.invoke(IPC.plugins.openFolder),
+  pluginsInstallSample: (force?: boolean) => ipcRenderer.invoke(IPC.plugins.installSample, force),
+  pluginsInstallZip: () => ipcRenderer.invoke(IPC.plugins.installZip),
+  pluginsDelete: (id: string) => ipcRenderer.invoke(IPC.plugins.delete, id),
+  onPluginsEvent: (cb: (event: PluginsBroadcastEvent) => void) => {
+    const handler = (_e: unknown, event: PluginsBroadcastEvent) => cb(event)
+    ipcRenderer.on(IPC.plugins.event, handler)
+    return () => ipcRenderer.removeListener(IPC.plugins.event, handler)
   },
 
   /* ---- local workspaces ---- */

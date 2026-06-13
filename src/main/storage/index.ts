@@ -13,6 +13,7 @@ import {
   defaultEnvironments,
   defaultGlobals,
   defaultHistory,
+  defaultPlugins,
   defaultProviders,
   defaultSettings,
   defaultTabs
@@ -26,7 +27,8 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   tabs: defaultTabs,
   settings: defaultSettings,
   providers: defaultProviders,
-  cookies: defaultCookies
+  cookies: defaultCookies,
+  plugins: defaultPlugins
 }
 
 /**
@@ -34,7 +36,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
  * settings, AI provider config (+ their safeStorage secrets). Everything else is
  * isolated per workspace.
  */
-const APP_KEYS = new Set<StorageKey>(['settings', 'providers'])
+const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins'])
 /** Per-workspace document keys (the isolated working data set). */
 const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies'] as const
 
@@ -72,6 +74,8 @@ export class StorageManager {
   private inflight = new Map<StorageKey, Promise<unknown>>()
   /** Notified after a workspace switch so dependents (cookie jar) can reload. */
   private switchListeners = new Set<() => void>()
+  /** Notified after any document save (key passed). */
+  private saveListeners = new Set<(key: StorageKey) => void>()
 
   constructor() {
     this.rootDir = join(app.getPath('userData'), 'relay-data')
@@ -178,6 +182,19 @@ export class StorageManager {
   set<K extends StorageKey>(key: K, value: StorageMap[K]): void {
     this.cache.set(key, value)
     this.storeFor(key).save(key, value)
+    for (const cb of this.saveListeners) {
+      try {
+        cb(key)
+      } catch (err) {
+        console.error('[storage] save listener failed:', (err as Error).message)
+      }
+    }
+  }
+
+  /** Notified (with the key) after any document is saved. */
+  onSave(cb: (key: StorageKey) => void): () => void {
+    this.saveListeners.add(cb)
+    return () => this.saveListeners.delete(cb)
   }
 
   getCached<K extends StorageKey>(key: K): StorageMap[K] | null {
@@ -306,12 +323,18 @@ export function registerStorageHandlers(storage: StorageManager): void {
     storage.set(key, value as StorageMap[StorageKey])
   })
 
+  // The `plugin:` namespace is owned by PluginManager (which validates the key
+  // against the manifest); the generic secrets channel must not let the renderer
+  // read-existence/overwrite/delete another plugin's secret out of band.
+  const isReserved = (ref: string): boolean => typeof ref !== 'string' || ref.startsWith('plugin:')
   ipcMain.handle(IPC.secrets.set, async (_e, ref: string, value: string) => {
+    if (isReserved(ref)) throw new Error('Reserved secret namespace')
     storage.secrets.set(ref, value)
     return { ref }
   })
-  ipcMain.handle(IPC.secrets.has, async (_e, ref: string) => storage.secrets.has(ref))
+  ipcMain.handle(IPC.secrets.has, async (_e, ref: string) => (isReserved(ref) ? false : storage.secrets.has(ref)))
   ipcMain.handle(IPC.secrets.delete, async (_e, ref: string) => {
+    if (isReserved(ref)) return
     storage.secrets.delete(ref)
   })
   ipcMain.handle(IPC.secrets.available, async () => storage.secrets.isAvailable())

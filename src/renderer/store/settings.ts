@@ -66,7 +66,7 @@ function applyCustomVars(vars: Record<string, string>): void {
   }
 }
 
-/** Apply the full appearance (theme base, preset attr, custom vars, accent). */
+/** Apply the full appearance (theme base, preset attr, accent, custom vars). */
 function applyAppearance(doc: SettingsDoc): 'light' | 'dark' {
   const custom = doc.themePreset === 'custom' ? doc.customTheme : null
   const resolved = custom ? custom.base : resolveTheme(doc.theme)
@@ -74,10 +74,12 @@ function applyAppearance(doc: SettingsDoc): 'light' | 'dark' {
   root.setAttribute('data-theme', resolved)
   if (doc.themePreset === 'relay') root.removeAttribute('data-preset')
   else root.setAttribute('data-preset', doc.themePreset)
-  if (custom) applyCustomVars(custom.vars)
-  else clearCustomVars()
+  // Accent first, custom vars LAST: a custom theme (e.g. a plugin theme) that
+  // defines --accent* must win over the derived accent, not be clobbered by it.
   if (doc.accentColor) applyAccentColor(doc.accentColor)
   else applyAccentHue(doc.accentHue)
+  if (custom) applyCustomVars(custom.vars)
+  else clearCustomVars()
   document.body.classList.add('theming')
   window.setTimeout(() => document.body.classList.remove('theming'), 400)
   return resolved

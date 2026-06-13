@@ -6,6 +6,7 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
+import { collectCommands, usePlugins } from '@renderer/store/plugins'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { exportRequestJson } from '@renderer/lib/export'
 import { MOD } from '@renderer/lib/platform'
@@ -37,6 +38,7 @@ export function CommandPalette() {
   const environments = useEnvironments((s) => s.env.environments)
   const openSaved = useTabs((s) => s.openSaved)
   const openNew = useTabs((s) => s.openNew)
+  const pluginList = usePlugins((s) => s.plugins)
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -80,12 +82,20 @@ export function CommandPalette() {
       icon: 'env',
       run: () => useEnvironments.getState().setActiveEnv(e.id)
     }))
+    const pluginCmds: Item[] = collectCommands(pluginList).map(({ pluginId, pluginName, command }) => ({
+      id: `plugin-${pluginId}-${command.id}`,
+      title: command.title,
+      desc: pluginName,
+      icon: command.icon ?? 'bolt',
+      run: () => void usePlugins.getState().invokeCommandFromActiveTab(pluginId, command.id)
+    }))
     return [
       { label: 'Запросы', items: requests },
       { label: 'Действия', items: actions },
+      { label: 'Плагины', items: pluginCmds },
       { label: 'Среды', items: envs }
     ]
-  }, [collections, environments, openSaved, openNew])
+  }, [collections, environments, openSaved, openNew, pluginList])
 
   const filtered = groups
     .map((g) => ({ ...g, items: g.items.filter((it) => `${it.title} ${it.desc ?? ''} ${it.method ?? ''}`.toLowerCase().includes(q.toLowerCase())) }))

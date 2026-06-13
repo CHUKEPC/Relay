@@ -49,8 +49,11 @@ const ABSOLUTE_MAX_REDIRECTS = 50
 /** HTTP status codes that represent a redirect. */
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
-/** User headers that may carry credentials — stripped on cross-origin redirects. */
-const CREDENTIAL_HEADER_RE = /(authorization|api[-_]?key|token|secret|credential|password|auth|cookie)/i
+/** User headers that may carry credentials — stripped on cross-origin redirects.
+ *  Exported: the plugin layer reuses the SAME pattern for context redaction and
+ *  its sandbox fetch, so the two paths can never drift (docs/PLUGINS.md §8). */
+export const CREDENTIAL_HEADER_RE =
+  /(authorization|api[-_]?key|access[-_]?key|token|secret|credential|password|passwd|auth|cookie|session|bearer|jwt|csrf|xsrf|signature)/i
 
 /**
  * Content-type fragments we treat as text (decoded to `text`). Anything else is

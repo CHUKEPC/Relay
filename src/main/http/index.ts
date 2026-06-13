@@ -29,8 +29,20 @@ const inFlight = new Map<string, AbortController>()
  * Idempotent-ish: callers should invoke this once during app startup. The
  * handlers create/track an AbortController per requestId and always clean the
  * map entry on completion (success or failure).
+ *
+ * `onResponse` is an optional fire-and-forget observer (the plugin `response`
+ * lifecycle hook) — it must never delay or fail the response path.
+ *
+ * `onRequest` is an optional pre-send transform (the plugin `request` hook) —
+ * it may return a patched spec; failures fall back to the original spec. The
+ * abort signal lets it stop running hooks when the user cancels the request.
  */
-export function registerHttpHandlers(ipcMain: IpcMain, cookieJar?: CookieJarBridge): void {
+export function registerHttpHandlers(
+  ipcMain: IpcMain,
+  cookieJar?: CookieJarBridge,
+  onResponse?: (spec: RequestSpec, result: ResponseResult) => void,
+  onRequest?: (spec: RequestSpec, signal: AbortSignal) => Promise<RequestSpec>
+): void {
   ipcMain.handle(
     IPC.request.send,
     async (_event: IpcMainInvokeEvent, spec: RequestSpec, opts: RunOptions): Promise<ResponseResult> => {
@@ -41,7 +53,24 @@ export function registerHttpHandlers(ipcMain: IpcMain, cookieJar?: CookieJarBrid
       inFlight.set(opts.requestId, controller)
 
       try {
-        return await runRequest(spec, opts, controller.signal, cookieJar)
+        // Pre-request plugin hooks may patch the resolved spec before send.
+        let finalSpec = spec
+        if (onRequest) {
+          try {
+            finalSpec = await onRequest(spec, controller.signal)
+          } catch (err) {
+            console.error('[http] onRequest transform failed:', err)
+          }
+        }
+        const result = await runRequest(finalSpec, opts, controller.signal, cookieJar)
+        if (onResponse) {
+          try {
+            onResponse(finalSpec, result)
+          } catch (err) {
+            console.error('[http] onResponse observer failed:', err)
+          }
+        }
+        return result
       } finally {
         // Only delete if we are still the owner (a reused id may have replaced us).
         if (inFlight.get(opts.requestId) === controller) {

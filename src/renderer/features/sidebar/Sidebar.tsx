@@ -1,7 +1,8 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { useUi, type SideTab } from '@renderer/store/ui'
 import { useConsole } from '@renderer/store/console'
+import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
 import { trackDrag } from '@renderer/lib/drag'
 import { CollectionsTree } from './CollectionsTree'
@@ -23,6 +24,9 @@ export function Sidebar() {
   const setSidebarWidth = useUi((s) => s.setSidebarWidth)
   const [query, setQuery] = useState('')
   const asideRef = useRef<HTMLElement>(null)
+  const pluginList = usePlugins((s) => s.plugins)
+  const pluginBusy = usePlugins((s) => s.busy)
+  const sidebarButtons = useMemo(() => collectButtons(pluginList, 'sidebar'), [pluginList])
 
   const onHandleDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -77,6 +81,24 @@ export function Sidebar() {
       {sideTab === 'env' && <EnvList />}
 
       <div style={{ marginTop: 'auto', padding: 10, borderTop: '1px solid var(--line)' }}>
+        {sidebarButtons.map(({ pluginId, pluginName, button }) => {
+          const busy = !!pluginBusy[`${pluginId}:${button.id}`]
+          return (
+            <button
+              key={`${pluginId}:${button.id}`}
+              className="tree-row"
+              style={{ width: '100%' }}
+              disabled={busy}
+              title={button.tooltip ?? `${pluginName} — ${button.label}`}
+              onClick={() => void usePlugins.getState().invokeButtonFromActiveTab(pluginId, button.id)}
+            >
+              <span className="twirl">
+                <Icon name={busy ? 'refresh' : (button.icon ?? 'bolt')} size={15} className={busy ? 'spin' : undefined} />
+              </span>
+              <span className="name">{button.label}</span>
+            </button>
+          )
+        })}
         <button className="tree-row" data-tour="console" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title="Консоль запросов">
           <span className="twirl">
             <Icon name="code2" size={15} />

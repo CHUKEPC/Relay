@@ -5,6 +5,7 @@ export type SideTab = 'collections' | 'history' | 'env'
 export type SettingsSection =
   | 'providers'
   | 'appearance'
+  | 'plugins'
   | 'general'
   | 'network'
   | 'data'

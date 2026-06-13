@@ -12,11 +12,12 @@
  * Supported method kinds: unary, server-streaming, client-streaming, bidi.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as grpc from '@grpc/grpc-js'
-import * as protoLoader from '@grpc/proto-loader'
-import * as descriptor from 'protobufjs/ext/descriptor'
+import type * as grpc from '@grpc/grpc-js'
+import type * as protoLoader from '@grpc/proto-loader'
+import type * as descriptorNs from 'protobufjs/ext/descriptor'
 import type { BrowserWindow, IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { makeId } from '@shared/id'
@@ -32,6 +33,30 @@ import type {
 } from '@shared/types'
 
 type GetWindow = () => BrowserWindow | null
+
+/**
+ * The grpc stack is REQUIRED LAZILY, not imported at module scope: protobufjs
+ * runs `Function(...)` codegen while its modules initialize, which crashes the
+ * whole bundle when it is re-forked as a script/plugin sandbox child running
+ * under `--disallow-code-generation-from-strings`. Deferring the require keeps
+ * the sandbox role (which never touches gRPC) free of protobufjs entirely.
+ */
+const lazyRequire = createRequire(import.meta.url)
+
+interface GrpcStack {
+  grpc: typeof grpc
+  protoLoader: typeof protoLoader
+  descriptor: typeof descriptorNs
+}
+
+let grpcStack: GrpcStack | null = null
+function rt(): GrpcStack {
+  return (grpcStack ??= {
+    grpc: lazyRequire('@grpc/grpc-js') as typeof grpc,
+    protoLoader: lazyRequire('@grpc/proto-loader') as typeof protoLoader,
+    descriptor: lazyRequire('protobufjs/ext/descriptor') as typeof descriptorNs
+  })
+}
 
 interface LiveCall {
   /** client-/bidi-stream: write one message */
@@ -97,7 +122,7 @@ function loadProto(proto: string): protoLoader.PackageDefinition {
   const file = join(dir, 'service.proto')
   try {
     writeFileSync(file, proto, 'utf8')
-    return protoLoader.loadSync(file, { ...LOAD_OPTS, includeDirs: [dir] })
+    return rt().protoLoader.loadSync(file, { ...LOAD_OPTS, includeDirs: [dir] })
   } finally {
     try {
       rmSync(dir, { recursive: true, force: true })
@@ -145,7 +170,7 @@ export function parseProto(proto: string): GrpcParseResult {
 }
 
 function metadataFromKV(kv: KV[] | undefined): grpc.Metadata {
-  const md = new grpc.Metadata()
+  const md = new (rt().grpc.Metadata)()
   for (const h of kv ?? []) {
     if (h && h.enabled !== false && h.key) md.add(h.key, h.value ?? '')
   }
@@ -311,8 +336,8 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
         return
       }
       try {
-        const fileSet = { file: fileProtos.map((buf) => descriptor.FileDescriptorProto.decode(buf)) }
-        const pkgDef = protoLoader.loadFileDescriptorSetFromObject(
+        const fileSet = { file: fileProtos.map((buf) => rt().descriptor.FileDescriptorProto.decode(buf)) }
+        const pkgDef = rt().protoLoader.loadFileDescriptorSetFromObject(
           fileSet as Parameters<typeof protoLoader.loadFileDescriptorSetFromObject>[0],
           LOAD_OPTS
         )
@@ -360,7 +385,7 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
     })
 
     stream.on('error', (err: grpc.ServiceError) => {
-      finish({ error: `${grpc.status[err.code] ?? err.code}: ${err.message}` })
+      finish({ error: `${rt().grpc.status[err.code] ?? err.code}: ${err.message}` })
     })
 
     stream.on('end', () => {
@@ -390,7 +415,7 @@ export async function reflectServices(spec: GrpcReflectSpec): Promise<GrpcParseR
 
 /** Resolve a service constructor from the loaded package by qualified name. */
 function resolveServiceCtor(pkgDef: protoLoader.PackageDefinition, service: string): grpc.ServiceClientConstructor | null {
-  const root = grpc.loadPackageDefinition(pkgDef) as Record<string, unknown>
+  const root = rt().grpc.loadPackageDefinition(pkgDef) as Record<string, unknown>
   let node: unknown = root
   for (const part of service.split('.')) {
     node = (node as Record<string, unknown> | undefined)?.[part]
@@ -426,7 +451,7 @@ function readPem(path: string | undefined): Buffer | null {
  * Throws if a configured PEM file cannot be read (surfaced to the caller).
  */
 function credentials(spec: TlsSpec): grpc.ChannelCredentials {
-  if (spec.plaintext) return grpc.credentials.createInsecure()
+  if (spec.plaintext) return rt().grpc.credentials.createInsecure()
 
   const ca = readPem(spec.caCertPath)
   const cert = readPem(spec.clientCertPath)
@@ -440,7 +465,7 @@ function credentials(spec: TlsSpec): grpc.ChannelCredentials {
 
   // createSsl(rootCerts, privateKey, certChain, verifyOptions): a non-null
   // key+cert pair enables mTLS; a non-null CA pins a custom root.
-  return grpc.credentials.createSsl(ca, key, cert, verifyOpts)
+  return rt().grpc.credentials.createSsl(ca, key, cert, verifyOpts)
 }
 
 /**
@@ -509,7 +534,7 @@ function invoke(
   }
 
   const onStatus = (status: grpc.StatusObject): void => {
-    const name = grpc.status[status.code] ?? String(status.code)
+    const name = rt().grpc.status[status.code] ?? String(status.code)
     emit(msg('system', `status: ${name}${status.details ? ` — ${status.details}` : ''}`, 'status'))
   }
 
@@ -525,7 +550,7 @@ function invoke(
   }
   const errEvent = (err: grpc.ServiceError): RealtimeEvent => ({
     type: 'error',
-    error: `${grpc.status[err.code] ?? err.code}: ${err.message}`
+    error: `${rt().grpc.status[err.code] ?? err.code}: ${err.message}`
   })
 
   emit({ type: 'open', protocol: kind })

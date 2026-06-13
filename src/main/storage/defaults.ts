@@ -5,6 +5,7 @@ import type {
   EnvironmentsDoc,
   GlobalsDoc,
   HistoryDoc,
+  PluginsStateDoc,
   ProvidersDoc,
   SettingsDoc,
   TabsDoc
@@ -117,4 +118,8 @@ export function defaultSettings(): SettingsDoc {
 
 export function defaultCookies(): CookiesDoc {
   return { version: STORAGE_VERSION, cookies: [] }
+}
+
+export function defaultPlugins(): PluginsStateDoc {
+  return { version: STORAGE_VERSION, plugins: [] }
 }

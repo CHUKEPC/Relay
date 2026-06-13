@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useResponse, type TabResponse } from '@renderer/store/response'
+import { collectButtons, usePlugins, type PluginToolbarButton } from '@renderer/store/plugins'
 import { useSettings } from '@renderer/store/settings'
+import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { Icon } from '@renderer/components/Icon'
-import { Field, IconButton, Modal, Segmented } from '@renderer/components/primitives'
+import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
 import { monaco } from '@renderer/lib/monaco'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
 import { kbd } from '@renderer/lib/platform'
 import { VisualizerTab } from './VisualizerTab'
 import { CookieManager } from '@renderer/features/cookies/CookieManager'
-import type { ResponseResult, HttpErrorKind } from '@shared/types'
+import { requestSnapshotForPlugin, responseSnapshotForPlugin } from '@shared/plugin-context'
+import type { PluginEventContext, ResponseResult, HttpErrorKind } from '@shared/types'
 
 /* ============================================================
  * Helpers
@@ -26,7 +29,8 @@ export function formatBytes(n: number): string {
 }
 
 type BodyView = 'pretty' | 'raw' | 'preview'
-type RespTab = 'body' | 'headers' | 'cookies' | 'tests' | 'visualize'
+/** Fixed tabs, plus dynamic `panel:<pluginId>:<panelId>` tabs from plugins. */
+type RespTab = 'body' | 'headers' | 'cookies' | 'tests' | 'visualize' | (string & {})
 
 /** Map a content-type to a Monaco language id for the Pretty viewer. */
 function languageForContentType(contentType: string | undefined): string {
@@ -158,6 +162,125 @@ function PreviewPane({ result }: { result: ResponseResult }): JSX.Element {
   )
 }
 
+/* ============================================================
+ * Plugin panel — sandboxed iframe rendering plugin-supplied HTML
+ * ============================================================ */
+
+function PluginPanelPane({
+  pluginId,
+  panelId,
+  context,
+  interactive,
+  responseKey
+}: {
+  pluginId: string
+  panelId: string
+  context: PluginEventContext
+  interactive: boolean
+  /** changes when a new response arrives → the panel re-renders with it */
+  responseKey: string
+}): JSX.Element {
+  const [html, setHtml] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [nonce, setNonce] = useState(0)
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  const msgBusyRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    void usePlugins
+      .getState()
+      .invokePanel(pluginId, panelId, context)
+      .then((res) => {
+        if (cancelled) return
+        if (res.error) setError(res.error)
+        else if (res.panelHtml == null) setError('Плагин не вернул содержимое панели (relay.panel.set не вызван).')
+        else setHtml(res.panelHtml)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // Re-run on refresh (nonce) or a new response (responseKey). Context is
+    // captured per render, so it reflects the latest request/response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pluginId, panelId, nonce, responseKey])
+
+  // Interactive panels: forward the iframe's postMessage to the plugin and
+  // re-render with whatever HTML the handler sets. The iframe is a NULL origin
+  // (sandbox="allow-scripts" without allow-same-origin), so its script can't
+  // reach the app — it can only postMessage to us. An in-flight guard drops
+  // messages while one is being processed, so a chatty/hostile iframe can't
+  // spawn a fork storm.
+  useEffect(() => {
+    if (!interactive) return
+    const onMessage = (e: MessageEvent): void => {
+      if (!frameRef.current || e.source !== frameRef.current.contentWindow) return
+      if (msgBusyRef.current) return
+      msgBusyRef.current = true
+      void usePlugins
+        .getState()
+        .panelMessage(pluginId, panelId, e.data, context)
+        .then((res) => {
+          if (res.error) setError(res.error)
+          else if (res.panelHtml != null) setHtml(res.panelHtml)
+        })
+        .finally(() => {
+          msgBusyRef.current = false
+        })
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pluginId, panelId, interactive])
+
+  if (loading) return <RespLoading />
+  if (error) {
+    return (
+      <div className="empty" style={{ alignItems: 'flex-start', paddingTop: 24 }}>
+        <div className="empty-card">
+          <div className="empty-ico" style={{ color: 'var(--s-5xx)' }}>
+            <Icon name="warn" size={22} />
+          </div>
+          <p style={{ marginBottom: 10 }}>{error}</p>
+          <button className="btn ghost" onClick={() => setNonce((n) => n + 1)}>
+            <Icon name="refresh" size={14} />
+            Повторить
+          </button>
+        </div>
+      </div>
+    )
+  }
+  // The HTML is UNTRUSTED plugin output. Non-interactive: fully script-free
+  // iframe. Interactive: scripts allowed but the iframe is a null origin (no
+  // allow-same-origin) and the CSP blocks all network, so it's contained.
+  const scriptSrc = interactive ? " 'unsafe-inline'" : ''
+  const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; script-src${scriptSrc || " 'none'"}">`
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 10px' }}>
+        <button className="btn ghost" style={{ height: 26 }} onClick={() => setNonce((n) => n + 1)}>
+          <Icon name="refresh" size={13} />
+          Обновить
+        </button>
+      </div>
+      <iframe
+        ref={frameRef}
+        className="preview-frame"
+        title="Панель плагина"
+        sandbox={interactive ? 'allow-scripts' : ''}
+        srcDoc={`${csp}${html ?? ''}`}
+        style={{ flex: 1, border: 'none', width: '100%' }}
+      />
+    </div>
+  )
+}
+
 function BodyPane({
   result,
   view,
@@ -270,7 +393,10 @@ function StatusBar({
   onCopy,
   onSave,
   onSaveExample,
-  onAskAI
+  onAskAI,
+  pluginButtons,
+  pluginBusy,
+  onPluginButton
 }: {
   result: ResponseResult
   copied: boolean
@@ -278,6 +404,9 @@ function StatusBar({
   onSave: () => void
   onSaveExample: () => void
   onAskAI: () => void
+  pluginButtons: PluginToolbarButton[]
+  pluginBusy: Record<string, boolean>
+  onPluginButton: (pluginId: string, buttonId: string) => void
 }): JSX.Element {
   const sc = statusColor(result.status)
   return (
@@ -298,6 +427,38 @@ function StatusBar({
         <span>{result.headers.length} headers</span>
       </div>
       <div className="resp-actions">
+        {/* The status bar is a no-wrap row (and split view halves it), so at
+            most 3 plugin buttons render inline; the rest go into a ⋯ menu. */}
+        {pluginButtons.slice(0, 3).map(({ pluginId, pluginName, button }) => {
+          const busy = !!pluginBusy[`${pluginId}:${button.id}`]
+          return (
+            <button
+              key={`${pluginId}:${button.id}`}
+              className="btn ghost"
+              style={{ height: 28 }}
+              title={button.tooltip ?? `${pluginName} — ${button.label}`}
+              disabled={busy}
+              onClick={() => onPluginButton(pluginId, button.id)}
+            >
+              <Icon name={busy ? 'refresh' : (button.icon ?? 'bolt')} size={14} className={busy ? 'spin' : undefined} />
+              {button.label}
+            </button>
+          )
+        })}
+        {pluginButtons.length > 3 && (
+          <Menu
+            trigger={
+              <button className="btn ghost" style={{ height: 28 }} title="Ещё кнопки плагинов">
+                <Icon name="dots" size={14} />
+              </button>
+            }
+            items={pluginButtons.slice(3).map(({ pluginId, pluginName, button }) => ({
+              label: `${pluginName}: ${button.label}`,
+              icon: button.icon ?? 'bolt',
+              onSelect: () => onPluginButton(pluginId, button.id)
+            }))}
+          />
+        )}
         <button className="ask-ai-btn" onClick={onAskAI}>
           <Icon name="sparkle" size={14} />
           Спросить AI
@@ -317,6 +478,7 @@ function StatusBar({
 function TabsRow({
   result,
   testCount,
+  panels,
   tab,
   onTab,
   bodyView,
@@ -327,6 +489,7 @@ function TabsRow({
 }: {
   result: ResponseResult
   testCount: number
+  panels: { tabId: string; label: string }[]
   tab: RespTab
   onTab: (t: RespTab) => void
   bodyView: BodyView
@@ -340,7 +503,8 @@ function TabsRow({
     { id: 'headers', label: 'Headers', count: result.headers.length },
     { id: 'cookies', label: 'Cookies', count: result.cookies.length },
     { id: 'tests', label: 'Tests', count: testCount },
-    { id: 'visualize', label: 'Visualize' }
+    { id: 'visualize', label: 'Visualize' },
+    ...panels.map((p) => ({ id: p.tabId as RespTab, label: p.label }))
   ]
 
   return (
@@ -443,6 +607,26 @@ function ExampleNameModal({
 export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () => void }): JSX.Element {
   const r = useResponse((s) => s.byTab[tabId]) ?? ({ status: 'empty' } as TabResponse)
   const wordWrap = useSettings((s) => s.settings.wordWrapResponse)
+  const pluginList = usePlugins((s) => s.plugins)
+  const pluginBusy = usePlugins((s) => s.busy)
+  const pluginButtons = useMemo(() => collectButtons(pluginList, 'response-toolbar'), [pluginList])
+  const pluginPanels = useMemo(
+    () =>
+      pluginList
+        .filter((p) => p.enabled && !p.error)
+        .flatMap((p) =>
+          (p.manifest.contributes.panels ?? [])
+            .filter((pn) => pn.location === 'response-tab')
+            .map((pn) => ({
+              tabId: `panel:${p.manifest.id}:${pn.id}`,
+              label: pn.label,
+              pluginId: p.manifest.id,
+              panelId: pn.id,
+              interactive: !!pn.interactive
+            }))
+        ),
+    [pluginList]
+  )
 
   const [tab, setTab] = useState<RespTab>('body')
   const [bodyView, setBodyView] = useState<BodyView>('pretty')
@@ -540,6 +724,23 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
   const testCount = r.testResults?.length ?? 0
   const isError = r.status === 'error' || !!result.error
 
+  // Snapshot of the tab's request + this response for a plugin event. Main
+  // re-filters it by the plugin's grants and masks sensitive fields.
+  const pluginContext = (): PluginEventContext => {
+    const req = useTabs.getState().doc.tabs.find((t) => t.id === tabId)?.request
+    return {
+      request: req ? requestSnapshotForPlugin(req.method, req.url, req.headers) : undefined,
+      response: responseSnapshotForPlugin(result)
+    }
+  }
+  const invokePluginButton = (pluginId: string, buttonId: string): void => {
+    void usePlugins.getState().invokeButton(pluginId, buttonId, pluginContext())
+  }
+
+  // A selected panel tab that vanished (plugin disabled/removed) falls back to Body.
+  const activePanel = pluginPanels.find((p) => p.tabId === tab)
+  const effectiveTab: RespTab = typeof tab === 'string' && tab.startsWith('panel:') && !activePanel ? 'body' : tab
+
   return (
     <div className="response" style={{ flex: 1 }}>
       <StatusBar
@@ -549,12 +750,16 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         onSave={saveBody}
         onSaveExample={() => setExampleOpen(true)}
         onAskAI={onAskAI}
+        pluginButtons={pluginButtons}
+        pluginBusy={pluginBusy}
+        onPluginButton={invokePluginButton}
       />
 
       <TabsRow
         result={result}
         testCount={testCount}
-        tab={tab}
+        panels={pluginPanels.map((p) => ({ tabId: p.tabId, label: p.label }))}
+        tab={effectiveTab}
         onTab={setTab}
         bodyView={bodyView}
         onBodyView={setBodyView}
@@ -575,16 +780,27 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
       />
 
       <div className="resp-body">
-        {tab === 'body' &&
+        {effectiveTab === 'body' &&
           (isError ? (
             <RespError result={result} onAskAI={onAskAI} />
           ) : (
             <BodyPane result={result} view={bodyView} wordWrap={wordWrap} hostRef={bodyHostRef} />
           ))}
 
-        {tab === 'visualize' && <VisualizerTab payload={r.visualizer} result={result} />}
+        {activePanel && effectiveTab === activePanel.tabId && (
+          <PluginPanelPane
+            key={activePanel.tabId}
+            pluginId={activePanel.pluginId}
+            panelId={activePanel.panelId}
+            context={pluginContext()}
+            interactive={activePanel.interactive}
+            responseKey={`${r.requestId ?? ''}:${result.timings.startedAt}`}
+          />
+        )}
 
-        {tab === 'headers' && (
+        {effectiveTab === 'visualize' && <VisualizerTab payload={r.visualizer} result={result} />}
+
+        {effectiveTab === 'headers' && (
           <table className="resp-table">
             <thead>
               <tr>
@@ -603,7 +819,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
           </table>
         )}
 
-        {tab === 'cookies' && (
+        {effectiveTab === 'cookies' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px' }}>
               <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
@@ -645,7 +861,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
           </div>
         )}
 
-        {tab === 'tests' && <TestsPane r={r} />}
+        {effectiveTab === 'tests' && <TestsPane r={r} />}
       </div>
     </div>
   )
