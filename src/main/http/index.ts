@@ -17,6 +17,34 @@ import type { RequestSpec, ResponseResult, RunOptions } from '@shared/types'
 import { runRequest, type CookieJarBridge } from './engine'
 
 /**
+ * Turn `proxy.mode === 'system'` into a concrete proxy for this URL.
+ *
+ * Chromium already knows the machine's proxy configuration — including PAC
+ * scripts and WPAD — so the answer comes from the session resolver rather than
+ * from re-reading OS settings. The engine stays free of Electron imports: by
+ * the time it runs, a system proxy looks exactly like a custom one.
+ */
+async function resolveSystemProxy(spec: RequestSpec): Promise<RequestSpec> {
+  const proxy = spec.settings.proxy
+  if (!proxy || proxy.mode !== 'system') return spec
+  try {
+    const { session } = await import('electron')
+    const resolved = await session.defaultSession.resolveProxy(spec.url)
+    // "DIRECT" | "PROXY host:port" | "PROXY a:1;PROXY b:2" | "SOCKS5 host:port"
+    const first = String(resolved || 'DIRECT').split(';')[0].trim()
+    const [kind, address] = first.split(/s+/)
+    if (!address || /^direct$/i.test(kind)) {
+      return { ...spec, settings: { ...spec.settings, proxy: { ...proxy, mode: 'off', enabled: false } } }
+    }
+    const scheme = /^socks/i.test(kind) ? (/^socks4/i.test(kind) ? 'socks4' : 'socks5') : 'http'
+    return { ...spec, settings: { ...spec.settings, proxy: { ...proxy, enabled: true, url: `${scheme}://${address}` } } }
+  } catch (err) {
+    console.error('[http] system proxy resolution failed:', (err as Error).message)
+    return { ...spec, settings: { ...spec.settings, proxy: { ...proxy, mode: 'off', enabled: false } } }
+  }
+}
+
+/**
  * In-flight requests keyed by `RunOptions.requestId`. Each entry owns the
  * AbortController whose signal is threaded into `runRequest`, so `request:cancel`
  * can abort the exact transfer.
@@ -62,6 +90,7 @@ export function registerHttpHandlers(
             console.error('[http] onRequest transform failed:', err)
           }
         }
+        finalSpec = await resolveSystemProxy(finalSpec)
         const result = await runRequest(finalSpec, opts, controller.signal, cookieJar)
         if (onResponse) {
           try {

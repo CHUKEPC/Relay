@@ -4,7 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { Field, Modal } from '@renderer/components/primitives'
 import { useWorkspaces } from '@renderer/store/workspaces'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** Titlebar workspace switcher: switch / create / rename / delete local workspaces. */
 export function WorkspaceSwitcher(): JSX.Element {
   const workspaces = useWorkspaces((s) => s.workspaces)
@@ -21,7 +21,7 @@ export function WorkspaceSwitcher(): JSX.Element {
         <DropdownMenu.Trigger asChild>
           <div className="env-pill nodrag" title={tr('Рабочее пространство')} style={{ background: 'var(--bg-1)' }}>
             <Icon name="grid" size={13} style={{ color: 'var(--tx-3)' }} />
-            {active?.name ?? 'Пространство'}
+            {tr(active?.name ?? 'Пространство')}
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)' }} />
           </div>
         </DropdownMenu.Trigger>
@@ -36,7 +36,7 @@ export function WorkspaceSwitcher(): JSX.Element {
                 disabled={busy}
               >
                 <Icon name="grid" size={14} style={{ color: 'var(--tx-3)' }} />
-                <span style={{ flex: 1 }}>{w.name}</span>
+                <span style={{ flex: 1 }}>{tr(w.name)}</span>
                 {w.id === activeId && <Icon name="check" size={14} className="tick" />}
               </DropdownMenu.Item>
             ))}
@@ -66,7 +66,7 @@ function CreateModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   }
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={tr('Новое рабочее пространство')} width={420}>
-      <Field label={tr('Название')} hint="Изолированный набор коллекций, сред, истории и вкладок.">
+      <Field label={tr('Название')} hint={tr('Изолированный набор коллекций, сред, истории и вкладок.')}>
         <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commit()} placeholder="Personal" />
       </Field>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
@@ -113,11 +113,11 @@ function ManageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
               />
             ) : (
               <span style={{ flex: 1, fontSize: 12.5 }}>
-                {w.name}
+                {tr(w.name)}
                 {w.id === activeId && <span style={{ color: 'var(--tx-3)', fontSize: 11 }}> {tr('· активно')}</span>}
               </span>
             )}
-            <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEdit(w.id, w.name)} title={tr('Переименовать')}>
+            <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEdit(w.id, tr(w.name))} title={tr('Переименовать')}>
               <Icon name="doc" size={14} />
             </button>
             <button
@@ -125,9 +125,10 @@ function ManageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
               style={{ width: 28, height: 28, color: workspaces.length <= 1 ? 'var(--tx-3)' : 'var(--s-5xx)' }}
               disabled={workspaces.length <= 1}
               onClick={() => {
-                if (window.confirm(`Удалить пространство «${w.name}» и все его данные?`)) void useWorkspaces.getState().remove(w.id)
+                if (window.confirm(trf('Удалить пространство «{name}» и все его данные?', { name: tr(w.name) })))
+                  void useWorkspaces.getState().remove(w.id)
               }}
-              title={workspaces.length <= 1 ? 'Нельзя удалить последнее' : 'Удалить'}
+              title={workspaces.length <= 1 ? tr('Нельзя удалить последнее') : tr('Удалить')}
             >
               <Icon name="trash" size={14} />
             </button>

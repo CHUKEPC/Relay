@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { GraphqlSchema } from '@shared/types'
+import { tr } from '../lib/i18n'
 
 export type GraphqlSchemaStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -30,7 +31,7 @@ export const useGraphqlSchema = create<GraphqlState>((set, store) => ({
         set((s) => ({ byRequest: { ...s.byRequest, [requestId]: { status: 'ready', schema: res.schema } } }))
       } else {
         set((s) => ({
-          byRequest: { ...s.byRequest, [requestId]: { status: 'error', error: res.error ?? 'Не удалось получить схему' } }
+          byRequest: { ...s.byRequest, [requestId]: { status: 'error', error: res.error ?? tr('Не удалось получить схему') } }
         }))
       }
     } catch (err) {

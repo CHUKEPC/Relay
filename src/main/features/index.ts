@@ -6,15 +6,16 @@
  * code is ever executed, so this registry needs neither sandbox nor permissions
  * — unlike the user plugin system in `src/main/plugins`.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { isCapability, type Capability, type FeaturePluginInfo, type FeaturePluginManifest } from '@shared/features'
 import type { StorageManager } from '../storage'
+import { mt } from '../i18n'
+import { readInstallChoice } from './install'
+import { MANIFEST, MANIFEST_MAX_BYTES, stageSource, validateManifest } from './pack-source'
 
-const MANIFEST = 'plugin.json'
-const MANIFEST_MAX_BYTES = 64 * 1024
 const LOCALE_MAX_BYTES = 512 * 1024
 const LOCALE_CODE = /^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/
 
@@ -58,7 +59,14 @@ function readManifest(dir: string, folder: string): FeaturePluginInfo {
 }
 
 export class FeatureRegistry {
+  /** Every pack folder found on disk, added or not. */
   private plugins: FeaturePluginInfo[] = []
+  /**
+   * Packs the user has actually taken into the app: ticked in the installer or
+   * picked later in Settings. A folder that is merely present in `plugins/` is
+   * deliberately *not* here — it stays invisible until it is added, so the
+   * Settings list shows what the user chose rather than what shipped.
+   */
   private enabled: Record<string, boolean> = {}
   private loaded = false
 
@@ -81,18 +89,34 @@ export class FeatureRegistry {
 
     const doc = await this.storage.get('features')
     this.enabled = { ...doc.enabled }
+
+    // The installer's pack selection wins once per install; after that the
+    // user's own toggles in Settings are what counts.
+    const choice = readInstallChoice()
+    const fresh = choice && choice.stamp !== doc.appliedInstall
+    if (choice && fresh) {
+      // Only the ticked packs are added; the rest keep sitting in the folder.
+      this.enabled = Object.fromEntries(folders.filter((id) => choice.packs.includes(id)).map((id) => [id, true]))
+    }
+
     this.plugins = folders.map((f) => {
       const info = readManifest(join(dir, f), f)
-      // New plugins start enabled: the folder shipping with the app *is* the
-      // user's decision to have the feature. Disabling is what gets persisted.
-      return { ...info, enabled: !info.error && (this.enabled[info.id] ?? true) }
+      // Packs start OFF: the base app is HTTP only, and everything beyond that
+      // is switched on deliberately — in the installer or in Settings.
+      return { ...info, enabled: !info.error && (this.enabled[info.id] ?? false) }
     })
     this.loaded = true
+
+    if (choice && fresh) {
+      this.storage.set('features', { ...doc, enabled: { ...this.enabled }, appliedInstall: choice.stamp })
+      await this.applyInstallLocale(choice.locale)
+    }
     return this.list()
   }
 
+  /** The packs the user added — what Settings shows. */
   list(): FeaturePluginInfo[] {
-    return this.plugins.map((p) => ({ ...p }))
+    return this.plugins.filter((p) => p.id in this.enabled).map((p) => ({ ...p }))
   }
 
   /** Capabilities unlocked by the currently enabled plugins. */
@@ -139,11 +163,85 @@ export class FeatureRegistry {
     return null
   }
 
+  /**
+   * Install a pack the user picked anywhere on disk: either the folder holding
+   * its `plugin.json`, or a `.zip` containing one. The folder is copied into
+   * the app's `plugins` directory so it loads on every start like the bundled
+   * ones — there is no second place packs can live.
+   */
+  async install(sourcePath: string): Promise<{ ok: true; id: string; list: FeaturePluginInfo[] } | { ok: false; error: string }> {
+    const dir = pluginsDir()
+    try {
+      mkdirSync(dir, { recursive: true })
+      const staged = stageSource(sourcePath)
+      if ('error' in staged) return { ok: false, error: staged.error }
+
+      const checked = validateManifest(staged.dir)
+      if ('error' in checked) {
+        if (staged.temp) rmSync(staged.temp, { recursive: true, force: true })
+        return { ok: false, error: checked.error }
+      }
+      const id = checked.id
+
+      const target = join(dir, id)
+      // Picking a folder that already lives in `plugins/` (the dialog opens
+      // there) is the normal way to take a shipped pack into use — nothing to
+      // copy, it just gets added.
+      if (resolve(staged.dir) !== resolve(target)) {
+        rmSync(target, { recursive: true, force: true })
+        cpSync(staged.dir, target, { recursive: true })
+      }
+      if (staged.temp) rmSync(staged.temp, { recursive: true, force: true })
+
+      // A hand-picked pack is switched on immediately: picking it *is* the
+      // decision to use it, unlike the ones that merely ship with the app.
+      this.enabled[id] = true
+      const doc = await this.storage.get('features')
+      this.storage.set('features', { ...doc, enabled: { ...this.enabled, [id]: true } })
+      await this.load()
+      this.broadcast()
+      return { ok: true, id, list: this.list() }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  }
+
+  /**
+   * Take a pack out of the app. The folder is left in `plugins/` on purpose:
+   * removing a shipped pack must not mean reinstalling the app to get it back,
+   * and the same picker that added it can add it again.
+   */
+  async remove(id: string): Promise<FeaturePluginInfo[]> {
+    delete this.enabled[id]
+    const doc = await this.storage.get('features')
+    const enabled = { ...doc.enabled }
+    delete enabled[id]
+    this.storage.set('features', { ...doc, enabled })
+    await this.load()
+    this.broadcast()
+    return this.list()
+  }
+
   /** Locale codes offered by enabled language plugins. */
   extraLocales(): string[] {
     const out = new Set<string>()
     for (const p of this.plugins) if (p.enabled && !p.error) for (const l of p.locales ?? []) out.add(l)
     return [...out]
+  }
+
+  /**
+   * Make the language chosen in the installer the UI language. Only ever
+   * applied together with a fresh install marker, so it cannot fight a user who
+   * later picks a different language in Settings.
+   */
+  private async applyInstallLocale(locale: string): Promise<void> {
+    try {
+      const settings = await this.storage.get('settings')
+      if (settings.language === locale) return
+      this.storage.set('settings', { ...settings, language: locale })
+    } catch (err) {
+      console.error('[features] cannot apply the installer language:', (err as Error).message)
+    }
   }
 
   private broadcast(): void {
@@ -158,10 +256,54 @@ export class FeatureRegistry {
   }
 }
 
-export function registerFeatureHandlers(registry: FeatureRegistry): void {
+/** Result of the one "pick a plugin" action in Settings. */
+export type PickResult =
+  | { ok: true; kind: 'pack'; id: string; list: FeaturePluginInfo[] }
+  | { ok: true; kind: 'plugin'; id: string }
+  | { ok: false; error: string }
+
+export function registerFeatureHandlers(
+  registry: FeatureRegistry,
+  /** Fallback for an archive that is a code plugin rather than a capability pack. */
+  installCodePlugin: (zipPath: string) => Promise<{ id: string }>
+): void {
   ipcMain.handle(IPC.features.list, async () => (registry.isLoaded() ? registry.list() : registry.load()))
   ipcMain.handle(IPC.features.setEnabled, (_e, id: string, enabled: boolean) => registry.setEnabled(id, enabled))
   ipcMain.handle(IPC.features.locale, (_e, code: string) => registry.readLocale(code))
+  ipcMain.handle(IPC.features.install, async (): Promise<PickResult | null> => {
+    // The path always comes from a native dialog, never from the renderer. It
+    // opens in the plugins folder — where the packs that ship with the app wait
+    // to be switched on — but any folder on the computer works.
+    const picked = await dialog.showOpenDialog({
+      title: mt('Выберите плагин'),
+      defaultPath: pluginsDir(),
+      properties: ['openFile'],
+      filters: [
+        { name: mt('Плагин Relay'), extensions: ['json', 'zip'] },
+        { name: mt('Все файлы'), extensions: ['*'] }
+      ]
+    })
+    if (picked.canceled || !picked.filePaths.length) return null
+
+    const path = picked.filePaths[0]
+    const asPack = await registry.install(path)
+    if (asPack.ok) return { ...asPack, kind: 'pack' as const }
+
+    // Not a capability pack. A `.zip` can still be a code plugin, so try that
+    // before reporting the pack error — the user picked one file, not a kind.
+    if (path.toLowerCase().endsWith('.zip')) {
+      try {
+        const installed = await installCodePlugin(path)
+        return { ok: true as const, kind: 'plugin' as const, id: installed.id }
+      } catch (err) {
+        return { ok: false as const, error: (err as Error).message }
+      }
+    }
+    return asPack
+  })
+
+  ipcMain.handle(IPC.features.remove, (_e, id: string) => registry.remove(id))
+
   ipcMain.handle(IPC.features.openFolder, async () => {
     const dir = pluginsDir()
     if (existsSync(dir)) await shell.openPath(dir)

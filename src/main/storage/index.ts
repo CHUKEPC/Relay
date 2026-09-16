@@ -5,6 +5,7 @@ import type { ProviderConfig, WorkspaceMeta, WorkspacesDoc } from '@shared/types
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { IPC, type StorageKey, type StorageMap } from '@shared/ipc-contract'
+import { setMainLanguage } from '../i18n'
 import { JsonStore } from './json-store'
 import { SecretStore } from './secrets'
 import {
@@ -137,6 +138,8 @@ export class StorageManager {
     }
     const doc: WorkspacesDoc = {
       version: STORAGE_VERSION,
+      // Translated on display (the UI language can change later), so the
+      // stored name stays the Russian source string like every other key.
       workspaces: [{ id: defaultId, name: 'Личное' }],
       activeWorkspaceId: defaultId
     }
@@ -313,6 +316,10 @@ export class StorageManager {
 }
 
 export function registerStorageHandlers(storage: StorageManager): void {
+  // Native dialogs and window titles are drawn by the main process, so they have
+  // to follow the UI language too.
+  void storage.get('settings').then((s) => setMainLanguage(s.language))
+
   // Reject unknown keys: `fileFor` joins the key into a path, so an unvalidated
   // key from the renderer (`../foo`) would read/write outside the data dir.
   const isKnownKey = (key: string): boolean => Object.prototype.hasOwnProperty.call(SEEDS, key)
@@ -323,6 +330,7 @@ export function registerStorageHandlers(storage: StorageManager): void {
   ipcMain.handle(IPC.storage.save, async (e, key: StorageKey, value: unknown) => {
     if (!isKnownKey(key)) throw new Error(`Unknown storage key: ${key}`)
     storage.set(key, value as StorageMap[StorageKey])
+    if (key === 'settings') setMainLanguage((value as StorageMap['settings'])?.language)
     // Keep detached pane windows and the main window showing the same data.
     for (const win of BrowserWindow.getAllWindows()) {
       if (win.isDestroyed() || win.webContents.id === e.sender.id) continue

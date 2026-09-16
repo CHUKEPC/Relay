@@ -10,6 +10,7 @@ import type {
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { flattenVariables } from '@shared/interpolate'
+import { trf } from '@renderer/lib/i18n'
 import { emptyCollections } from './defaults'
 import { persist } from './persist'
 
@@ -321,12 +322,12 @@ function applyVarDefUpdates(existing: VariableDef[], updates: Record<string, str
 function cloneNodeWithNewIds(node: CollectionNode): CollectionNode {
   if (node.type === 'request') {
     const id = makeId('req')
-    return { id, type: 'request', request: { ...node.request, id, name: `${node.request.name} (копия)` } }
+    return { id, type: 'request', request: { ...node.request, id, name: trf('{name} (копия)', { name: node.request.name }) } }
   }
   return {
     ...node,
     id: makeId(node.type === 'collection' ? 'col' : 'fld'),
-    name: `${node.name} (копия)`,
+    name: trf('{name} (копия)', { name: node.name }),
     children: node.children.map(cloneNodeWithNewIds)
   }
 }

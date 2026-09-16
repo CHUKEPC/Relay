@@ -20,7 +20,7 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
   const isGlobals = target.kind === 'globals'
   const environment = !isGlobals ? env.environments.find((e) => e.id === target.id) : undefined
   const vars: VariableDef[] = isGlobals ? globals.variables : environment?.variables ?? []
-  const title = isGlobals ? 'Глобальные переменные' : environment?.name || 'Среда'
+  const title = isGlobals ? tr('Глобальные переменные') : tr(environment?.name || 'Среда')
 
   const commit = (next: VariableDef[]) => {
     if (isGlobals) setGlobalVars(next)

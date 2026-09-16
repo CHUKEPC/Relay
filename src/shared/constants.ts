@@ -5,7 +5,7 @@
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '0.9.0'
+export const APP_VERSION = '0.9.3'
 export const FEEDBACK_EMAIL = 'chukepc.best@gmail.com'
 /**
  * GitHub owner/repo used for release update checks; placeholder until the app

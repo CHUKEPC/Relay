@@ -9,7 +9,7 @@ import { useUi } from '@renderer/store/ui'
 import { useCap } from '@renderer/store/features'
 import { CORE_AUTH_TYPES } from '@shared/features'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 const CORE_AUTH = new Set<Auth['type']>(CORE_AUTH_TYPES)
 
 const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
@@ -103,7 +103,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
       </Field>
       {!hasAdvanced && (
         <div style={{ color: 'var(--tx-3)', fontSize: 12, margin: '-4px 0 10px' }}>
-          Digest, JWT, OAuth 1.0, AWS Signature, Hawk, Akamai, ASAP и NTLM — в плагине{' '}
+          {tr('Digest, JWT, OAuth 1.0, AWS Signature, Hawk, Akamai, ASAP и NTLM — в плагине')}{' '}
           <button className="link-btn" onClick={() => useUi.getState().openSettings('plugins')}> {tr('«Продвинутая Authorization»')} </button>
           .
         </div>
@@ -169,9 +169,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
           </Field>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
-            <input type="checkbox" checked={auth.preemptive ?? false} onChange={(e) => setAuth({ ...auth, preemptive: e.target.checked })} />
-            Preemptive (отправлять авторизацию сразу, без ожидания 401)
-          </label>
+            <input type="checkbox" checked={auth.preemptive ?? false} onChange={(e) => setAuth({ ...auth, preemptive: e.target.checked })} /> {tr('Preemptive (отправлять авторизацию сразу, без ожидания 401)')} </label>
           {auth.preemptive && (
             <>
               <Field label="Realm">
@@ -186,14 +184,18 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               <Field label="Opaque">
                 <input className="input mono" value={auth.opaque ?? ''} onChange={(e) => setAuth({ ...auth, opaque: e.target.value })} placeholder={tr('(необязательно)')} />
               </Field>
-              <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}> {tr('Preemptive требует известных')} <span className="mono">realm</span> и{' '}
-                <span className="mono">nonce</span> (например, из предыдущего ответа 401). Заголовок{' '}
-                <span className="mono">Authorization</span> {tr('вычисляется и отправляется в первом же запросе.')} </div>
+              <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
+                {tr('Preemptive требует известных')} <span className="mono">realm</span> {tr('и')} <span className="mono">nonce</span>{' '}
+                {tr('(например, из предыдущего ответа 401). Заголовок')} <span className="mono">Authorization</span>{' '}
+                {tr('вычисляется и отправляется в первом же запросе.')}
+              </div>
             </>
           )}
           {!auth.preemptive && (
-            <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}> {tr('Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с заголовком')} <span className="mono">WWW-Authenticate: Digest</span> автоматически
-              вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.
+            <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
+              {tr('Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с заголовком')}{' '}
+              <span className="mono">WWW-Authenticate: Digest</span>{' '}
+              {tr('автоматически вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.')}
             </div>
           )}
         </>
@@ -222,9 +224,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               style={{ resize: 'vertical', minHeight: 84 }}
             />
           </Field>
-          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: -6, marginBottom: 8 }}>
-            Для HS* — общий секрет, для RS*/PS* — PEM приватный ключ.
-          </div>
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: -6, marginBottom: 8 }}> {tr('Для HS* — общий секрет, для RS*/PS* — PEM приватный ключ.')} </div>
           <Field label="Payload (JSON)">
             <textarea
               className="input mono"
@@ -393,10 +393,10 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
           <Field label="Password">
             <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
           </Field>
-          <Field label="Domain" hint="Домен Windows (необязательно)">
+          <Field label="Domain" hint={tr('Домен Windows (необязательно)')}>
             <input className="input" value={auth.domain ?? ''} onChange={(e) => setAuth({ ...auth, domain: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
-          <Field label="Workstation" hint="Имя рабочей станции (необязательно)">
+          <Field label="Workstation" hint={tr('Имя рабочей станции (необязательно)')}>
             <input className="input" value={auth.workstation ?? ''} onChange={(e) => setAuth({ ...auth, workstation: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
           <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: 4 }}> {tr('NTLMv2: запрос отправляется с Type 1, на 401 с Type 2 движок отвечает Type 3 по тому же keep-alive соединению.')} </div>
@@ -426,7 +426,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
 
   const getToken = async () => {
     if (!auth.tokenUrl) {
-      setMsg('Укажите Token URL')
+      setMsg(tr('Укажите Token URL'))
       return
     }
     setBusy(true)
@@ -449,15 +449,15 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
     if (res.ok && res.accessToken) {
       // Persist the new access token (and a rotated refresh token, if returned).
       setAuth({ ...auth, accessToken: res.accessToken, ...(res.refreshToken ? { refreshToken: res.refreshToken } : {}) })
-      setMsg('Токен получен')
+      setMsg(tr('Токен получен'))
     } else {
-      setMsg(res.error ?? 'Не удалось получить токен')
+      setMsg(res.error ?? tr('Не удалось получить токен'))
     }
   }
 
   const requestDeviceCode = async () => {
     if (!auth.deviceAuthUrl) {
-      setMsg('Укажите Device Auth URL')
+      setMsg(tr('Укажите Device Auth URL'))
       return
     }
     setBusy(true)
@@ -472,9 +472,9 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       // Store the device_code so a subsequent "Получить токен" can poll for it.
       setAuth({ ...auth, deviceCode: res.deviceCode })
       const where = res.verificationUriComplete ?? res.verificationUri ?? ''
-      setMsg(`Откройте ${where} и введите код: ${res.userCode ?? ''}`)
+      setMsg(trf('Откройте {url} и введите код: {code}', { url: where, code: res.userCode ?? '' }))
     } else {
-      setMsg(res.error ?? 'Не удалось получить device code')
+      setMsg(res.error ?? tr('Не удалось получить device code'))
     }
   }
 
@@ -537,7 +537,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
             <input type="checkbox" checked={pkceOn} onChange={(e) => togglePkce(e.target.checked)} /> {tr('Использовать PKCE')} </label>
           {pkceOn && (
-            <Field label="Code Verifier" hint="отправляется при обмене кода на токен">
+            <Field label="Code Verifier" hint={tr('отправляется при обмене кода на токен')}>
               <input className="input mono" value={auth.codeVerifier ?? ''} readOnly />
             </Field>
           )}
@@ -553,7 +553,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
           <Field label="Device Auth URL">
             <input className="input mono" value={auth.deviceAuthUrl ?? ''} onChange={(e) => setAuth({ ...auth, deviceAuthUrl: e.target.value })} placeholder="https://auth.example.com/device/code" />
           </Field>
-          <Field label="Device Code" hint="заполняется кнопкой ниже">
+          <Field label="Device Code" hint={tr('заполняется кнопкой ниже')}>
             <input className="input mono" value={auth.deviceCode ?? ''} onChange={(e) => setAuth({ ...auth, deviceCode: e.target.value })} placeholder={tr('(получите device code)')} />
           </Field>
         </>
@@ -562,12 +562,10 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
         <input className="input mono" value={auth.scope ?? ''} onChange={(e) => setAuth({ ...auth, scope: e.target.value })} placeholder="read write" />
       </Field>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 10px' }}>
-        <input type="checkbox" checked={auth.autoRefresh ?? false} onChange={(e) => setAuth({ ...auth, autoRefresh: e.target.checked })} />
-        Авто-обновление токена при 401 (нужны Refresh Token и Token URL)
-      </label>
+        <input type="checkbox" checked={auth.autoRefresh ?? false} onChange={(e) => setAuth({ ...auth, autoRefresh: e.target.checked })} /> {tr('Авто-обновление токена при 401 (нужны Refresh Token и Token URL)')} </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn primary" onClick={getToken} disabled={busy}>
-          {busy ? 'Запрос…' : 'Получить токен'}
+          {busy ? tr('Запрос…') : tr('Получить токен')}
         </button>
         {auth.grant === 'device_code' && (
           <button className="btn" onClick={requestDeviceCode} disabled={busy}> {tr('Запросить device code')} </button>

@@ -5,6 +5,7 @@ import { useResponse } from '../store/response'
 import { sendActiveRequest, currentSecretValues } from './request-runner'
 import { redactSecrets, maskHeaderValue } from './ai-context'
 import { splitUrl } from './url'
+import { tr, trf } from './i18n'
 
 /** Tools the assistant may call. Mutating/sending tools require confirmation. */
 export const TOOL_SPECS: ToolSpec[] = [
@@ -61,11 +62,11 @@ export function isMutating(name: string): boolean {
 export function describeToolCall(name: string, args: any): { title: string; detail: string } {
   switch (name) {
     case 'update_current_request':
-      return { title: 'Изменить текущий запрос', detail: JSON.stringify(args, null, 2) }
+      return { title: tr('Изменить текущий запрос'), detail: JSON.stringify(args, null, 2) }
     case 'set_variable':
-      return { title: `Установить переменную (${args.scope})`, detail: `${args.key} = ${args.value}` }
+      return { title: trf('Установить переменную ({scope})', { scope: args.scope }), detail: `${args.key} = ${args.value}` }
     case 'send_request':
-      return { title: 'Отправить текущий запрос', detail: 'Запрос будет выполнен.' }
+      return { title: tr('Отправить текущий запрос'), detail: tr('Запрос будет выполнен.') }
     default:
       return { title: name, detail: JSON.stringify(args, null, 2) }
   }

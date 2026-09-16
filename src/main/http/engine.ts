@@ -324,8 +324,16 @@ interface ConnectTls {
   cert?: Buffer
   key?: Buffer
   pfx?: Buffer
-  ca?: Buffer
+  /** one bundle, or several when a global CA and a per-host CA both apply */
+  ca?: Buffer | Buffer[]
   passphrase?: string
+}
+
+/** Add a CA bundle, keeping any already loaded for this request. */
+function addCa(tls: ConnectTls, bundle: Buffer): void {
+  if (!tls.ca) tls.ca = bundle
+  else if (Array.isArray(tls.ca)) tls.ca.push(bundle)
+  else tls.ca = [tls.ca, bundle]
 }
 
 /** Load the cert material (bytes) from disk into the TLS options. */
@@ -336,7 +344,7 @@ async function loadClientCert(tls: ConnectTls, cert: ClientCert): Promise<void> 
     if (cert.certPath) tls.cert = await readFile(cert.certPath)
     if (cert.keyPath) tls.key = await readFile(cert.keyPath)
   }
-  if (cert.caPath) tls.ca = await readFile(cert.caPath)
+  if (cert.caPath) addCa(tls, await readFile(cert.caPath))
   if (cert.passphrase) tls.passphrase = cert.passphrase
 }
 
@@ -366,13 +374,25 @@ async function makeDispatcher(
 
   const tls: ConnectTls = {}
   if (relaxTls) tls.rejectUnauthorized = false
+  // A CA bundle configured once for the whole app (Settings -> Сеть), on top of
+  // the system trust store — the usual way to talk to a corporate MITM proxy.
+  if (settings?.caPath) {
+    try {
+      addCa(tls, await readFile(settings.caPath))
+    } catch {
+      // An unreadable CA file must not stop the request; TLS simply stays strict.
+    }
+  }
   const cert = matchClientCert(settings?.clientCerts, host, hostname)
   if (cert) await loadClientCert(tls, cert)
   const hasTls = Object.keys(tls).length > 0
   const allowH2 = settings?.allowH2 === true
 
+  // `mode` is resolved in main before the engine runs ('system' becomes a
+  // concrete url or nothing), so here a proxy simply applies or it does not.
   const proxy: ProxyConfig | null | undefined = settings?.proxy
-  if (proxy && proxy.enabled && proxy.url && !isProxyBypassed(hostname, proxy.bypass)) {
+  const proxyOn = proxy ? (proxy.mode ? proxy.mode !== 'off' : proxy.enabled) : false
+  if (proxy && proxyOn && proxy.url && !isProxyBypassed(hostname, proxy.bypass)) {
     const opts: ProxyAgent.Options = { uri: proxy.url }
     if (hasTls) opts.requestTls = tls
     if (allowH2) opts.allowH2 = true

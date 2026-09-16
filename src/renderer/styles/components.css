@@ -204,6 +204,26 @@
 .divider:hover .grip, .divider.drag .grip { opacity: 1; }
 .divider:hover::after, .divider.drag::after { background: var(--accent); height: 2px; }
 
+/* ---------- NARROW PANES: scroll, never wrap ----------
+   A pane is only as wide as the user drags it, and a toolbar that wraps or
+   silently clips puts controls out of reach (the Send button, the last request
+   tab). These rows keep their natural width and scroll sideways instead. The
+   scrollbar is the point: everything stays reachable at any pane width. */
+.req-bar, .req-tabs, .resp-tabs, .resp-statusbar, .subbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.req-bar > *, .req-tabs > *, .resp-tabs > *, .resp-statusbar > *, .subbar > * { flex: none; }
+/* The URL is the one field worth giving the leftover width to. */
+.req-bar .url-bar { flex: 1 0 200px; min-width: 200px; }
+.req-tabs .tab, .resp-tabs .tab, .subbar .label, .subbar .seg button { white-space: nowrap; }
+.resp-meta, .resp-meta b, .resp-meta .sep { white-space: nowrap; }
+/* Key/value rows have four columns; below this they are unreadable, so the
+   table scrolls with the rest of the tab instead of squeezing. */
+.kv-table { min-width: 440px; }
+
 /* ---------- RESPONSE PANEL ---------- */
 .response { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--bg-0); }
 .resp-statusbar { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-bottom: 1px solid var(--line); flex: none; }
@@ -238,7 +258,9 @@
 .skel { background: linear-gradient(90deg, var(--bg-2) 0px, var(--bg-3) 40px, var(--bg-2) 80px); background-size: 400px 100%; animation: shimmer 1.3s infinite linear; border-radius: 5px; }
 
 /* ---------- EMPTY STATES ---------- */
-.empty { flex: 1; display: grid; place-items: center; padding: 40px; }
+/* `min-height: 0` + `overflow: auto`: in a short pane the card must scroll
+   into view instead of being cut off by the pane edge. */
+.empty { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 40px; }
 .empty-card { max-width: 380px; text-align: center; animation: fadeUp .4s var(--ease-out); }
 .empty-ico { width: 56px; height: 56px; border-radius: 16px; background: var(--bg-2); border: 1px solid var(--line); display: grid; place-items: center; margin: 0 auto 18px; color: var(--tx-2); box-shadow: var(--shadow-1); }
 .empty h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; letter-spacing: -0.01em; }

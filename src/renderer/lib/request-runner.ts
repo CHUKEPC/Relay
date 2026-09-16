@@ -18,6 +18,7 @@ import { useHistory } from '../store/history'
 import { useConsole } from '../store/console'
 import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
+import { trf } from './i18n'
 
 /** Short, readable body preview for the console log. */
 function consoleBodyPreview(body: RequestModel['body']): string | undefined {
@@ -43,6 +44,13 @@ function consoleBodyPreview(body: RequestModel['body']): string | undefined {
   }
 }
 
+/** Effective proxy mode, tolerating documents written before `mode` existed. */
+export function proxyMode(proxy: { mode?: 'off' | 'system' | 'custom'; enabled?: boolean } | null | undefined): 'off' | 'system' | 'custom' {
+  if (!proxy) return 'off'
+  if (proxy.mode) return proxy.mode
+  return proxy.enabled ? 'custom' : 'off'
+}
+
 export function settingsToRequestSettings(): RequestSettings {
   const s = useSettings.getState().settings
   return {
@@ -50,9 +58,11 @@ export function settingsToRequestSettings(): RequestSettings {
     followRedirects: s.followRedirects,
     maxRedirects: s.maxRedirects,
     rejectUnauthorized: s.rejectUnauthorized,
-    // Global network config threaded to the engine (proxy bypass + per-host certs).
-    proxy: s.proxy && s.proxy.enabled ? s.proxy : null,
+    // Global network config threaded to the engine (proxy, CA bundle, per-host certs).
+    // 'system' is resolved to a concrete proxy in main, so it is passed through.
+    proxy: proxyMode(s.proxy) === 'off' ? null : s.proxy,
     clientCerts: s.clientCerts ?? [],
+    caPath: s.caPath || undefined,
     allowH2: s.http2 === true
   }
 }
@@ -193,7 +203,7 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
       applyScriptSideEffects(tab.savedRequestId, result)
       // Pre-request scripts have no results pane — surface a failure so it isn't
       // silently dropped (e.g. a sandbox timeout that skipped an auth header).
-      if (result.error) useUi.getState().showToast(`Pre-request скрипт: ${result.error}`, 'error')
+      if (result.error) useUi.getState().showToast(trf('Pre-request скрипт: {error}', { error: result.error }), 'error')
       workingReq = applyRequestPatch(workingReq, result.requestPatch)
     } catch (err) {
       console.error('pre-request script failed', err)

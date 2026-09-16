@@ -4,22 +4,26 @@ import type { UpdateCheckResult } from '@shared/ipc-contract'
 import { Toggle } from '@renderer/components/primitives'
 import { useSettings } from '@renderer/store/settings'
 
-import { tr } from '@renderer/lib/i18n'
-const ERRORS: Record<string, string> = {
-  'no-releases': 'В репозитории пока нет ни одного релиза или тега версии',
-  'rate-limit': 'GitHub временно ограничил число запросов — попробуйте позже',
-  timeout: 'GitHub не ответил за 10 секунд',
-  network: 'Нет соединения с GitHub',
-  ipc: 'Внутренняя ошибка проверки',
-  'web-mode': 'Проверка доступна только в десктопном приложении'
+import { tr, trf } from '@renderer/lib/i18n'
+/** Built per call: tr() must run while rendering, not when the module loads. */
+function errorText(error: string): string {
+  const map: Record<string, string> = {
+    'no-releases': tr('В репозитории пока нет ни одного релиза или тега версии'),
+    'rate-limit': tr('GitHub временно ограничил число запросов — попробуйте позже'),
+    timeout: tr('GitHub не ответил за 10 секунд'),
+    network: tr('Нет соединения с GitHub'),
+    ipc: tr('Внутренняя ошибка проверки'),
+    'web-mode': tr('Проверка доступна только в десктопном приложении')
+  }
+  return map[error] ?? trf('GitHub ответил ошибкой ({error})', { error })
 }
 
 /** One plain-Russian line describing the outcome of a check. */
 function describe(result: UpdateCheckResult): string {
-  if (!result.ok) return ERRORS[result.error] ?? `GitHub ответил ошибкой (${result.error})`
-  const from = result.source === 'tag' ? ' (по тегам репозитория — релиз ещё не опубликован)' : ''
-  if (result.updateAvailable) return `Доступна версия ${result.latestVersion}${from}`
-  return `У вас актуальная версия ${result.currentVersion}${from}`
+  if (!result.ok) return errorText(result.error)
+  const from = result.source === 'tag' ? tr(' (по тегам репозитория — релиз ещё не опубликован)') : ''
+  if (result.updateAvailable) return trf('Доступна версия {version}', { version: result.latestVersion }) + from
+  return trf('У вас актуальная версия {version}', { version: result.currentVersion }) + from
 }
 
 /** Settings group: opt-out toggle + manual "check now" against GitHub. */
@@ -42,8 +46,8 @@ export function UpdatesCard(): JSX.Element {
     }
   }
 
-  let resultLine = 'Запросить последнюю версию с GitHub'
-  if (checking) resultLine = 'Проверяем…'
+  let resultLine = tr('Запросить последнюю версию с GitHub')
+  if (checking) resultLine = tr('Проверяем…')
   else if (result) resultLine = describe(result)
 
   return (
@@ -68,25 +72,27 @@ export function UpdatesCard(): JSX.Element {
         </div>
         {result?.ok && (
           <button className="btn ghost" onClick={() => void window.api.openExternal(result.url)}>
-            {result.updateAvailable ? 'Открыть страницу релиза' : 'Открыть релизы'}
+            {result.updateAvailable ? tr('Открыть страницу релиза') : tr('Открыть релизы')}
           </button>
         )}
         <button className="btn" disabled={checking} onClick={() => void check()}>
-          {checking ? 'Проверяем…' : 'Проверить сейчас'}
+          {checking ? tr('Проверяем…') : tr('Проверить сейчас')}
         </button>
       </div>
 
       {result?.ok && result.updateAvailable && (result.publishedAt || result.notes) && (
         <div className="upd-notes">
           {result.publishedAt && (
-            <div className="upd-notes-date">Опубликован {new Date(result.publishedAt).toLocaleDateString('ru-RU')}</div>
+            <div className="upd-notes-date">
+              {trf('Опубликован {date}', { date: new Date(result.publishedAt).toLocaleDateString() })}
+            </div>
           )}
           {result.notes && <div className="upd-notes-body">{result.notes}</div>}
         </div>
       )}
 
       <div style={{ fontSize: 12, color: 'var(--tx-3)', margin: '8px 0 4px' }}>
-        Текущая версия {APP_VERSION} · {UPDATE_REPO}
+        {trf('Текущая версия {version}', { version: APP_VERSION })} · {UPDATE_REPO}
       </div>
     </>
   )

@@ -17,7 +17,7 @@ export function ToolConfirmModal() {
         </span>
         <div style={{ fontSize: 14.5, fontWeight: 650 }}>{tr('Ассистент предлагает действие')}</div>
       </div>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{pending.title}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{tr(pending.title)}</div>
       <div className="code-block" style={{ margin: 0 }}>
         <pre style={{ maxHeight: 240 }}>{pending.detail}</pre>
       </div>

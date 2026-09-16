@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
 import type { PluginInfo, PluginPermission, PluginRunKind, PluginThemeContribution, SettingsDoc } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { Toggle } from '@renderer/components/primitives'
+import { Popover, Toggle } from '@renderer/components/primitives'
 import { usePlugins } from '@renderer/store/plugins'
 import { useSettings } from '@renderer/store/settings'
 import { useUi } from '@renderer/store/ui'
-import { FeaturePacks } from './FeaturePacks'
+import { useFeatures } from '@renderer/store/features'
+import { PackRow } from './FeaturePacks'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** Human consequence line per permission token (consent must be readable). */
 function permissionLabel(p: PluginPermission): string {
-  if (p === 'net') return 'Доступ в интернет — любой хост'
-  if (p.startsWith('net:')) return `Доступ в интернет — только ${p.slice('net:'.length)}`
-  if (p === 'request:read') return 'Чтение запроса: метод, URL и заголовки (значения известных секретных заголовков скрыты)'
-  if (p === 'response:read') return 'Чтение ответа, включая тело (до 200 КБ) — может содержать токены'
-  if (p === 'request:write') return 'Изменение запроса перед отправкой'
-  if (p === 'storage') return 'Своё хранилище данных'
-  if (p === 'clipboard') return 'Запись в буфер обмена'
-  if (p === 'history:read') return 'Чтение истории запросов'
+  if (p === 'net') return tr('Доступ в интернет — любой хост')
+  if (p.startsWith('net:')) return trf('Доступ в интернет — только {host}', { host: p.slice('net:'.length) })
+  if (p === 'request:read') return tr('Чтение запроса: метод, URL и заголовки (значения известных секретных заголовков скрыты)')
+  if (p === 'response:read') return tr('Чтение ответа, включая тело (до 200 КБ) — может содержать токены')
+  if (p === 'request:write') return tr('Изменение запроса перед отправкой')
+  if (p === 'storage') return tr('Своё хранилище данных')
+  if (p === 'clipboard') return tr('Запись в буфер обмена')
+  if (p === 'history:read') return tr('Чтение истории запросов')
   return p
 }
 
@@ -32,7 +33,7 @@ const RUN_KIND_LABEL: Record<PluginRunKind, string> = {
 }
 
 function lastRunLabel(event: PluginRunKind): string {
-  return RUN_KIND_LABEL[event] ?? event
+  return tr(RUN_KIND_LABEL[event] ?? event)
 }
 
 const chipStyle: React.CSSProperties = {
@@ -93,7 +94,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
   }
 
   const buttonLocationLabel = (loc: string): string =>
-    loc === 'response-toolbar' ? 'панель ответа' : loc === 'titlebar' ? 'верхняя панель' : 'боковая панель'
+    loc === 'response-toolbar' ? tr('панель ответа') : loc === 'titlebar' ? tr('верхняя панель') : tr('боковая панель')
 
   const applyTheme = (t: PluginThemeContribution): void => {
     const s = useSettings.getState().settings
@@ -107,7 +108,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       patch.appearanceSnapshot = { themePreset: s.themePreset, customTheme: s.customTheme }
     }
     useSettings.getState().update(patch)
-    useUi.getState().showToast(`Тема «${t.label}» применена`)
+    useUi.getState().showToast(trf('Тема «{name}» применена', { name: t.label }))
   }
 
   const revertTheme = (): void => {
@@ -127,366 +128,337 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
     themePreset === 'custom' && customTheme?.source?.pluginId === m.id && customTheme.source.themeId === t.id
 
   return (
-    <div
-      style={{
-        border: '1px solid var(--line)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--bg-1)',
-        padding: '14px 16px',
-        marginBottom: 12
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {m.name}
-            <span style={{ fontSize: 11, color: 'var(--tx-3)', fontWeight: 400 }}>v{m.version}</span>
-            {m.author && <span style={{ fontSize: 11, color: 'var(--tx-3)', fontWeight: 400 }}>· {m.author}</span>}
-          </div>
-          {m.description && (
-            <div style={{ fontSize: 12, color: 'var(--tx-2)', marginTop: 3 }}>{m.description}</div>
-          )}
+    <div className="set-row plugin-row">
+      <div className="label">
+        <div className="t">
+          {m.name}
+          <span className="pack-ver">{m.version}</span>
+          {m.author && <span className="pack-ver">· {m.author}</span>}
         </div>
-        {!broken && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={tr('Включение выдаёт перечисленные разрешения')}>
-            <span style={{ fontSize: 11.5, color: 'var(--tx-2)' }}>
-              {info.enabled ? 'Включён' : m.permissions.length ? 'Включить и разрешить' : 'Включить'}
-            </span>
-            <Toggle checked={info.enabled} onChange={(v) => void setEnabled(m.id, v)} />
+
+        {broken && (
+          <div className="d err" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="warn" size={14} />
+            {info.error}
           </div>
         )}
-        <button
-          className="icon-btn"
-          title={confirmDelete ? 'Нажмите ещё раз — удалить папку плагина' : 'Удалить плагин'}
-          style={confirmDelete ? { color: 'var(--s-5xx)' } : undefined}
-          onClick={() => {
-            if (confirmDelete) void deletePlugin(m.id)
-            else setConfirmDelete(true)
-          }}
-        >
-          <Icon name="trash" size={15} />
-        </button>
-      </div>
 
-      {confirmDelete && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-5xx)' }}> {tr('Папка плагина будет удалена с диска. Нажмите корзину ещё раз для подтверждения.')} </div>
-      )}
+        {confirmDelete && <div className="d err">{tr('Папка плагина будет удалена с диска. Нажмите корзину ещё раз для подтверждения.')}</div>}
 
-      {broken && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'var(--s-5xx)' }}>
-          <Icon name="warn" size={14} />
-          {info.error}
-        </div>
-      )}
+        {info.needsRegrant && !broken && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-4xx, #d97706)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="warn" size={14} /> {tr('Обновление плагина запрашивает новые разрешения — включите его заново, чтобы выдать их:')}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {missingPerms.map((p) => (
+                <span key={p} style={warnChipStyle}>
+                  + {permissionLabel(p)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {info.needsRegrant && !broken && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-4xx, #d97706)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="warn" size={14} /> {tr('Обновление плагина запрашивает новые разрешения — включите его заново, чтобы выдать их:')} </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-            {missingPerms.map((p) => (
-              <span key={p} style={warnChipStyle}>
-                + {permissionLabel(p)}
+        {/* Per-host grant editor — narrow a broad `net` grant to specific hosts. */}
+        {hasBroadNet && info.enabled && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, marginBottom: 4 }}>
+              {tr('Сеть: разрешённые хосты')}{' '}
+              <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
+                {info.netAllowlist.length ? tr('(плагин ограничен этим списком)') : tr('(пусто = любой хост)')}
               </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-        <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{tr('Разрешения:')}</span>
-        {m.permissions.length === 0 && <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{tr('не требуются')}</span>}
-        {m.permissions.map((p) => (
-          <span key={p} style={chipStyle} title={p}>
-            {permissionLabel(p)}
-          </span>
-        ))}
-      </div>
-
-      {(buttons.length > 0 || panels.length > 0 || commands.length > 0 || events.length > 0) && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          {buttons.map((b) => (
-            <span key={b.id} style={{ ...chipStyle, color: 'var(--tx-2)' }}>
-              Кнопка «{b.label}» — {buttonLocationLabel(b.location)}
-            </span>
-          ))}
-          {panels.map((p) => (
-            <span key={p.id} style={{ ...chipStyle, color: 'var(--tx-2)' }}>
-              Панель «{p.label}»{p.interactive ? ' (интерактивная)' : ''} — вкладка ответа
-            </span>
-          ))}
-          {commands.map((c) => (
-            <span key={c.id} style={{ ...chipStyle, color: 'var(--tx-2)' }}>
-              Команда «{c.title}» — палитра (⌘K)
-            </span>
-          ))}
-          {events.includes('response') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: после каждого ответа')}</span>
-          )}
-          {events.includes('request') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: перед каждым запросом')}</span>
-          )}
-          {events.includes('workspace') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: смена пространства')}</span>
-          )}
-          {events.includes('collection') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: изменение коллекций')}</span>
-          )}
-        </div>
-      )}
-
-      {/* Per-host grant editor — narrow a broad `net` grant to specific hosts. */}
-      {hasBroadNet && info.enabled && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12.5, marginBottom: 4 }}> {tr('Сеть: разрешённые хосты')} <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
-              {' '}
-              {info.netAllowlist.length ? '(плагин ограничен этим списком)' : '(пусто = любой хост)'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            {info.netAllowlist.map((h) => (
-              <span key={h} style={{ ...chipStyle, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                {h}
-                <button
-                  className="icon-btn"
-                  style={{ width: 16, height: 16 }}
-                  title={tr('Убрать')}
-                  onClick={() => void setNetAllowlist(m.id, info.netAllowlist.filter((x) => x !== h))}
-                >
-                  <Icon name="close" size={11} />
-                </button>
-              </span>
-            ))}
-            <input
-              className="input mono"
-              placeholder={tr('example.com или *.example.com')}
-              value={newHost}
-              onChange={(e) => setNewHost(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return
-                const host = newHost.trim().toLowerCase()
-                if (!host) return
-                if (!/^(\*\.)?[a-z0-9]([a-z0-9.-]{0,253})(:\d{1,5})?$/.test(host)) {
-                  useUi.getState().showToast(tr('Некорректный хост (пример: example.com или *.example.com)'), 'error')
-                  return
-                }
-                if (info.netAllowlist.includes(host)) {
-                  useUi.getState().showToast(tr('Этот хост уже в списке'), 'error')
-                  return
-                }
-                void setNetAllowlist(m.id, [...info.netAllowlist, host])
-                setNewHost('')
-              }}
-              style={{ width: 220, height: 26 }}
-            />
-          </div>
-        </div>
-      )}
-
-      {info.lastRun && (
-        <div style={{ marginTop: 10, fontSize: 11.5 }}>
-          <span style={{ color: info.lastRun.error ? 'var(--s-5xx)' : 'var(--tx-3)' }}>
-            Последний запуск ({lastRunLabel(info.lastRun.event)}, {info.lastRun.durationMs} мс):{' '}
-            {info.lastRun.error ? info.lastRun.error : 'ок'}
-          </span>
-          {info.lastRun.logs.length > 0 && (
-            <details style={{ marginTop: 4 }}>
-              <summary style={{ cursor: 'pointer', color: 'var(--tx-3)' }}>
-                Логи ({info.lastRun.logs.length})
-              </summary>
-              <pre
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  color: 'var(--tx-2)',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  margin: '6px 0 0',
-                  maxHeight: 140,
-                  overflow: 'auto'
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {info.netAllowlist.map((h) => (
+                <span key={h} style={{ ...chipStyle, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  {h}
+                  <button
+                    className="icon-btn"
+                    style={{ width: 16, height: 16 }}
+                    title={tr('Убрать')}
+                    onClick={() => void setNetAllowlist(m.id, info.netAllowlist.filter((x) => x !== h))}
+                  >
+                    <Icon name="close" size={11} />
+                  </button>
+                </span>
+              ))}
+              <input
+                className="input mono"
+                placeholder={tr('example.com или *.example.com')}
+                value={newHost}
+                onChange={(e) => setNewHost(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  const host = newHost.trim().toLowerCase()
+                  if (!host) return
+                  if (!/^(\*\.)?[a-z0-9]([a-z0-9.-]{0,253})(:\d{1,5})?$/.test(host)) {
+                    useUi.getState().showToast(tr('Некорректный хост (пример: example.com или *.example.com)'), 'error')
+                    return
+                  }
+                  if (info.netAllowlist.includes(host)) {
+                    useUi.getState().showToast(tr('Этот хост уже в списке'), 'error')
+                    return
+                  }
+                  void setNetAllowlist(m.id, [...info.netAllowlist, host])
+                  setNewHost('')
                 }}
-              >
-                {info.lastRun.logs.map((l) => `[${l.level}] ${l.message}`).join('\n')}
-              </pre>
-            </details>
-          )}
-        </div>
-      )}
+                style={{ width: 220, height: 26 }}
+              />
+            </div>
+          </div>
+        )}
 
-      {m.config.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          {m.config.map((f) => {
-            if (f.type === 'secret') {
-              const isSet = info.secretKeysSet.includes(f.key)
-              const draft = secretDraft[f.key]
-              const editing = draft !== undefined
+        {m.config.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {m.config.map((f) => {
+              if (f.type === 'secret') {
+                const isSet = info.secretKeysSet.includes(f.key)
+                const draft = secretDraft[f.key]
+                const editing = draft !== undefined
+                return (
+                  <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5 }}>
+                        {f.label}
+                        <Icon name="key" size={12} style={{ marginLeft: 6, color: 'var(--tx-3)', verticalAlign: 'middle' }} />
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
+                        {f.description ? f.description + ' · ' : ''}
+                        {isSet ? tr('сохранено в безопасном хранилище') : tr('не задано')}
+                      </div>
+                    </div>
+                    <input
+                      className="input mono"
+                      type="password"
+                      placeholder={isSet ? tr('•••••••• (сохранено)') : f.placeholder}
+                      value={draft ?? ''}
+                      onChange={(e) => setSecretDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveSecret(f.key)
+                      }}
+                      style={{ width: 200 }}
+                    />
+                    <button className="btn ghost" style={{ height: 30 }} disabled={!editing} onClick={() => saveSecret(f.key)} title={tr('Сохранить секрет')}>
+                      {tr('Сохранить')}
+                    </button>
+                    {isSet && (
+                      <button
+                        className="icon-btn"
+                        title={tr('Очистить секрет')}
+                        onClick={() => {
+                          // Drop any in-progress draft so the field doesn't keep
+                          // showing (and re-saving) text that no longer applies.
+                          setSecretDraft((d) => {
+                            const next = { ...d }
+                            delete next[f.key]
+                            return next
+                          })
+                          void setSecret(m.id, f.key, '')
+                        }}
+                      >
+                        <Icon name="trash" size={14} />
+                      </button>
+                    )}
+                  </div>
+                )
+              }
               return (
                 <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5 }}>
-                      {f.label}
-                      <Icon name="key" size={12} style={{ marginLeft: 6, color: 'var(--tx-3)', verticalAlign: 'middle' }} />
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
-                      {f.description ? f.description + ' · ' : ''}
-                      {isSet ? 'сохранено в безопасном хранилище' : 'не задано'}
-                    </div>
+                    <div style={{ fontSize: 12.5 }}>{f.label}</div>
+                    {f.description && <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{f.description}</div>}
                   </div>
                   <input
                     className="input mono"
-                    type="password"
-                    placeholder={isSet ? '•••••••• (сохранено)' : f.placeholder}
-                    value={draft ?? ''}
-                    onChange={(e) => setSecretDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveSecret(f.key)
-                    }}
-                    style={{ width: 200 }}
+                    type="text"
+                    placeholder={f.placeholder}
+                    value={info.config[f.key] ?? ''}
+                    onChange={(e) => setConfig(m.id, { ...info.config, [f.key]: e.target.value })}
+                    style={{ width: 280 }}
                   />
-                  <button
-                    className="btn ghost"
-                    style={{ height: 30 }}
-                    disabled={!editing}
-                    onClick={() => saveSecret(f.key)}
-                    title={tr('Сохранить секрет')}
-                  > {tr('Сохранить')} </button>
-                  {isSet && (
-                    <button
-                      className="icon-btn"
-                      title={tr('Очистить секрет')}
-                      onClick={() => {
-                        // Drop any in-progress draft so the field doesn't keep
-                        // showing (and re-saving) text that no longer applies.
-                        setSecretDraft((d) => {
-                          const next = { ...d }
-                          delete next[f.key]
-                          return next
-                        })
-                        void setSecret(m.id, f.key, '')
-                      }}
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
-                  )}
                 </div>
               )
-            }
-            return (
-              <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5 }}>{f.label}</div>
-                  {f.description && <div style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{f.description}</div>}
-                </div>
-                <input
-                  className="input mono"
-                  type="text"
-                  placeholder={f.placeholder}
-                  value={info.config[f.key] ?? ''}
-                  onChange={(e) => setConfig(m.id, { ...info.config, [f.key]: e.target.value })}
-                  style={{ width: 280 }}
-                />
-              </div>
-            )
-          })}
-        </div>
-      )}
+            })}
+          </div>
+        )}
 
-      {themes.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          {themes.map((t) => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-              <Icon name={t.base === 'dark' ? 'moon' : 'sun'} size={14} style={{ color: 'var(--tx-3)' }} />
-              <div style={{ flex: 1, fontSize: 12.5 }}>
-                Тема «{t.label}»{' '}
-                <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
-                  ({t.base === 'dark' ? 'тёмная' : 'светлая'})
-                </span>
+        {themes.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            {themes.map((t) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                <Icon name={t.base === 'dark' ? 'moon' : 'sun'} size={14} style={{ color: 'var(--tx-3)' }} />
+                <div style={{ flex: 1, fontSize: 12.5 }}>
+                  {trf('Тема «{name}»', { name: t.label })}{' '}
+                  <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>({t.base === 'dark' ? tr('тёмная') : tr('светлая')})</span>
+                </div>
+                {isApplied(t) ? (
+                  <button className="btn ghost" style={{ height: 28 }} onClick={revertTheme}>
+                    {tr('Вернуть прежнюю')}
+                  </button>
+                ) : (
+                  <button className="btn ghost" style={{ height: 28 }} onClick={() => applyTheme(t)}>
+                    {tr('Применить')}
+                  </button>
+                )}
               </div>
-              {isApplied(t) ? (
-                <button className="btn ghost" style={{ height: 28 }} onClick={revertTheme}> {tr('Вернуть прежнюю')} </button>
-              ) : (
-                <button className="btn ghost" style={{ height: 28 }} onClick={() => applyTheme(t)}> {tr('Применить')} </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Popover
+        trigger={
+          <button className="icon-btn" title={tr('О плагине')}>
+            <Icon name="info" size={15} />
+          </button>
+        }
+      >
+        <div className="plugin-info">
+          <div className="plugin-info-h">{m.name}</div>
+          {m.description && <p>{m.description}</p>}
+
+          <div className="plugin-info-sub">{tr('Разрешения')}</div>
+          {m.permissions.length === 0 ? (
+            <p>{tr('не требуются')}</p>
+          ) : (
+            <ul>
+              {m.permissions.map((p) => (
+                <li key={p}>{permissionLabel(p)}</li>
+              ))}
+            </ul>
+          )}
+
+          {(buttons.length > 0 || panels.length > 0 || commands.length > 0 || events.length > 0) && (
+            <>
+              <div className="plugin-info-sub">{tr('Что добавляет')}</div>
+              <ul>
+                {buttons.map((b) => (
+                  <li key={b.id}>{trf('Кнопка «{label}» — {where}', { label: b.label, where: buttonLocationLabel(b.location) })}</li>
+                ))}
+                {panels.map((p) => (
+                  <li key={p.id}>
+                    {trf('Панель «{label}»{interactive} — вкладка ответа', { label: p.label, interactive: p.interactive ? tr(' (интерактивная)') : '' })}
+                  </li>
+                ))}
+                {commands.map((c) => (
+                  <li key={c.id}>{trf('Команда «{title}» — палитра ({key})', { title: c.title, key: '⌘K' })}</li>
+                ))}
+                {events.includes('response') && <li>{tr('Хук: после каждого ответа')}</li>}
+                {events.includes('request') && <li>{tr('Хук: перед каждым запросом')}</li>}
+                {events.includes('workspace') && <li>{tr('Хук: смена пространства')}</li>}
+                {events.includes('collection') && <li>{tr('Хук: изменение коллекций')}</li>}
+              </ul>
+            </>
+          )}
+
+          {info.lastRun && (
+            <>
+              <div className="plugin-info-sub">{tr('Последний запуск')}</div>
+              <p style={{ color: info.lastRun.error ? 'var(--s-5xx)' : undefined }}>
+                {trf('{kind}, {ms} мс: {result}', {
+                  kind: lastRunLabel(info.lastRun.event),
+                  ms: info.lastRun.durationMs,
+                  result: info.lastRun.error ? info.lastRun.error : tr('ок')
+                })}
+              </p>
+              {info.lastRun.logs.length > 0 && (
+                <details>
+                  <summary style={{ cursor: 'pointer', color: 'var(--tx-3)' }}>{trf('Логи ({count})', { count: info.lastRun.logs.length })}</summary>
+                  <pre className="plugin-info-logs">{info.lastRun.logs.map((l) => `[${l.level}] ${l.message}`).join('\n')}</pre>
+                </details>
               )}
-            </div>
-          ))}
+            </>
+          )}
+
+          <div className="plugin-info-sub">{tr('Папка')}</div>
+          <p>{tr('Плагины с кодом лежат в каталоге данных приложения.')}</p>
+          <button className="btn ghost" style={{ height: 28 }} onClick={() => void window.api.pluginsOpenFolder()}>
+            <Icon name="folder" size={13} /> {tr('Открыть папку')}
+          </button>
         </div>
-      )}
+      </Popover>
+
+      <button
+        className="icon-btn"
+        title={confirmDelete ? tr('Нажмите ещё раз — удалить папку плагина') : tr('Удалить плагин')}
+        onClick={() => {
+          if (confirmDelete) void deletePlugin(m.id)
+          else setConfirmDelete(true)
+        }}
+      >
+        <Icon name="trash" size={14} style={confirmDelete ? { color: 'var(--danger, #d14343)' } : undefined} />
+      </button>
+
+      <Toggle
+        checked={info.enabled}
+        disabled={broken}
+        title={info.enabled ? tr('Выключить') : m.permissions.length ? tr('Включить и выдать разрешения') : tr('Включить')}
+        onChange={(v) => void setEnabled(m.id, v)}
+      />
     </div>
   )
 }
 
 export function PluginsSection(): JSX.Element {
   const plugins = usePlugins((s) => s.plugins)
-  const loaded = usePlugins((s) => s.loaded)
   const refresh = usePlugins((s) => s.refresh)
-  const installSample = usePlugins((s) => s.installSample)
-  const installFromZip = usePlugins((s) => s.installFromZip)
-  const [confirmReinstall, setConfirmReinstall] = useState(false)
+  const packs = useFeatures((s) => s.plugins)
+  const loaded = useFeatures((s) => s.loaded)
+  const [installing, setInstalling] = useState(false)
+  const showToast = useUi((s) => s.showToast)
 
   useEffect(() => {
     void usePlugins.getState().init()
   }, [])
 
-  // Auto-disarm the overwrite confirmation so it can't linger indefinitely.
-  useEffect(() => {
-    if (!confirmReinstall) return
-    const t = window.setTimeout(() => setConfirmReinstall(false), 4000)
-    return () => window.clearTimeout(t)
-  }, [confirmReinstall])
-
-  const onInstallSample = async (): Promise<void> => {
-    if (confirmReinstall) {
-      setConfirmReinstall(false)
-      await installSample(true)
-      return
+  /**
+   * One entry point for adding a plugin from anywhere on disk. The main process
+   * decides what was picked: a capability pack (a folder with a manifest, or a
+   * .zip holding one) or a code plugin archive.
+   */
+  const addPlugin = async (): Promise<void> => {
+    setInstalling(true)
+    try {
+      const result = await window.api.featuresInstall()
+      if (!result) return
+      if (!result.ok) {
+        showToast(`${tr('Не удалось подключить плагин')}: ${result.error}`, 'error')
+        return
+      }
+      if (result.kind === 'pack') useFeatures.getState().setPlugins(result.list)
+      else await refresh()
+      showToast(trf('Плагин «{id}» подключён', { id: result.id }))
+    } catch (err) {
+      showToast(`${tr('Не удалось подключить плагин')}: ${err instanceof Error ? err.message : String(err)}`, 'error')
+    } finally {
+      setInstalling(false)
     }
-    const outcome = await installSample(false)
-    if (outcome === 'exists') setConfirmReinstall(true)
   }
+
+  const empty = loaded && !packs.length && !plugins.length
 
   return (
     <>
       <div className="set-h">{tr('Плагины')}</div>
-
-      <FeaturePacks />
-
-      <div className="set-group-label">{tr('Пользовательские плагины')}</div>
       <div className="set-sub">
-        Плагины — папки в каталоге данных приложения; они подхватываются автоматически (hot-reload). Код плагина
-        выполняется в изолированной песочнице и получает только те разрешения, которые вы выдали при включении.
-        Формат описан в docs/PLUGINS.md.
+        {tr(
+          'Плагин — это папка с файлом plugin.json. Комплекты возможностей включают то, что уже есть в приложении (протоколы, AI-ассистент, языки), а плагины с кодом выполняются в изолированной песочнице и получают только выданные им разрешения. Кнопка ниже открывает папку plugins рядом с приложением — там ждут комплекты, которые не были выбраны при установке, — но выбрать плагин можно в любой папке компьютера.'
+        )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-        <button className="btn ghost" onClick={() => void window.api.pluginsOpenFolder()}>
-          <Icon name="folder" size={14} /> {tr('Открыть папку плагинов')} </button>
-        <button className="btn ghost" onClick={() => void onInstallSample()}>
-          <Icon name="download" size={14} />
-          {confirmReinstall ? 'Перезаписать пример?' : 'Установить пример'}
+      <div style={{ display: 'flex', gap: 8, margin: '14px 0 18px', flexWrap: 'wrap' }}>
+        <button className="btn" disabled={installing} onClick={() => void addPlugin()}>
+          <Icon name="plus" size={14} /> {installing ? tr('Подключаем…') : tr('Выбрать плагин на компьютере…')}
         </button>
-        <button className="btn ghost" onClick={() => void installFromZip()}>
-          <Icon name="upload" size={14} /> {tr('Установить из .zip')} </button>
-        <button className="btn ghost" onClick={() => void refresh()}>
-          <Icon name="refresh" size={14} /> {tr('Обновить')} </button>
-      </div>
-      <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginBottom: 18 }}>
-        {confirmReinstall
-          ? 'Папка webhook-forwarder уже существует — повторное нажатие перезапишет её файлы.'
-          : 'Пример можно переустановить в любой момент — правьте его копию как шаблон.'}
       </div>
 
-      {loaded && plugins.length === 0 && (
-        <div
-          style={{
-            border: '1px dashed var(--line-2)',
-            borderRadius: 'var(--radius-md)',
-            padding: '22px 18px',
-            fontSize: 12.5,
-            color: 'var(--tx-2)'
-          }}
-        > {tr('Плагинов пока нет. Нажмите «Установить пример» — он добавит кнопку «В webhook» на панель ответа и тему Forge Green, а заодно послужит шаблоном для собственных плагинов.')} </div>
-      )}
+      {!loaded && <div className="set-sub">{tr('Загрузка…')}</div>}
+      {empty && <div className="set-sub">{tr('Ни одного плагина не подключено. Нажмите «Выбрать плагин на компьютере…» — откроется папка plugins с комплектами, которые идут в составе приложения.')}</div>}
 
+      {packs.map((p) => (
+        <PackRow key={p.id} pack={p} />
+      ))}
       {plugins.map((p) => (
         <PluginCard key={p.manifest.id} info={p} />
       ))}

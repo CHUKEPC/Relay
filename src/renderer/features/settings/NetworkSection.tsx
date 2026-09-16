@@ -5,6 +5,7 @@ import { Toggle } from '@renderer/components/primitives'
 import { Icon } from '@renderer/components/Icon'
 import { makeId } from '@shared/id'
 import { useSettings } from '@renderer/store/settings'
+import { proxyMode, settingsToRequestSettings } from '@renderer/lib/request-runner'
 
 import { tr } from '@renderer/lib/i18n'
 /* ------------------------------------------------------------------ *
@@ -36,6 +37,72 @@ function deriveMode(cert: ClientCert): CertMode {
 /* ------------------------------------------------------------------ *
  * Section
  * ------------------------------------------------------------------ */
+
+const PROXY_MODES: { id: 'off' | 'system' | 'custom'; label: string }[] = [
+  { id: 'off', label: 'Без прокси' },
+  { id: 'system', label: 'Системный' },
+  { id: 'custom', label: 'Свой' }
+]
+
+/**
+ * Send one real request through the current network settings. Reading the
+ * configuration back from the UI proves nothing — only the engine can say
+ * whether the proxy, the CA bundle and the certificates actually work.
+ */
+function ConnectionTest(): JSX.Element {
+  const [url, setUrl] = useState('https://httpbin.org/get')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  const run = async (): Promise<void> => {
+    setBusy(true)
+    setResult(null)
+    try {
+      const res = await window.api.sendRequest(
+        {
+          method: 'GET',
+          url,
+          query: [],
+          headers: [],
+          body: { type: 'none' },
+          auth: { type: 'none' },
+          settings: settingsToRequestSettings()
+        },
+        { requestId: `net-test-${Date.now()}` }
+      )
+      setResult(
+        res.ok || res.status > 0
+          ? `${tr('Ответ')}: ${res.status} ${res.statusText ?? ''} · ${Math.round(res.timings.totalMs)} ${tr('мс')}`
+          : `${tr('Ошибка')}: ${res.error?.kind ?? 'unknown'} — ${res.error?.message ?? ''}`
+      )
+    } catch (err) {
+      setResult(`${tr('Ошибка')}: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="set-group-label">{tr('Проверка соединения')}</div>
+      <div className="net-block">
+        <div className="field">
+          <label htmlFor="net-test-url">{tr('Адрес для проверки')}</label>
+          <input id="net-test-url" className="input mono" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn" disabled={busy || !url.trim()} onClick={() => void run()}>
+            <Icon name="send" size={14} /> {busy ? tr('Проверяем…') : tr('Отправить тестовый запрос')}
+          </button>
+          {result && <span className="hint" style={{ margin: 0 }}>{result}</span>}
+        </div>
+        <div className="hint">
+          {tr('Запрос уходит через текущие настройки прокси, CA и сертификатов — ровно так же, как обычные запросы.')}
+        </div>
+      </div>
+    </>
+  )
+}
 
 export function NetworkSection(): JSX.Element {
   const settings = useSettings((s) => s.settings)
@@ -69,7 +136,13 @@ export function NetworkSection(): JSX.Element {
     patchProxy({ bypass: parseBypass(e.target.value) })
   }
 
-  const proxyOff = !proxy.enabled
+  const mode = proxyMode(proxy)
+  const proxyOff = mode !== 'custom'
+
+  const pickCa = async (): Promise<void> => {
+    const picked = await window.api.openFile({ filters: [{ name: 'CA', extensions: ['pem', 'crt', 'cer', 'ca'] }] })
+    if (picked && picked.length) update({ caPath: picked[0].filePath })
+  }
 
   return (
     <>
@@ -80,7 +153,7 @@ export function NetworkSection(): JSX.Element {
       <div className="set-row">
         <div className="label">
           <div className="t">HTTP/2</div>
-          <div className="d">Разрешить согласование HTTP/2 (h2) по ALPN, если сервер его поддерживает</div>
+          <div className="d">{tr('Разрешить согласование HTTP/2 (h2) по ALPN, если сервер его поддерживает')}</div>
         </div>
         <Toggle checked={settings.http2} onChange={(v) => update({ http2: v })} />
       </div>
@@ -90,10 +163,23 @@ export function NetworkSection(): JSX.Element {
 
       <div className="set-row">
         <div className="label">
-          <div className="t">{tr('Использовать прокси')}</div>
-          <div className="d">Направлять HTTP/HTTPS-запросы через указанный прокси-сервер</div>
+          <div className="t">{tr('Режим прокси')}</div>
+          <div className="d">
+            {tr('«Системный» берёт настройки прокси операционной системы, включая PAC-скрипт; «Свой» — адрес ниже.')}
+          </div>
         </div>
-        <Toggle checked={proxy.enabled} onChange={(enabled) => patchProxy({ enabled })} />
+        <div className="seg" role="group" aria-label={tr('Режим прокси')}>
+          {PROXY_MODES.map((m) => (
+            <button
+              key={m.id}
+              className={mode === m.id ? 'on' : ''}
+              aria-pressed={mode === m.id}
+              onClick={() => patchProxy({ mode: m.id, enabled: m.id !== 'off' })}
+            >
+              {tr(m.label)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className={`net-block${proxyOff ? ' net-block-off' : ''}`}>
@@ -140,7 +226,7 @@ export function NetworkSection(): JSX.Element {
         </div>
 
         <div className="field">
-          <label htmlFor="net-proxy-bypass">Исключения (no-proxy)</label>
+          <label htmlFor="net-proxy-bypass">{tr('Исключения (no-proxy)')}</label>
           <textarea
             id="net-proxy-bypass"
             className="input net-textarea mono"
@@ -149,18 +235,37 @@ export function NetworkSection(): JSX.Element {
             disabled={proxyOff}
             onChange={onBypassChange}
           />
-          <div className="hint">
-            По одному хосту в строке (или через запятую). Поддерживаются точные хосты,
-            суффиксы вида <code>*.example.com</code> {tr('и')} <code>*</code>.
+          <div className="hint"> {tr('По одному хосту в строке (или через запятую). Поддерживаются точные хосты, суффиксы вида')} <code>*.example.com</code> {tr('и')} <code>*</code>.
           </div>
+        </div>
+      </div>
+
+      {/* ========================= TLS / CA ============================ */}
+      <div className="set-group-label">{tr('Проверка сертификатов')}</div>
+
+      <div className="set-row">
+        <div className="label">
+          <div className="t">{tr('Проверять SSL-сертификаты')}</div>
+          <div className="d">{tr('Отклонять ответы с недоверенным или просроченным сертификатом. Отключайте только для тестовых стендов.')}</div>
+        </div>
+        <Toggle checked={settings.rejectUnauthorized} onChange={(v) => update({ rejectUnauthorized: v })} />
+      </div>
+
+      <div className="net-block">
+        <FilePicker
+          label={tr('Общий CA-сертификат (PEM)')}
+          path={settings.caPath}
+          onPick={() => void pickCa()}
+          onClear={() => update({ caPath: '' })}
+        />
+        <div className="hint">
+          {tr('Дополняет системное хранилище доверия — нужен, когда трафик расшифровывает корпоративный прокси.')}
         </div>
       </div>
 
       {/* ===================== CLIENT CERTIFICATES ===================== */}
       <div className="set-group-label">{tr('Клиентские сертификаты')}</div>
-      <div className="net-cert-intro"> {tr('Сертификаты подбираются по хосту запроса — точное совпадение хоста или')} <code>host:port</code>.
-        Используйте PEM (сертификат + ключ) или контейнер PFX/PKCS#12.
-      </div>
+      <div className="net-cert-intro"> {tr('Сертификаты подбираются по хосту запроса — точное совпадение хоста или')} <code>host:port</code>{tr('. Используйте PEM (сертификат + ключ) или контейнер PFX/PKCS#12.')} </div>
 
       {certs.length === 0 && (
         <div className="net-empty">{tr('Сертификаты не добавлены.')}</div>
@@ -178,6 +283,8 @@ export function NetworkSection(): JSX.Element {
         onClick={() => update({ clientCerts: [...certs, { id: makeId('cert'), host: '' }] })}
       >
         <Icon name="plus" size={14} /> {tr('Добавить сертификат')} </button>
+
+      <ConnectionTest />
     </>
   )
 }
@@ -253,13 +360,13 @@ function CertRow({
             <FilePicker
               label={tr('Сертификат (CRT/PEM)')}
               path={cert.certPath}
-              onPick={() => pick('certPath', [{ name: 'Сертификат', extensions: ['crt', 'cert', 'pem'] }])}
+              onPick={() => pick('certPath', [{ name: tr('Сертификат'), extensions: ['crt', 'cert', 'pem'] }])}
               onClear={() => patch({ certPath: undefined })}
             />
             <FilePicker
               label={tr('Приватный ключ (KEY/PEM)')}
               path={cert.keyPath}
-              onPick={() => pick('keyPath', [{ name: 'Ключ', extensions: ['key', 'pem'] }])}
+              onPick={() => pick('keyPath', [{ name: tr('Ключ'), extensions: ['key', 'pem'] }])}
               onClear={() => patch({ keyPath: undefined })}
             />
           </>
@@ -275,17 +382,17 @@ function CertRow({
         <FilePicker
           label={tr('Дополнительный CA (необязательно)')}
           path={cert.caPath}
-          onPick={() => pick('caPath', [{ name: 'CA-сертификат', extensions: ['crt', 'cert', 'pem', 'ca'] }])}
+          onPick={() => pick('caPath', [{ name: tr('CA-сертификат'), extensions: ['crt', 'cert', 'pem', 'ca'] }])}
           onClear={() => patch({ caPath: undefined })}
         />
 
         <div className="field net-cert-pass">
-          <label>Пароль (passphrase)</label>
+          <label>{tr('Пароль (passphrase)')}</label>
           <input
             className="input"
             type="password"
             autoComplete="new-password"
-            placeholder={mode === 'pfx' ? 'пароль контейнера' : 'если ключ зашифрован'}
+            placeholder={mode === 'pfx' ? tr('пароль контейнера') : tr('если ключ зашифрован')}
             value={cert.passphrase ?? ''}
             onChange={(e) => patch({ passphrase: e.target.value === '' ? undefined : e.target.value })}
           />
@@ -317,7 +424,7 @@ function FilePicker({
       <div className="net-picker-row">
         <button className="btn ghost net-pick-btn" type="button" onClick={onPick} title={path ?? undefined}>
           <Icon name="upload" size={13} />
-          <span className="net-pick-name">{name ?? 'Выбрать файл'}</span>
+          <span className="net-pick-name">{name ?? tr('Выбрать файл')}</span>
         </button>
         {path && (
           <button className="icon-btn" type="button" title={tr('Очистить')} aria-label={tr('Очистить файл')} onClick={onClear}>

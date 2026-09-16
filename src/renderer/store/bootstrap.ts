@@ -24,7 +24,7 @@ import {
   emptyTabs
 } from './defaults'
 
-import { tr } from '@renderer/lib/i18n'
+import { trf } from '@renderer/lib/i18n'
 let unloadWired = false
 
 /**
@@ -112,7 +112,7 @@ function scheduleUpdateCheck(): void {
       .checkUpdates()
       .then((res) => {
         if (res.ok && res.updateAvailable) {
-          useUi.getState().showToast(tr('Доступна новая версия ') + res.latestVersion + ' — Настройки → О приложении')
+          useUi.getState().showToast(trf('Доступна новая версия {version} — Настройки → О приложении', { version: res.latestVersion }))
         }
       })
       .catch(() => {

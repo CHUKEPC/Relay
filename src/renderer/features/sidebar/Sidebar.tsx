@@ -70,7 +70,7 @@ export function Sidebar() {
         <div className="side-search">
           <Icon name="search" size={14} />
           <input
-            placeholder={sideTab === 'collections' ? 'Поиск запросов…' : 'Поиск в истории…'}
+            placeholder={sideTab === 'collections' ? tr('Поиск запросов…') : tr('Поиск в истории…')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

@@ -3,7 +3,8 @@ import type { SettingsDoc } from '@shared/types'
 import { Toggle } from '@renderer/components/primitives'
 import { useSettings } from '@renderer/store/settings'
 
-import { applyLanguage, LANGUAGE_NAMES, tr } from '@renderer/lib/i18n'
+import { LANGUAGE_NAMES, tr } from '@renderer/lib/i18n'
+import { flushPersistAndWait } from '@renderer/store/persist'
 import { useFeatures } from '@renderer/store/features'
 import { useUi } from '@renderer/store/ui'
 import { CORE_LOCALES } from '@shared/features'
@@ -43,6 +44,13 @@ const NUMBER_ROWS: NumberRowDef[] = [
  * only while the «Дополнительные языки» pack is enabled, and a language that
  * disappears with its pack falls back to Russian on the next start.
  */
+/** Persist the choice, make sure it reached disk, then restart the renderer. */
+async function switchLanguage(code: string): Promise<void> {
+  useSettings.getState().update({ language: code })
+  await flushPersistAndWait()
+  window.location.reload()
+}
+
 function LanguageRow(): JSX.Element {
   const language = useSettings((s) => s.settings.language)
   const extra = useFeatures((s) => s.plugins.flatMap((p) => (p.enabled && !p.error ? (p.locales ?? []) : [])))
@@ -63,9 +71,10 @@ function LanguageRow(): JSX.Element {
         style={{ width: 200 }}
         value={language}
         onChange={(e) => {
-          const next = e.target.value
-          useSettings.getState().update({ language: next })
-          void applyLanguage(next)
+          // Reload rather than swap the catalog in place: module-level constants
+          // (label tables, error maps) call tr() once when their module is first
+          // evaluated, so only a fresh start makes every string follow the switch.
+          void switchLanguage(e.target.value)
         }}
       >
         {codes.map((code) => (
@@ -119,8 +128,8 @@ export function GeneralSection(): JSX.Element {
       {TOGGLE_ROWS.map((row) => (
         <div className="set-row" key={row.key}>
           <div className="label">
-            <div className="t">{row.title}</div>
-            <div className="d">{row.desc}</div>
+            <div className="t">{tr(row.title)}</div>
+            <div className="d">{tr(row.desc)}</div>
           </div>
           <Toggle
             checked={settings[row.key]}
@@ -132,8 +141,8 @@ export function GeneralSection(): JSX.Element {
       {NUMBER_ROWS.map((row) => (
         <div className="set-row" key={row.key}>
           <div className="label">
-            <div className="t">{row.title}</div>
-            <div className="d">{row.desc}</div>
+            <div className="t">{tr(row.title)}</div>
+            <div className="d">{tr(row.desc)}</div>
           </div>
           <input
             className="input mono"

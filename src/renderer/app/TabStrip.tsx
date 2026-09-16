@@ -7,7 +7,7 @@ import { MOD } from '@renderer/lib/platform'
 import { TAB_MIME } from '@renderer/lib/dnd'
 import { saveActiveRequest } from '@renderer/lib/save'
 import { exportRequestJson } from '@renderer/lib/export'
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-tabs.css'
 
 export function TabStrip() {
@@ -52,7 +52,7 @@ export function TabStrip() {
             <ContextMenu.Trigger asChild>
               <div
                 className={`rtab${activeTabId === t.id ? ' on' : ''}${t.dirty ? ' is-dirty' : ''}${shownInPanes?.has(t.id) && activeTabId !== t.id ? ' in-pane' : ''}`}
-                title={detached.includes(t.id) ? 'Открыт в отдельном окне — нажмите, чтобы перейти к нему' : undefined}
+                title={detached.includes(t.id) ? tr('Открыт в отдельном окне — нажмите, чтобы перейти к нему') : undefined}
                 ref={(el) => {
                   if (el) tabRefs.current.set(t.id, el)
                   else tabRefs.current.delete(t.id)
@@ -74,7 +74,7 @@ export function TabStrip() {
                 }}
               >
                 <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
-                <span className="label">{t.request.name || 'Без названия'}</span>
+                <span className="label">{tr(t.request.name || 'Без названия')}</span>
                 {detached.includes(t.id) && <Icon name="floatWin" size={12} className="tab-window" />}
                 {/* Dirty dot shows when there are unsaved changes; on hover it is
                     replaced by the close X, so every tab is closable with the mouse. */}
@@ -82,7 +82,7 @@ export function TabStrip() {
                   {t.dirty && <span className="dirty" title={tr('Несохранённые изменения')} />}
                   <span
                     className="x"
-                    title={`Закрыть (${MOD}W)`}
+                    title={trf('Закрыть ({key})', { key: `${MOD}W` })}
                     onClick={(e) => {
                       e.stopPropagation()
                       closeTab(t.id)
@@ -114,7 +114,7 @@ export function TabStrip() {
                 <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().closeAll()}> {tr('Закрыть все')} </ContextMenu.Item>
                 <ContextMenu.Separator className="pop-sep" />
                 <ContextMenu.Item className="pop-item" onSelect={() => void usePanes.getState().detachTab(t.id)}>
-                  {detached.includes(t.id) ? 'Перейти к окну' : 'Открыть в отдельном окне'}
+                  {detached.includes(t.id) ? tr('Перейти к окну') : tr('Открыть в отдельном окне')}
                 </ContextMenu.Item>
                 <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().duplicateTab(t.id)}> {tr('Дублировать')} </ContextMenu.Item>
                 <ContextMenu.Item
@@ -127,7 +127,7 @@ export function TabStrip() {
           </ContextMenu.Root>
         ))}
       </div>
-      <button className="icon-btn tabstrip-add" onClick={() => openNew()} title={`Новый запрос (${MOD}N)`}>
+      <button className="icon-btn tabstrip-add" onClick={() => openNew()} title={trf('Новый запрос ({key})', { key: `${MOD}N` })}>
         <Icon name="plus" size={16} />
       </button>
     </div>

@@ -77,7 +77,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
   const doReflect = async (): Promise<void> => {
     const address = interpolate(grpc.address ?? '', scope).replace(/^[a-z]+:\/\//i, '')
     if (!address.trim()) {
-      setParseError('Укажите адрес (host:port) для reflection')
+      setParseError(tr('Укажите адрес (host:port) для reflection'))
       return
     }
     setDiscovering(true)
@@ -122,7 +122,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
   const pickPem = async (field: 'caCertPath' | 'clientCertPath' | 'clientKeyPath'): Promise<void> => {
     const files = await window.api.openFile({
       multiple: false,
-      filters: [{ name: 'PEM/сертификат', extensions: ['pem', 'crt', 'cert', 'key', 'ca'] }]
+      filters: [{ name: tr('PEM/сертификат'), extensions: ['pem', 'crt', 'cert', 'key', 'ca'] }]
     })
     if (files && files[0]) set({ [field]: files[0].filePath })
   }
@@ -134,14 +134,14 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Discovery source: reflection toggle + (when off) .proto editor */}
       <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ flex: 1 }}>{useReflection ? 'Server Reflection' : 'Proto-файл'}</span>
+        <span style={{ flex: 1 }}>{useReflection ? 'Server Reflection' : tr('Proto-файл')}</span>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--tx-2)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
           <Toggle checked={useReflection} onChange={(v) => set({ useReflection: v })} />
           Reflection
         </label>
         {useReflection ? (
           <button className="btn" style={{ height: 26 }} disabled={discovering} onClick={() => void doReflect()}>
-            {discovering ? 'Обнаружение…' : 'Обнаружить'}
+            {discovering ? tr('Обнаружение…') : tr('Обнаружить')}
           </button>
         ) : (
           <>
@@ -151,7 +151,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
               <button className="btn ghost" style={{ height: 26 }} onClick={() => { set({ proto: SAMPLE_PROTO }); void doParse(SAMPLE_PROTO) }}> {tr('Пример')} </button>
             )}
             <button className="btn" style={{ height: 26 }} disabled={parsing || !(grpc.proto ?? '').trim()} onClick={() => void doParse(grpc.proto ?? '')}>
-              {parsing ? 'Разбор…' : 'Разобрать'}
+              {parsing ? tr('Разбор…') : tr('Разобрать')}
             </button>
           </>
         )}
@@ -195,13 +195,13 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
           items={(activeService?.methods ?? []).map((m) => ({
             key: m.name,
             label: m.name,
-            hint: KIND_LABEL[m.kind],
+            hint: tr(KIND_LABEL[m.kind]),
             onSelect: () => activeService && selectMethod(activeService, m)
           }))}
         />
         {activeMethod && (
           <span className="chip" style={{ alignSelf: 'center', fontSize: 11, color: 'var(--tx-3)' }}>
-            {KIND_LABEL[activeMethod.kind]} · {activeMethod.requestType || '?'} → {activeMethod.responseType || '?'}
+            {tr(KIND_LABEL[activeMethod.kind])} · {activeMethod.requestType || '?'} → {activeMethod.responseType || '?'}
           </span>
         )}
       </div>
@@ -209,9 +209,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
       {/* Connection options: TLS, per-call deadline, mTLS PEM paths */}
       <div style={{ display: 'flex', gap: 14, padding: '0 14px 8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-2)' }}>
-          <Toggle checked={grpc.plaintext ?? false} onChange={(plaintext) => set({ plaintext })} />
-          Plaintext (без TLS)
-        </label>
+          <Toggle checked={grpc.plaintext ?? false} onChange={(plaintext) => set({ plaintext })} /> {tr('Plaintext (без TLS)')} </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--tx-3)' }}>
             Deadline (ms)
@@ -283,7 +281,7 @@ function PemPicker({
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button className="btn ghost" type="button" style={{ height: 30, maxWidth: 200 }} onClick={onPick} title={path ?? undefined}>
           <Icon name="upload" size={13} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name ?? 'Выбрать…'}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name ?? tr('Выбрать…')}</span>
         </button>
         {path && (
           <button className="icon-btn" type="button" title={tr('Очистить')} aria-label={tr('Очистить файл')} onClick={onClear}>

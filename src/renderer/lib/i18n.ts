@@ -62,6 +62,25 @@ export function trf(source: string, vars: Record<string, string | number>): stri
   return tr(source).replace(/\{(\w+)\}/g, (whole, key: string) => (key in vars ? String(vars[key]) : whole))
 }
 
+/**
+ * Plural form, picked by the ACTIVE language's rules and then translated.
+ *
+ * The three arguments are the Russian one/few/many forms, so a call still reads
+ * as Russian at the call site. Languages with two forms (English, German,
+ * Spanish) never select `few`, so their catalogs only have to translate `one`
+ * and `many` — and they get "21 domains" right, which hardcoded Russian rules
+ * would not.
+ */
+export function trp(n: number, one: string, few: string, many: string): string {
+  let category: Intl.LDMLPluralRule = 'other'
+  try {
+    category = new Intl.PluralRules(useI18n.getState().lang).select(n)
+  } catch {
+    // Unknown language tag — fall back to the source language's own rules.
+  }
+  return tr(category === 'one' ? one : category === 'few' ? few : many)
+}
+
 /** Is this language part of the base app? */
 export function isCoreLanguage(code: string): boolean {
   return (CORE_LOCALES as readonly string[]).includes(code)

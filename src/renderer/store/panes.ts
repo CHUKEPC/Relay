@@ -6,7 +6,7 @@ import { setActiveTabFallback, useTabs } from './tabs'
 import { useResponse, type TabResponse } from './response'
 import { useUi } from './ui'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /* ============================================================
  * Model — a Terminator-style binary split tree
  * ============================================================ */
@@ -40,6 +40,18 @@ export interface PaneSplit {
 export type PaneNode = PaneLeaf | PaneSplit
 
 export const PANE_PRESETS = [1, 2, 3, 4, 8] as const
+
+/**
+ * Menu label per preset. Spelled out rather than built from a number because
+ * the plural form differs per language (Russian has three of them).
+ */
+export const PANE_COUNT_LABEL: Record<number, string> = {
+  1: '1 панель',
+  2: '2 панели',
+  3: '3 панели',
+  4: '4 панели',
+  8: '8 панелей'
+}
 export type PanePreset = (typeof PANE_PRESETS)[number]
 
 interface Rect {
@@ -151,6 +163,16 @@ function neighborOf(root: PaneNode, id: string, dir: Direction): PaneLeaf | null
   return best?.leaf ?? null
 }
 
+/**
+ * Preset layouts, built so that every horizontal divider belongs to one column
+ * only. Stacking rows (`col(row(a,b), row(c,d))`) would give the grid a single
+ * full-width divider that resizes both columns at once; splitting columns first
+ * (`row(col(a,c), col(b,d))`) lets each column be resized on its own, the way
+ * the sidebar and the response divider behave.
+ *
+ * `leaves` are laid out in reading order — leaves[0] top-left, then left to
+ * right, then down — which is also the order the pane numbers follow.
+ */
 function presetTree(n: PanePreset, leaves: PaneLeaf[]): PaneNode {
   const [a, b, c, d, e, f, g, h] = leaves
   switch (n) {
@@ -161,10 +183,26 @@ function presetTree(n: PanePreset, leaves: PaneLeaf[]): PaneNode {
     case 3:
       return split('row', a, split('col', b, c))
     case 4:
-      return split('col', split('row', a, b), split('row', c, d))
+      return split('row', split('col', a, c), split('col', b, d))
     case 8:
-      return split('col', split('row', split('row', a, b), split('row', c, d)), split('row', split('row', e, f), split('row', g, h)))
+      return split('row', split('row', split('col', a, e), split('col', b, f)), split('row', split('col', c, g), split('col', d, h)))
   }
+}
+
+/**
+ * Leaves in reading order (top row left to right, then the next row down).
+ * Pane numbers come from here rather than from the tree walk, so the label a
+ * user sees matches where the pane actually sits, whatever shape the tree has.
+ */
+export function leavesInReadingOrder(root: PaneNode): PaneLeaf[] {
+  const rects = layoutRects(root)
+  const eps = 0.001
+  return leavesOf(root).sort((x, y) => {
+    const rx = rects.get(x.id)!
+    const ry = rects.get(y.id)!
+    if (Math.abs(rx.y - ry.y) > eps) return rx.y - ry.y
+    return rx.x - ry.x
+  })
 }
 
 /* ============================================================
@@ -231,8 +269,8 @@ function atLimit(maxPanes: number): void {
     .getState()
     .showToast(
       maxPanes < MAX_PANES
-        ? `Больше ${maxPanes} панелей — включите плагин «Дополнительные панели»`
-        : `Больше ${maxPanes} панелей не поддерживается`
+        ? trf('Больше {n} панелей — включите плагин «Дополнительные панели»', { n: maxPanes })
+        : trf('Больше {n} панелей не поддерживается', { n: maxPanes })
     )
 }
 
@@ -502,7 +540,7 @@ export const usePanes = create<PanesState>((set, get) => {
         return
       }
       window.api.panePutSnapshot(tabId, useResponse.getState().byTab[tabId] ?? null)
-      await window.api.paneDetach(tabId, tab.request.name || 'Без названия')
+      await window.api.paneDetach(tabId, tr(tab.request.name || 'Без названия'))
       const cur = get()
       const detached = [...cur.detached, tabId]
       let root = cur.root

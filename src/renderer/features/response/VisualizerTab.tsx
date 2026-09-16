@@ -45,7 +45,7 @@ function TemplateView({ payload }: { payload: VisualizerPayload }): JSX.Element 
     try {
       inner = renderTemplate(payload.template, payload.data)
     } catch {
-      inner = '<p>Не удалось отрендерить шаблон визуализатора.</p>'
+      inner = `<p>${tr('Не удалось отрендерить шаблон визуализатора.')}</p>`
     }
     return buildSandboxDoc(inner)
   }, [payload])
@@ -161,10 +161,7 @@ export function VisualizerTab({
 
   return (
     <EmptyViz
-      hint={
-        'Нет визуализации. В тестовом скрипте вызовите pm.visualizer.set(template, data) — ' +
-        'или верните JSON-массив объектов, чтобы увидеть авто-таблицу.'
-      }
+      hint={tr('Нет визуализации. В тестовом скрипте вызовите pm.visualizer.set(template, data) — или верните JSON-массив объектов, чтобы увидеть авто-таблицу.')}
     />
   )
 }

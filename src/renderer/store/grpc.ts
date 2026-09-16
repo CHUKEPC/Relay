@@ -8,6 +8,7 @@ import type {
   RealtimeMessage
 } from '@shared/types'
 import { makeId } from '@shared/id'
+import { tr, trf } from '../lib/i18n'
 
 export type GrpcStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -84,18 +85,18 @@ export const useGrpc = create<GrpcState>((set, get) => {
     switch (ev.type) {
       case 'open':
         patch(tabId, { status: 'running', error: undefined })
-        append(tabId, sys(`Вызов запущен (${ev.protocol ?? 'unary'})`))
+        append(tabId, sys(trf('Вызов запущен ({protocol})', { protocol: ev.protocol ?? 'unary' })))
         break
       case 'message':
         append(tabId, ev.message)
         break
       case 'close':
         patch(tabId, { status: 'done' })
-        append(tabId, sys('Вызов завершён'))
+        append(tabId, sys(tr('Вызов завершён')))
         break
       case 'error':
         patch(tabId, { status: 'error', error: ev.error })
-        append(tabId, sys(`Ошибка: ${ev.error}`))
+        append(tabId, sys(trf('Ошибка: {message}', { message: ev.error })))
         break
       case 'reconnecting':
         break

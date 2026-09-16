@@ -520,6 +520,7 @@ plugins/
 ├── ai-assistant/plugin.json       → ai
 ├── advanced-auth/plugin.json      → auth.advanced
 ├── extra-panes/plugin.json        → panes.extra
+├── backup-formats/plugin.json     → backup.extra
 └── extra-languages/
     ├── plugin.json                → i18n.extra
     └── locales/{de,es}.json
@@ -534,6 +535,13 @@ granted permissions. A feature pack executes nothing — it is a manifest (plus 
 for languages), so it needs no sandbox and no consent dialog. Deleting its folder removes
 the capability outright; the toggle in Settings → Плагины only hides it.
 
+**A pack in the folder is not a pack in the app.** The Settings list shows only the packs
+the user actually took into the app — ticked in the installer or picked later with «Выбрать
+плагин на компьютере…». The rest simply sit in `plugins/`, invisible, until they are added.
+Removing a pack is the inverse: it drops out of the list and its capability disappears, but
+its folder stays put, so a pack that ships with the app can always be added back without
+reinstalling.
+
 | Piece | Where |
 |---|---|
 | capability list + manifest types | `src/shared/features.ts` |
@@ -542,8 +550,27 @@ the capability outright; the toggle in Settings → Плагины only hides it
 | settings UI | `src/renderer/features/settings/FeaturePacks.tsx` |
 | translation engine | `src/renderer/lib/i18n.ts`, `src/renderer/locales/en.json` |
 
-Enabled/disabled state lives in the app-level `features` document; a pack that is present
-and has never been switched off counts as enabled (shipping it *is* the decision).
+Packs are **opt-in**: a pack that has never been switched on stays off, so a fresh install is
+the base app and nothing else. The Windows installer asks which packs to enable and writes the
+answer to `install-config.json` next to the executable; `src/main/features/install.ts` applies
+it once per install (the file's mtime is the marker) and also applies the installer's language
+to `settings.language`. Day-to-day toggling in Settings → Плагины is never overwritten.
+
+Enabled/disabled state lives in the app-level `features` document.
+
+Packs are not limited to the ones that ship with the app: **Settings → Плагины → «Выбрать
+плагин на компьютере…»** takes a `plugin.json` (or a `.zip` containing one) from anywhere on
+disk, validates it and copies it into the plugins folder, switched on. The dialog opens in the
+plugins folder, which is also how a shipped-but-not-chosen pack is taken into use: picking a
+folder that is already there adds it without copying anything. Archive entries with absolute
+paths or `..` segments are dropped and the manifest id must be a plain token, so an archive can
+never write outside its own folder (`src/main/features/pack-source.ts`, unit-tested).
+
+There is one picker for both kinds: `features:install` owns the dialog, and an archive that is
+not a capability pack is handed to the code-plugin installer, so the user never has to know
+which kind they picked. The settings screen likewise shows packs and code plugins in one list,
+each row carrying a name, an info popover (description, what it adds, permissions, folder) and
+the remove/enable controls.
 
 ---
 

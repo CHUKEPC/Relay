@@ -7,7 +7,7 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
  *  so the user sees the clean, actionable message. */
 function cleanError(msg: string): string {
@@ -23,15 +23,14 @@ function cleanError(msg: string): string {
  *  Format names (Postman, OpenAPI, HAR…) stay English on purpose. */
 function localizeError(msg: string): string {
   if (msg.startsWith('Could not detect import format')) {
-    return (
-      'Не удалось распознать формат. Поддерживаются: команда cURL, коллекция Postman v2.1, ' +
-      'OpenAPI 3 / Swagger 2.0 (JSON или YAML), HAR и экспорт Insomnia v4.'
+    return tr(
+      'Не удалось распознать формат. Поддерживаются: команда cURL, коллекция Postman v2.1, OpenAPI 3 / Swagger 2.0 (JSON или YAML), HAR и экспорт Insomnia v4.'
     )
   }
   const badJson = msg.match(/^This doesn't look like valid (.+) JSON\. Check the document\.$/)
-  if (badJson) return `Это не похоже на корректный JSON (${badJson[1]}). Проверьте документ.`
+  if (badJson) return trf('Это не похоже на корректный JSON ({format}). Проверьте документ.', { format: badJson[1] })
   const badDoc = msg.match(/^This doesn't look like a valid (.+) document \(JSON or YAML\)\.$/)
-  if (badDoc) return `Это не похоже на корректный документ ${badDoc[1]} (JSON или YAML).`
+  if (badDoc) return trf('Это не похоже на корректный документ {format} (JSON или YAML).', { format: badDoc[1] })
   return msg
 }
 
@@ -55,23 +54,23 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const onFile = (file: File) => {
     const reader = new FileReader()
     reader.onload = () => setText(String(reader.result ?? ''))
-    reader.onerror = () => setError('Не удалось прочитать файл')
+    reader.onerror = () => setError(tr('Не удалось прочитать файл'))
     reader.readAsText(file)
   }
 
   const doImport = async () => {
     setError(null)
     if (!text.trim()) {
-      setError('Вставьте содержимое или выберите файл')
+      setError(tr('Вставьте содержимое или выберите файл'))
       return
     }
     try {
       const results = await window.api.importData(kind, text)
       if (!results.length) {
         setError(
-          'Не удалось распознать формат. Поддерживаются: коллекция Postman v2.1, OpenAPI 3.x / Swagger 2.0 ' +
-            '(JSON или YAML), HAR, экспорт Insomnia v4 и команда cURL. ' +
-            'Убедитесь, что вы вставили именно файл коллекции, а не произвольный JSON.'
+          tr(
+            'Не удалось распознать формат. Поддерживаются: коллекция Postman v2.1, OpenAPI 3.x / Swagger 2.0 (JSON или YAML), HAR, экспорт Insomnia v4 и команда cURL. Убедитесь, что вы вставили именно файл коллекции, а не произвольный JSON.'
+          )
         )
         return
       }
@@ -79,7 +78,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       // tell the user instead of silently adding an empty node.
       const totalReqs = results.reduce((n, r) => n + (r.collection ? countRequests(r.collection) : 0), 0)
       if (results.every((r) => r.kind === 'collection') && totalReqs === 0) {
-        setError('Файл распознан как коллекция, но в нём нет запросов. Проверьте, что выбрали правильный файл.')
+        setError(tr('Файл распознан как коллекция, но в нём нет запросов. Проверьте, что выбрали правильный файл.'))
         return
       }
       const warnings: string[] = []
@@ -100,11 +99,14 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         }
       }
       const parts = [
-        collections && `коллекций: ${collections}${totalReqs ? ` (запросов: ${totalReqs})` : ''}`,
-        requests && `запросов: ${requests}`,
-        environments && `сред: ${environments}`
+        collections && trf('коллекций: {n}', { n: collections }) + (totalReqs ? ` ${trf('(запросов: {n})', { n: totalReqs })}` : ''),
+        requests && trf('запросов: {n}', { n: requests }),
+        environments && trf('сред: {n}', { n: environments })
       ].filter(Boolean)
-      showToast(`Импортировано (${parts.join(', ') || 'данные'})${warnings.length ? ` · предупреждений: ${warnings.length}` : ''}`)
+      showToast(
+        trf('Импортировано ({what})', { what: parts.join(', ') || tr('данные') }) +
+          (warnings.length ? ` · ${trf('предупреждений: {n}', { n: warnings.length })}` : '')
+      )
       setText('')
       onOpenChange(false)
     } catch (err) {
@@ -120,7 +122,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           value={kind}
           onChange={setKind}
           options={[
-            { value: 'auto', label: 'Авто' },
+            { value: 'auto', label: tr('Авто') },
             { value: 'postman', label: 'Postman v2.1' },
             { value: 'openapi', label: 'OpenAPI 3' },
             { value: 'swagger', label: 'Swagger 2.0' },
@@ -135,7 +137,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         <textarea
           className="input"
           style={{ height: 200, fontFamily: 'var(--font-mono)', fontSize: 12, padding: 10, resize: 'vertical' }}
-          placeholder={'Вставьте Postman/OpenAPI JSON или команду curl…'}
+          placeholder={tr('Вставьте Postman/OpenAPI JSON или команду curl…')}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />

@@ -35,8 +35,9 @@ export function defaultSettingsDoc(): SettingsDoc {
     sendAiContext: true,
     autoApplyAiTools: false,
     defaultProviderId: null,
-    proxy: { enabled: false, url: '', bypass: [] },
+    proxy: { mode: 'off', enabled: false, url: '', bypass: [] },
     clientCerts: [],
+    caPath: '',
     http2: false
   }
 }

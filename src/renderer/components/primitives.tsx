@@ -67,17 +67,21 @@ export function Segmented<T extends string>({
 export function Toggle({
   checked,
   onChange,
-  disabled
+  disabled,
+  title
 }: {
   checked: boolean
   onChange: (v: boolean) => void
   disabled?: boolean
+  /** Hover hint — a switch carries no label of its own. */
+  title?: string
 }) {
   return (
     <SwitchPrimitive.Root
       className={`toggle ${checked ? 'on' : ''}`}
       checked={checked}
       disabled={disabled}
+      title={title}
       onCheckedChange={onChange}
     >
       <SwitchPrimitive.Thumb />

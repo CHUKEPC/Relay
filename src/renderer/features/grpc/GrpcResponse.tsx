@@ -3,7 +3,7 @@ import type { RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useGrpc, type GrpcStatus } from '@renderer/store/grpc'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** Bottom/right-panel view for a gRPC call (replaces the HTTP response). */
 
 const STATUS_LABEL: Record<GrpcStatus, string> = {
@@ -72,12 +72,12 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
       <div className="resp-statusbar">
         <span className="status-pill" style={{ color: sc, background: `color-mix(in oklch, ${sc} 14%, transparent)` }}>
           <span className="pulse" style={{ background: sc }} />
-          {STATUS_LABEL[g.status]}
+          {tr(STATUS_LABEL[g.status])}
         </span>
         <div className="resp-meta">
           <span>gRPC</span>
           <span className="sep">•</span>
-          <span>{inCount} ответ(ов)</span>
+          <span>{trf('ответов: {n}', { n: inCount })}</span>
         </div>
         <div className="resp-actions">
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>

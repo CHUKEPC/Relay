@@ -4,7 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { IconButton } from '@renderer/components/primitives'
 import { useAi } from '@renderer/store/ai'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 const MASKED_PLACEHOLDER = '••••••••••••••••'
 
 type KeyHint = { kind: 'ok' | 'neutral' | 'error'; text: string } | null
@@ -71,7 +71,7 @@ export function ProviderDetail({
     const key = draftKey.trim()
     if ((!key && !canConnectWithoutKey) || saving) return
     if (hasBaseUrl(provider.kind) && provider.kind !== 'openrouter' && !provider.baseUrl?.trim()) {
-      setKeyHint({ kind: 'error', text: 'Сначала укажите Base URL сервера.' })
+      setKeyHint({ kind: 'error', text: tr('Сначала укажите Base URL сервера.') })
       return
     }
     setSaving(true)
@@ -83,14 +83,14 @@ export function ProviderDetail({
       const found = await refreshModels(provider.id)
       setKeyHint(
         found > 0
-          ? { kind: 'ok', text: `Подключено · доступно моделей: ${found}` }
+          ? { kind: 'ok', text: trf('Подключено · доступно моделей: {n}', { n: found }) }
           : {
               kind: 'neutral',
-              text: 'Сохранено, но список моделей получить не удалось — проверьте ключ и адрес или впишите модель вручную.'
+              text: tr('Сохранено, но список моделей получить не удалось — проверьте ключ и адрес или впишите модель вручную.')
             }
       )
     } catch (err) {
-      setKeyHint({ kind: 'error', text: `Не удалось сохранить ключ: ${(err as Error).message}` })
+      setKeyHint({ kind: 'error', text: trf('Не удалось сохранить ключ: {message}', { message: (err as Error).message }) })
     } finally {
       setSaving(false)
     }
@@ -133,7 +133,7 @@ export function ProviderDetail({
             onChange={(e) => updateProvider(provider.id, { label: e.target.value })}
             style={{ height: 30, fontWeight: 600, maxWidth: 280 }}
           />
-          {provider.sub && <div className="prov-sub">{provider.sub}</div>}
+          {provider.sub && <div className="prov-sub">{tr(provider.sub)}</div>}
         </div>
         {provider.hasKey && !isActive && (
           <button className="btn primary" onClick={() => setActiveProvider(provider.id)}> {tr('Сделать активным')} </button>
@@ -146,7 +146,7 @@ export function ProviderDetail({
 
       {hasBaseUrl(provider.kind) && (
         <div className="field">
-          <label>Base URL{provider.kind === 'openrouter' ? ' (необязательно)' : ''}</label>
+          <label>Base URL{provider.kind === 'openrouter' ? ` ${tr('(необязательно)')}` : ''}</label>
           <input
             className="input mono"
             value={provider.baseUrl ?? ''}
@@ -158,14 +158,17 @@ export function ProviderDetail({
       )}
 
       <div className="field">
-        <label>API-ключ{keyOptional(provider.kind) ? ' (если сервер его требует)' : ''}</label>
+        <label>
+          {tr('API-ключ')}
+          {keyOptional(provider.kind) ? ` ${tr('(если сервер его требует)')}` : ''}
+        </label>
         <div className="input-row">
           <div className="input-key">
             <input
               className="input mono"
               type={reveal ? 'text' : 'password'}
               value={draftKey}
-              placeholder={showMasked ? (provider.keyless ? 'подключено без ключа' : MASKED_PLACEHOLDER) : 'sk-…'}
+              placeholder={showMasked ? (provider.keyless ? tr('подключено без ключа') : MASKED_PLACEHOLDER) : 'sk-…'}
               onChange={(e) => setDraftKey(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleSaveKey()
@@ -177,7 +180,7 @@ export function ProviderDetail({
               className="reveal"
               size={15}
               active={reveal}
-              title={reveal ? 'Скрыть' : 'Показать'}
+              title={reveal ? tr('Скрыть') : tr('Показать')}
               onClick={() => setReveal((r) => !r)}
             />
           </div>
@@ -187,12 +190,12 @@ export function ProviderDetail({
             onClick={() => void handleSaveKey()}
           >
             {saving
-              ? 'Подключение…'
+              ? tr('Подключение…')
               : provider.hasKey
-                ? 'Обновить'
+                ? tr('Обновить')
                 : canConnectWithoutKey
-                  ? 'Подключить без ключа'
-                  : 'Подключить'}
+                  ? tr('Подключить без ключа')
+                  : tr('Подключить')}
           </button>
           {provider.hasKey && (
             <button className="btn" onClick={() => void handleClearKey()}> {tr('Отключить')} </button>
@@ -210,8 +213,8 @@ export function ProviderDetail({
         )}
         <div className="hint">
           {secretsOk === false
-            ? '⚠ OS-хранилище ключей недоступно — ключ сохраняется локально в открытом виде (base64). Настройте системный keychain, чтобы он шифровался.'
-            : 'Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к провайдеру.'}
+            ? tr('⚠ OS-хранилище ключей недоступно — ключ сохраняется локально в открытом виде (base64). Настройте системный keychain, чтобы он шифровался.')
+            : tr('Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к провайдеру.')}
           {keyUrl && (
             <>
               {' '}
@@ -264,7 +267,7 @@ function ModelPicker({
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const fetchedRef = useRef(false)
-  const current = provider.defaultModel || 'Выберите модель'
+  const current = provider.defaultModel || tr('Выберите модель')
 
   const canFetch = !!provider.hasKey || provider.kind === 'openai-compatible' || provider.kind === 'openrouter'
 
@@ -365,8 +368,8 @@ function ModelPicker({
             {!loading && failed && provider.models.length === 0 && (
               <div className="model-pop-note">
                 {canFetch
-                  ? 'Провайдер не вернул список. Проверьте ключ и адрес или впишите модель вручную.'
-                  : 'Подключите ключ, чтобы загрузить список моделей.'}
+                  ? tr('Провайдер не вернул список. Проверьте ключ и адрес или впишите модель вручную.')
+                  : tr('Подключите ключ, чтобы загрузить список моделей.')}
               </div>
             )}
             {!loading && !failed && provider.models.length === 0 && !canFetch && (
@@ -388,7 +391,7 @@ function ModelPicker({
               </div>
             )}
           </div>
-          {provider.models.length > 0 && <div className="model-pop-foot">Моделей: {provider.models.length}</div>}
+          {provider.models.length > 0 && <div className="model-pop-foot">{trf('Моделей: {n}', { n: provider.models.length })}</div>}
         </div>
       )}
     </>

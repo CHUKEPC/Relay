@@ -176,6 +176,12 @@ export type JwtAlg =
  * is NOT CIDR-matched — only host/suffix globs) that skip the proxy.
  */
 export interface ProxyConfig {
+  /**
+   * 'off' sends everything direct, 'system' follows the OS/browser proxy
+   * settings (resolved in main before the engine runs), 'custom' uses `url`.
+   * Missing means the pre-mode shape: `enabled` alone decided off/custom.
+   */
+  mode?: 'off' | 'system' | 'custom'
   enabled: boolean
   /** proxy origin, e.g. http://127.0.0.1:8080 */
   url: string
@@ -214,6 +220,8 @@ export interface RequestSettings {
   clientCerts?: ClientCert[]
   /** allow HTTP/2 (undici negotiates h2 via ALPN when the server supports it) */
   allowH2?: boolean
+  /** extra CA bundle (PEM path) trusted for every host, like Postman's CA file */
+  caPath?: string
 }
 
 /** A fully-resolved (variables already interpolated) request ready for the engine. */
@@ -474,6 +482,8 @@ export interface SettingsDoc extends DocEnvelope {
   proxy: ProxyConfig
   /** client TLS certificates matched by host (paths only; bytes read in main) */
   clientCerts: ClientCert[]
+  /** extra CA bundle (PEM) trusted for every request; empty = system trust only */
+  caPath?: string
   /** allow HTTP/2 negotiation for outbound requests */
   http2: boolean
   /** run without the GPU: less video memory, softer scrolling (needs a restart) */

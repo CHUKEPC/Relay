@@ -14,7 +14,7 @@ import { trackDrag } from '@renderer/lib/drag'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 const SUGGESTIONS = [
   { icon: 'info', text: 'Объясни этот ответ', prompt: 'Объясни текущий ответ: что он означает, структуру полей и есть ли проблемы.' },
   { icon: 'warn', text: 'Диагностировать ошибку', prompt: 'Разбери ошибку текущего ответа/запроса и предложи конкретное исправление.' },
@@ -125,7 +125,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
             <Icon name="plus" size={15} />
           </button>
         )}
-        <button className="icon-btn" onClick={onClose} title={`Скрыть панель (${MOD}J)`}>
+        <button className="icon-btn" onClick={onClose} title={trf('Скрыть панель ({key})', { key: `${MOD}J` })}>
           <Icon name="close" size={15} />
         </button>
       </div>
@@ -145,9 +145,9 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
             </div>
             <div className="ai-suggest">
               {SUGGESTIONS.map((s, i) => (
-                <button key={i} className="sug-chip" onClick={() => submit(s.prompt)}>
+                <button key={i} className="sug-chip" onClick={() => submit(tr(s.prompt))}>
                   <Icon name={s.icon} size={13} />
-                  {s.text}
+                  {tr(s.text)}
                 </button>
               ))}
             </div>

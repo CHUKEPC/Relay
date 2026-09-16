@@ -8,10 +8,10 @@ import { useEnvironments } from '@renderer/store/environments'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd, MOD } from '@renderer/lib/platform'
 import { kbdCombo, type KeyActionId } from '@renderer/lib/keymap'
-import { leavesOf, PANE_PRESETS, usePanes } from '@renderer/store/panes'
+import { leavesOf, PANE_COUNT_LABEL, PANE_PRESETS, usePanes } from '@renderer/store/panes'
 import { WorkspaceSwitcher } from '@renderer/features/workspaces/WorkspaceSwitcher'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 export function Titlebar() {
   const setTheme = useSettings((s) => s.setTheme)
   const resolvedTheme = useSettings((s) => s.resolvedTheme)
@@ -73,7 +73,7 @@ export function Titlebar() {
         <DropdownMenu.Trigger asChild>
           <div className="env-pill nodrag" data-tour="env">
             <span className="dot" />
-            {activeEnv ? activeEnv.name : 'Без окружения'}
+            {activeEnv ? tr(activeEnv.name) : tr('Без окружения')}
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)' }} />
           </div>
         </DropdownMenu.Trigger>
@@ -109,9 +109,7 @@ export function Titlebar() {
                 className={`pop-item ${paneCount === n ? 'on' : ''}`}
                 onSelect={() => usePanes.getState().applyPreset(n)}
               >
-                <span style={{ flex: 1 }}>
-                  {n} {n === 1 ? 'панель' : n < 5 ? 'панели' : 'панелей'}
-                </span>
+                <span style={{ flex: 1 }}>{tr(PANE_COUNT_LABEL[n] ?? `${n}`)}</span>
                 <span className="pane-menu-kbd">{kbdCombo(`panePreset${n}` as KeyActionId, keybindings)}</span>
                 {paneCount === n && <Icon name="check" size={14} className="tick" />}
               </DropdownMenu.Item>
@@ -136,16 +134,37 @@ export function Titlebar() {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
-      <div className="theme-toggle nodrag">
-        <button className={resolvedTheme === 'light' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('light')} title={tr('Светлая')}>
+      {/* Three explicit states. The old two-button version highlighted nothing
+          while the theme was 'system', so a fresh install looked light with no
+          button marked — the control must always show what is actually set. */}
+      <div className="theme-toggle nodrag" role="group" aria-label={tr('Тема')}>
+        <button
+          className={themeChoice === 'system' ? 'on' : ''}
+          aria-pressed={themeChoice === 'system'}
+          onClick={() => setTheme('system')}
+          title={`${tr('Системная')} — ${resolvedTheme === 'dark' ? tr('Тёмная') : tr('Светлая')}`}
+        >
+          <Icon name="monitor" size={14} />
+        </button>
+        <button
+          className={themeChoice === 'light' ? 'on' : ''}
+          aria-pressed={themeChoice === 'light'}
+          onClick={() => setTheme('light')}
+          title={tr('Светлая')}
+        >
           <Icon name="sun" size={15} />
         </button>
-        <button className={resolvedTheme === 'dark' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('dark')} title={tr('Тёмная')}>
+        <button
+          className={themeChoice === 'dark' ? 'on' : ''}
+          aria-pressed={themeChoice === 'dark'}
+          onClick={() => setTheme('dark')}
+          title={tr('Тёмная')}
+        >
           <Icon name="moon" size={14} />
         </button>
       </div>
       {hasAi && (
-        <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} data-tour="ai" onClick={() => useUi.getState().toggleAi()} title={`AI-ассистент (${MOD}J)`}>
+        <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} data-tour="ai" onClick={() => useUi.getState().toggleAi()} title={trf('AI-ассистент ({key})', { key: `${MOD}J` })}>
           <Icon name="sparkle" size={16} />
         </button>
       )}

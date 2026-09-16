@@ -48,6 +48,10 @@ nsis:
   installerLanguages:
     - en_US
     - ru_RU
+  # Ask for the language up front: the choice also becomes the app's UI language
+  # (installer.nsh writes it to install-config.json, read by src/main/features).
+  multiLanguageInstaller: true
+  displayLanguageSelector: true
 
 mac:
   target:

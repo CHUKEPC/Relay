@@ -111,7 +111,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
               title={tr('Нажмите, чтобы переименовать')}
               onClick={startEdit}
             >
-              {req.name.trim() || 'Без названия'}
+              {tr(req.name.trim() || 'Без названия')}
             </span>
             <button className="icon-btn reqmeta-edit" title={tr('Переименовать')} onClick={startEdit}>
               <Icon name="pencil" size={13} />

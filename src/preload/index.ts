@@ -141,6 +141,8 @@ const api: RelayApi = {
   featuresSetEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke(IPC.features.setEnabled, id, enabled),
   featuresLocale: (code: string) => ipcRenderer.invoke(IPC.features.locale, code),
   featuresOpenFolder: () => ipcRenderer.invoke(IPC.features.openFolder),
+  featuresInstall: () => ipcRenderer.invoke(IPC.features.install),
+  featuresRemove: (id: string) => ipcRenderer.invoke(IPC.features.remove, id),
   onFeaturesChanged: (cb: (list: FeaturePluginInfo[]) => void) => {
     const handler = (_e: unknown, list: FeaturePluginInfo[]) => cb(list)
     ipcRenderer.on(IPC.features.changed, handler)
@@ -189,6 +191,7 @@ const api: RelayApi = {
   openFile: (opts: OpenFileOptions) => ipcRenderer.invoke(IPC.dialog.openFile, opts),
   saveFile: (opts: SaveFileOptions) => ipcRenderer.invoke(IPC.dialog.saveFile, opts),
   readTextFile: (path: string) => ipcRenderer.invoke(IPC.dialog.readFile, path),
+  readBinaryFile: (path: string) => ipcRenderer.invoke(IPC.dialog.readBinary, path),
 
   /* ---- window controls ---- */
   minimizeWindow: () => ipcRenderer.invoke(IPC.app.minimize),

@@ -53,8 +53,10 @@ import type { FeaturePluginInfo } from './features'
 /** Persisted enable/disable state of the bundled feature plugins (app-level). */
 export interface FeaturePluginsDoc {
   version: number
-  /** plugin id -> enabled; a missing id means "enabled" (shipped = wanted) */
+  /** plugin id -> enabled; a missing id means disabled (packs are opt-in) */
   enabled: Record<string, boolean>
+  /** mtime of the install-config.json whose pack selection was already applied */
+  appliedInstall?: number
 }
 
 /** Channel names, grouped. Use these constants on both ends. */
@@ -151,6 +153,8 @@ export const IPC = {
     list: 'features:list',
     setEnabled: 'features:setEnabled',
     locale: 'features:locale',
+    install: 'features:install',
+    remove: 'features:remove',
     openFolder: 'features:openFolder',
     /** broadcast: the enabled set changed (sent to every window) */
     changed: 'features:changed'
@@ -179,7 +183,8 @@ export const IPC = {
   dialog: {
     openFile: 'dialog:openFile',
     saveFile: 'dialog:saveFile',
-    readFile: 'dialog:readFile'
+    readFile: 'dialog:readFile',
+    readBinary: 'dialog:readBinary'
   },
   app: {
     platform: 'app:platform',
@@ -363,6 +368,19 @@ export interface RelayApi {
   featuresLocale(code: string): Promise<Record<string, string> | null>
   /** Reveal the bundled plugins folder; false when it is missing. */
   featuresOpenFolder(): Promise<boolean>
+  /**
+   * Pick a plugin anywhere on disk and add it: a capability pack's folder (or
+   * its `plugin.json`), or a `.zip` holding either a pack or a code plugin.
+   * The dialog opens in the app's `plugins` folder. Null = cancelled.
+   */
+  featuresInstall(): Promise<
+    | { ok: true; kind: 'pack'; id: string; list: FeaturePluginInfo[] }
+    | { ok: true; kind: 'plugin'; id: string }
+    | { ok: false; error: string }
+    | null
+  >
+  /** Take a pack out of the app (its folder stays in `plugins/`). */
+  featuresRemove(id: string): Promise<FeaturePluginInfo[]>
   /** Subscribe to enable/disable changes made in any window. Returns an unsubscribe fn. */
   onFeaturesChanged(cb: (list: FeaturePluginInfo[]) => void): () => void
 
@@ -416,6 +434,8 @@ export interface RelayApi {
   saveFile(opts: SaveFileOptions): Promise<string | null>
   /** Read a UTF-8 text file the user picked (for runner data files). Size-capped in main. */
   readTextFile(path: string): Promise<string>
+  /** Read a user-picked file as base64 (binary backups). Same size cap as text. */
+  readBinaryFile(path: string): Promise<string>
 
   /* ---- window controls (frameless) ---- */
   minimizeWindow(): Promise<void>

@@ -4,7 +4,7 @@ import { MOD } from '@renderer/lib/platform'
 import { KEY_ACTIONS, comboFromEvent, findConflict, formatCombo } from '@renderer/lib/keymap'
 import type { KeyActionGroup, KeyActionId } from '@renderer/lib/keymap'
 import { useSettings } from '@renderer/store/settings'
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-keys.css'
 
 /** Non-rebindable shortcuts shown as a static reference group. */
@@ -65,14 +65,14 @@ export function ShortcutsSection(): JSX.Element {
       const combo = comboFromEvent(e)
       if (!combo) return // pure-modifier press — keep waiting
       if (!isBindable(combo)) {
-        setCaptureError(`Сочетание должно содержать ${MOD}, Alt или F-клавишу`)
+        setCaptureError(trf('Сочетание должно содержать {mod}, Alt или F-клавишу', { mod: MOD }))
         return
       }
       const custom = useSettings.getState().settings.keybindings
       const conflict = findConflict(combo, custom, capturingId)
       if (conflict) {
         const label = KEY_ACTIONS.find((a) => a.id === conflict)?.label ?? conflict
-        setCaptureError(`Уже используется: ${label}`)
+        setCaptureError(trf('Уже используется: {action}', { action: tr(label) }))
         return
       }
       const action = KEY_ACTIONS.find((a) => a.id === capturingId)
@@ -106,7 +106,7 @@ export function ShortcutsSection(): JSX.Element {
       {GROUPS.map((group) => (
       <div key={group.id}>
         <div className="set-group-label">{tr(group.title)}</div>
-        {group.hint && <div className="set-sub" style={{ marginTop: -6 }}>{group.hint}</div>}
+        {group.hint && <div className="set-sub" style={{ marginTop: -6 }}>{tr(group.hint)}</div>}
         {KEY_ACTIONS.filter((a) => a.group === group.id).map((action) => {
           const overridden = keybindings[action.id] !== undefined
           const combo = overridden ? keybindings[action.id] : action.defaultCombo

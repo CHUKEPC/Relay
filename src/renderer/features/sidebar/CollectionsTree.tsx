@@ -11,7 +11,7 @@ import { ImportDialog } from '@renderer/features/data/ImportDialog'
 import { REQUEST_MIME } from '@renderer/lib/dnd'
 import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 function MethodTag({ m }: { m: string }) {
   return <span className={`method-tag mtag m-${m}`}>{m === 'DELETE' ? 'DEL' : m}</span>
 }
@@ -44,7 +44,7 @@ export function CollectionsTree({ query }: { query: string }) {
   const deleteAll = () => {
     const n = collections.length
     if (n === 0) return
-    if (window.confirm(`Удалить все коллекции (${n})? Это действие необратимо.`)) setAll([])
+    if (window.confirm(trf('Удалить все коллекции ({n})? Это действие необратимо.', { n }))) setAll([])
   }
 
   return (
@@ -70,7 +70,7 @@ export function CollectionsTree({ query }: { query: string }) {
             style={{ width: 22, height: 22 }}
             title={tr('Новая коллекция')}
             onClick={() => {
-              const id = addCollection('Новая коллекция')
+              const id = addCollection(tr('Новая коллекция'))
               setRename({ id, isNew: true })
             }}
           >
@@ -298,7 +298,7 @@ function TreeNode({
         <ContextMenu.Item
           className="pop-item"
           onSelect={() => {
-            const r = emptyRequest('Новый запрос')
+            const r = emptyRequest(tr('Новый запрос'))
             store.addRequest(node.id, r)
             openSaved(r, r.id)
           }}
@@ -307,7 +307,7 @@ function TreeNode({
         <ContextMenu.Item
           className="pop-item"
           onSelect={() => {
-            const id = store.addFolder(node.id, 'Новая папка')
+            const id = store.addFolder(node.id, tr('Новая папка'))
             setOpen(true)
             setRename({ id, isNew: true })
           }}
@@ -318,7 +318,7 @@ function TreeNode({
         <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
           <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => void exportFolderJson(node)}>
-          <Icon name="download" size={14} /> {node.type === 'collection' ? 'Экспорт (Postman v2.1)' : 'Экспорт'}
+          <Icon name="download" size={14} /> {node.type === 'collection' ? tr('Экспорт (Postman v2.1)') : tr('Экспорт')}
         </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => useRunner.getState().openFor(node)}>
           <Icon name="play" size={14} /> {tr('Запустить')} </ContextMenu.Item>
@@ -327,7 +327,7 @@ function TreeNode({
           className="pop-item"
           style={{ color: 'var(--s-5xx)' }}
           onSelect={() => {
-            if (window.confirm(`Удалить «${node.name}» и всё содержимое?`)) store.removeNode(node.id)
+            if (window.confirm(trf('Удалить «{name}» и всё содержимое?', { name: tr(node.name) }))) store.removeNode(node.id)
           }}
         >
           <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>

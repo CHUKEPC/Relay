@@ -4,21 +4,25 @@ import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
 import { kbd } from '@renderer/lib/platform'
 import { clamp } from '@renderer/lib/math'
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-tour.css'
 
 interface TourStep {
   /** CSS selector of the anchor element to spotlight. */
   target: string
   title: string
+  /** translated at render; `{key}` is replaced with the platform shortcut */
   body: string
+  /** shortcut letter for the `{key}` placeholder, if the body has one */
+  keyHint?: string
 }
 
 const STEPS: TourStep[] = [
   {
     target: '[data-tour="search"]',
     title: 'Поиск и команды',
-    body: `Глобальный поиск по запросам, коллекциям и командам. Открывается в любой момент — ${kbd('K')}.`
+    body: 'Глобальный поиск по запросам, коллекциям и командам. Открывается в любой момент — {key}.',
+    keyHint: 'K'
   },
   {
     target: '.tabstrip',
@@ -28,12 +32,14 @@ const STEPS: TourStep[] = [
   {
     target: '[data-tour="send"]',
     title: 'Адрес и отправка',
-    body: `Выберите метод, введите URL и нажмите «Отправить» — или ${kbd('Enter')}.`
+    body: 'Выберите метод, введите URL и нажмите «Отправить» — или {key}.',
+    keyHint: 'Enter'
   },
   {
     target: '[data-tour="save"]',
     title: 'Сохранение',
-    body: `Сохраните запрос в коллекцию, чтобы вернуться к нему позже — ${kbd('S')}.`
+    body: 'Сохраните запрос в коллекцию, чтобы вернуться к нему позже — {key}.',
+    keyHint: 'S'
   },
   {
     target: '[data-tour="nav"]',
@@ -225,11 +231,9 @@ export function Tour(): JSX.Element | null {
         <button className="tour-skip" title={tr('Закрыть')} onClick={() => useTour.getState().stop()}>
           <Icon name="close" size={13} />
         </button>
-        <div className="tour-progress">
-          Шаг {step + 1} из {STEPS.length}
-        </div>
-        <h4>{s.title}</h4>
-        <p>{s.body}</p>
+        <div className="tour-progress">{trf('Шаг {n} из {total}', { n: step + 1, total: STEPS.length })}</div>
+        <h4>{tr(s.title)}</h4>
+        <p>{s.keyHint ? trf(s.body, { key: kbd(s.keyHint) }) : tr(s.body)}</p>
         <div className="tour-foot">
           {!last && (
             <button className="btn ghost tour-skip-text" onClick={() => useTour.getState().stop()}> {tr('Пропустить')} </button>
@@ -238,7 +242,7 @@ export function Tour(): JSX.Element | null {
             <button className="btn ghost" onClick={() => useTour.getState().prev()}> {tr('Назад')} </button>
           )}
           <button className="btn primary" onClick={() => useTour.getState().next()}>
-            {last ? 'Готово' : 'Далее'}
+            {last ? tr('Готово') : tr('Далее')}
           </button>
         </div>
       </div>

@@ -168,7 +168,7 @@ export function App() {
       </Suspense>
       <SaveDialog
         open={saveOpen}
-        initialName={useTabs.getState().activeTab()?.request.name ?? 'Без названия'}
+        initialName={tr(useTabs.getState().activeTab()?.request.name ?? 'Без названия')}
         onOpenChange={(v) => useUi.getState().setSaveDialogOpen(v)}
         onSave={saveActiveAs}
       />

@@ -1,5 +1,6 @@
 import type { CollectionFolderNode, RequestModel } from '@shared/types'
 import { useUi } from '@renderer/store/ui'
+import { tr, trf } from '@renderer/lib/i18n'
 
 /** Strip path-hostile characters so the name is safe as a file name on every OS. */
 function sanitizeFileName(name: string): string {
@@ -29,7 +30,7 @@ async function exportNodeAsCollection(node: CollectionFolderNode, okMessage: str
     showToast(okMessage)
     return true
   } catch (err) {
-    showToast(`Не удалось экспортировать: ${err instanceof Error ? err.message : String(err)}`, 'error')
+    showToast(trf('Не удалось экспортировать: {message}', { message: err instanceof Error ? err.message : String(err) }), 'error')
     return false
   }
 }
@@ -40,7 +41,7 @@ async function exportNodeAsCollection(node: CollectionFolderNode, okMessage: str
  */
 export async function exportFolderJson(node: CollectionFolderNode): Promise<boolean> {
   const wrapped: CollectionFolderNode = { ...node, type: 'collection' }
-  return exportNodeAsCollection(wrapped, node.type === 'collection' ? 'Коллекция экспортирована' : 'Папка экспортирована')
+  return exportNodeAsCollection(wrapped, node.type === 'collection' ? tr('Коллекция экспортирована') : tr('Папка экспортирована'))
 }
 
 /** Export a single request as a one-item Postman v2.1 collection file. */
@@ -48,8 +49,8 @@ export async function exportRequestJson(request: RequestModel): Promise<boolean>
   const wrapped: CollectionFolderNode = {
     id: request.id + '-export',
     type: 'collection',
-    name: request.name || 'Без названия',
+    name: tr(request.name || 'Без названия'),
     children: [{ id: request.id, type: 'request', request }]
   }
-  return exportNodeAsCollection(wrapped, 'Запрос экспортирован')
+  return exportNodeAsCollection(wrapped, tr('Запрос экспортирован'))
 }

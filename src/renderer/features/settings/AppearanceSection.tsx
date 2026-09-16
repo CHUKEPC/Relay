@@ -3,7 +3,7 @@ import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 type ThemeChoice = SettingsDoc['theme']
 
 interface ThemeSwatchDef {
@@ -226,7 +226,7 @@ export function AppearanceSection(): JSX.Element {
           <div
             key={p.id}
             className={`theme-swatch${themePreset === p.id ? ' on' : ''}`}
-            title={p.id === 'relay' ? 'Стандартная тема Relay' : `В стиле ${p.label}`}
+            title={p.id === 'relay' ? tr('Стандартная тема Relay') : trf('В стиле {name}', { name: p.label })}
             aria-pressed={themePreset === p.id}
             {...selectCard(() => setThemePreset(p.id))}
           >
@@ -253,7 +253,7 @@ export function AppearanceSection(): JSX.Element {
             <Icon name="plus" size={18} />
           </div>
           <div className="lab">
-            Создать свою
+            {tr('Создать свою')}
             {themePreset === 'custom' && <Icon name="check" size={13} style={{ color: 'var(--accent)' }} />}
           </div>
         </div>
@@ -295,7 +295,7 @@ export function AppearanceSection(): JSX.Element {
             <button
               key={h}
               title={`oklch hue ${h}`}
-              aria-label={`Акцент ${h}`}
+              aria-label={trf('Акцент {hue}', { hue: h })}
               aria-pressed={selected}
               onClick={() => setAccentHue(h)}
               style={{

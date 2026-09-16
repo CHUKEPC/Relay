@@ -18,7 +18,7 @@ import { saveActiveAs, saveActiveRequest } from '@renderer/lib/save'
 import { SaveDialog } from '@renderer/features/collections/SaveDialog'
 import { PaneView } from './Workspace'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** The URL fragment `#pane=<tabId>` marks a detached pane window. */
 export function detachedTabIdFromUrl(): string | null {
   const m = /(?:^|[#&])pane=([^&]+)/.exec(window.location.hash)
@@ -63,7 +63,7 @@ export function DetachedApp({ tabId }: { tabId: string }) {
   }, [ready, tab])
 
   useEffect(() => {
-    document.title = `${tab?.request.name || 'Без названия'} — Relay`
+    document.title = `${tr(tab?.request.name || 'Без названия')} — Relay`
   }, [tab?.request.name])
 
   useEffect(() => {
@@ -122,14 +122,14 @@ export function DetachedApp({ tabId }: { tabId: string }) {
         {tab && (
           <div className="detached-title">
             <span className={`method-tag m-${tab.request.method}`}>{tab.request.method === 'DELETE' ? 'DEL' : tab.request.method}</span>
-            <span className="detached-name">{tab.request.name || 'Без названия'}</span>
+            <span className="detached-name">{tr(tab.request.name || 'Без названия')}</span>
             {tab.dirty && <span className="pane-dirty" title={tr('Несохранённые изменения')} />}
           </div>
         )}
         <div className="grow" />
         <button
           className="btn ghost nodrag detached-return"
-          title={`Вернуть в основное окно (${kbdCombo('paneDetach', keybindings)})`}
+          title={trf('Вернуть в основное окно ({key})', { key: kbdCombo('paneDetach', keybindings) })}
           onClick={() => void window.api.paneAttach(tabId)}
         >
           <Icon name="dockBottom" size={14} /> {tr('Вернуть в основное окно')} </button>
@@ -159,7 +159,7 @@ export function DetachedApp({ tabId }: { tabId: string }) {
 
       <SaveDialog
         open={saveOpen}
-        initialName={tab?.request.name ?? 'Без названия'}
+        initialName={tr(tab?.request.name ?? 'Без названия')}
         onOpenChange={(v) => useUi.getState().setSaveDialogOpen(v)}
         onSave={saveActiveAs}
       />

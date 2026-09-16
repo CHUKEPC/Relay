@@ -139,12 +139,13 @@ describe('keyboard layout control', () => {
   it('moves focus and swaps panes by direction', () => {
     openTabs(4)
     P().applyPreset(4)
-    const [tl, tr, bl] = leaves()
+    // Reading order, not tree order: the 2x2 preset is two independent columns.
+    const [tl, tr, bl, br] = panes.leavesInReadingOrder(P().root)
     P().focusPane(tl.id)
     P().focusDirection('right')
     expect(P().activeId).toBe(tr.id)
     P().focusDirection('down')
-    expect(P().activeId).toBe(leaves()[3].id)
+    expect(P().activeId).toBe(br.id)
 
     P().focusPane(tl.id)
     const tlTab = tl.tabId
@@ -153,6 +154,17 @@ describe('keyboard layout control', () => {
     expect(tabOf(bl.id)).toBe(tlTab)
     expect(tabOf(tl.id)).toBe(blTab)
     expect(P().activeId).toBe(bl.id)
+  })
+
+  it('gives each column of the 2x2 preset its own horizontal divider', () => {
+    openTabs(4)
+    P().applyPreset(4)
+    const root = P().root as PaneSplit
+    // Columns first: resizing one column's divider must not move the other's.
+    expect(root.dir).toBe('row')
+    expect((root.a as PaneSplit).dir).toBe('col')
+    expect((root.b as PaneSplit).dir).toBe('col')
+    expect((root.a as PaneSplit).id).not.toBe((root.b as PaneSplit).id)
   })
 
   it('resizes by moving the nearest divider in the arrow direction', () => {

@@ -66,8 +66,9 @@ export function defaultSettings(): SettingsDoc {
     sendAiContext: true,
     autoApplyAiTools: false,
     defaultProviderId: null,
-    proxy: { enabled: false, url: '', bypass: [] },
+    proxy: { mode: 'off', enabled: false, url: '', bypass: [] },
     clientCerts: [],
+    caPath: '',
     http2: false
   }
 }
@@ -81,6 +82,7 @@ export function defaultPlugins(): PluginsStateDoc {
 }
 
 export function defaultFeatures(): FeaturePluginsDoc {
-  // Empty map = every bundled plugin is on; disabling is what gets recorded.
+  // Empty map = every pack is off; the installer (or Settings) switches on
+  // what the user actually wants.
   return { version: STORAGE_VERSION, enabled: {} }
 }

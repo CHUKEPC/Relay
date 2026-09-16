@@ -71,10 +71,10 @@ export function KVTable({
           type="button"
           className="btn ghost kv-bulk-toggle"
           onClick={() => (bulk ? leaveBulk() : enterBulk())}
-          title={bulk ? 'Вернуться к таблице' : 'Массовое редактирование'}
+          title={bulk ? tr('Вернуться к таблице') : tr('Массовое редактирование')}
         >
           <Icon name={bulk ? 'grid' : 'code2'} size={14} />
-          {bulk ? 'Таблица' : 'Текстом'}
+          {bulk ? tr('Таблица') : tr('Текстом')}
         </button>
       </div>
 

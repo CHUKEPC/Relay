@@ -4,7 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { statusColor } from '@renderer/lib/status-color'
 import { useRunner, type IterationResult } from '@renderer/store/runner'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** Aggregate pass/fail/time across all iterations. */
 function summarize(results: IterationResult[]): { reqs: number; passed: number; failed: number; timeMs: number } {
   let reqs = 0
@@ -40,7 +40,7 @@ export function RunnerPanel(): JSX.Element | null {
   const close = useRunner.getState().close
 
   return (
-    <Modal open={open} onOpenChange={(o) => !o && close()} title={`Запуск: ${targetName}`} width={680}>
+    <Modal open={open} onOpenChange={(o) => !o && close()} title={trf('Запуск: {name}', { name: tr(targetName) })} width={680}>
       {/* config */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <label style={{ fontSize: 12, color: 'var(--tx-2)' }}> {tr('Итераций')} <input
@@ -54,9 +54,7 @@ export function RunnerPanel(): JSX.Element | null {
             style={{ width: 90, display: 'block', marginTop: 4 }}
           />
         </label>
-        <label style={{ fontSize: 12, color: 'var(--tx-2)' }}>
-          Задержка (мс)
-          <input
+        <label style={{ fontSize: 12, color: 'var(--tx-2)' }}> {tr('Задержка (мс)')} <input
             className="input mono"
             type="number"
             min={0}
@@ -68,11 +66,11 @@ export function RunnerPanel(): JSX.Element | null {
           />
         </label>
         <div style={{ flex: 1, minWidth: 160 }}>
-          <div style={{ fontSize: 12, color: 'var(--tx-2)', marginBottom: 4 }}>Файл данных (CSV/JSON)</div>
+          <div style={{ fontSize: 12, color: 'var(--tx-2)', marginBottom: 4 }}>{tr('Файл данных (CSV/JSON)')}</div>
           {dataFileName ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="mono" style={{ fontSize: 12, color: 'var(--tx-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {dataFileName} · {dataRows.length} строк
+                {dataFileName} · {trf('строк: {n}', { n: dataRows.length })}
               </span>
               <button className="icon-btn" style={{ width: 26, height: 26 }} disabled={running} onClick={() => useRunner.getState().clearData()} title={tr('Убрать файл')}>
                 <Icon name="close" size={13} />
@@ -99,7 +97,7 @@ export function RunnerPanel(): JSX.Element | null {
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--tx-2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="refresh" size={13} className="spin" />
-            Итерация {current.iter}, запрос «{current.reqName}»…
+            {trf('Итерация {n}, запрос «{name}»…', { n: current.iter, name: tr(current.reqName) })}
           </div>
         </div>
       )}
@@ -107,9 +105,9 @@ export function RunnerPanel(): JSX.Element | null {
       {/* summary */}
       {results.length > 0 && (
         <div className="test-summary" style={{ marginTop: 14 }}>
-          <span className="test-badge">{summary.reqs} запросов</span>
-          <span className="test-badge pass">{summary.passed} тестов пройдено</span>
-          <span className="test-badge fail">{summary.failed} провалено</span>
+          <span className="test-badge">{trf('запросов: {n}', { n: summary.reqs })}</span>
+          <span className="test-badge pass">{trf('тестов пройдено: {n}', { n: summary.passed })}</span>
+          <span className="test-badge fail">{trf('{n} провалено', { n: summary.failed })}</span>
           <span className="test-badge">{summary.timeMs} ms</span>
         </div>
       )}
@@ -119,7 +117,7 @@ export function RunnerPanel(): JSX.Element | null {
         {results.map((it) => (
           <div key={it.index} style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '6px 0' }}>
-              Итерация {it.index + 1}
+              {trf('Итерация {n}', { n: it.index + 1 })}
             </div>
             {it.requests.map((r) => {
               const sc = statusColor(r.status)
@@ -136,7 +134,7 @@ export function RunnerPanel(): JSX.Element | null {
                     <>
                       {r.tests.length > 0 && (
                         <span style={{ fontSize: 11.5, color: failed ? 'var(--s-5xx)' : 'var(--s-2xx)' }}>
-                          {r.tests.length - failed}/{r.tests.length} тестов
+                          {trf('{passed}/{total} тестов', { passed: r.tests.length - failed, total: r.tests.length })}
                         </span>
                       )}
                       <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{r.timeMs} ms</span>

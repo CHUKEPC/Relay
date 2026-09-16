@@ -8,6 +8,7 @@ import type { RelayApi } from '@shared/ipc-contract'
 import type { AiStreamEvent, ResponseResult } from '@shared/types'
 import { CAPABILITIES, type FeaturePluginInfo } from '@shared/features'
 import { APP_VERSION, STORAGE_VERSION } from '@shared/constants'
+import { tr } from './i18n'
 
 /** One synthetic pack holding every capability — preview shows the full UI. */
 const MOCK_FEATURES: FeaturePluginInfo[] = [
@@ -100,7 +101,7 @@ if (!window.api) {
       sendAiContext: true,
       autoApplyAiTools: false,
       defaultProviderId: null,
-      proxy: { enabled: false, url: '', bypass: [] },
+      proxy: { mode: 'off', enabled: false, url: '', bypass: [] },
       clientCerts: [],
       http2: false
     },
@@ -191,15 +192,15 @@ if (!window.api) {
     paneTakeSnapshot: async () => null,
     onPaneClosed: () => () => {},
     windowNudge: async () => {},
-    grpcParse: async () => ({ services: [], error: 'gRPC недоступен в web-режиме' }),
+    grpcParse: async () => ({ services: [], error: tr('gRPC недоступен в web-режиме') }),
     grpcInvoke: async () => {},
     grpcSend: async () => {},
     grpcEnd: async () => {},
     grpcCancel: async () => {},
-    grpcReflect: async () => ({ services: [], error: 'gRPC недоступен в web-режиме' }),
+    grpcReflect: async () => ({ services: [], error: tr('gRPC недоступен в web-режиме') }),
     onGrpc: () => () => {},
-    oauthDevice: async () => ({ ok: false, error: 'Недоступно в web-режиме' }),
-    graphqlIntrospect: async () => ({ ok: false, error: 'Недоступно в web-режиме' }),
+    oauthDevice: async () => ({ ok: false, error: tr('Недоступно в web-режиме') }),
+    graphqlIntrospect: async () => ({ ok: false, error: tr('Недоступно в web-режиме') }),
     sqliteExport: async () => '',
     sqliteImport: async () => ({
       snapshot: { collections: [], environments: [], activeEnvironmentId: null, globals: [], history: [] },
@@ -207,10 +208,13 @@ if (!window.api) {
     }),
     // Browser preview: pretend every bundled feature pack is present and on, so
     // the whole UI is reachable without the main process.
+    readBinaryFile: async () => '',
     featuresList: async () => MOCK_FEATURES,
     featuresSetEnabled: async () => MOCK_FEATURES,
     featuresLocale: async () => null,
     featuresOpenFolder: async () => false,
+    featuresInstall: async () => null,
+    featuresRemove: async () => MOCK_FEATURES,
     onFeaturesChanged: () => () => {},
 
     pluginsList: async () => [],
@@ -218,10 +222,10 @@ if (!window.api) {
     pluginsSetConfig: async () => {},
     pluginsSetSecret: async () => [],
     pluginsSetNetAllowlist: async () => [],
-    pluginsInvokeButton: async () => ({ logs: [], error: 'Плагины недоступны в web-режиме' }),
-    pluginsInvokePanel: async () => ({ logs: [], error: 'Плагины недоступны в web-режиме' }),
-    pluginsPanelMessage: async () => ({ logs: [], error: 'Плагины недоступны в web-режиме' }),
-    pluginsInvokeCommand: async () => ({ logs: [], error: 'Плагины недоступны в web-режиме' }),
+    pluginsInvokeButton: async () => ({ logs: [], error: tr('Плагины недоступны в web-режиме') }),
+    pluginsInvokePanel: async () => ({ logs: [], error: tr('Плагины недоступны в web-режиме') }),
+    pluginsPanelMessage: async () => ({ logs: [], error: tr('Плагины недоступны в web-режиме') }),
+    pluginsInvokeCommand: async () => ({ logs: [], error: tr('Плагины недоступны в web-режиме') }),
     pluginsOpenFolder: async () => {},
     pluginsInstallSample: async () => ({ plugins: [], existed: false }),
     pluginsInstallZip: async () => null,

@@ -2,6 +2,7 @@ import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useRequestUi, type RequestSubTab } from '@renderer/store/request-ui'
 import { discard, restorePatch, takeRedo, takeUndo, withoutRecording, type UndoEntry, type UndoSource } from '@renderer/store/undo-history'
+import { tr, trf } from '@renderer/lib/i18n'
 
 const SOURCE_LABELS: Record<UndoSource, string> = {
   url: 'адрес',
@@ -107,9 +108,11 @@ export function handleUndoKey(e: KeyboardEvent): void {
   e.stopPropagation()
   const entry = step(tabId, direction)
   if (!entry) {
-    ui.showToast(direction === 'undo' ? 'Нечего отменять' : 'Нечего возвращать')
+    ui.showToast(direction === 'undo' ? tr('Нечего отменять') : tr('Нечего возвращать'))
     return
   }
   reveal(tabId, entry.source)
-  ui.showToast(`${direction === 'undo' ? 'Отменено' : 'Возвращено'}: ${SOURCE_LABELS[entry.source]}`)
+  ui.showToast(
+    trf(direction === 'undo' ? 'Отменено: {what}' : 'Возвращено: {what}', { what: tr(SOURCE_LABELS[entry.source]) })
+  )
 }

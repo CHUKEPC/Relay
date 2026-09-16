@@ -189,6 +189,9 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       grouped by area (URL, Params, Headers, Body, Auth, Scripts, name/description). Inside a field
       it undoes that area even after focus moved away; with nothing focused it undoes the tab's
       latest change, switches to that sub-tab and highlights it.
+- [x] **Narrow panes scroll instead of wrapping**: the request bar, the tab rows, the sub-bars and
+      the key/value table keep their natural width and scroll sideways, so nothing — the Send button
+      least of all — ends up clipped out of reach when a pane is dragged narrow.
 
 - [x] **Drag a tab or a saved request into the grid**: dropping it on the middle of a pane shows
       it there; dropping it on an edge splits that pane; dropping it on an outer edge of the whole
@@ -197,15 +200,39 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Feature packs** (`plugins/` next to the app, see docs/PLUGINS.md §10): the base app is HTTP
       + GraphQL, six auth schemes, ru/en and four panes. WebSocket, SSE, Socket.IO, MQTT, gRPC, the
       AI assistant, the advanced auth schemes, extra languages and extra panes each live in their own
-      folder and can be switched off (or deleted) individually. Their UI and their renderer chunks
-      are absent until the pack is on.
+      folder and can be switched off (or removed from the list) individually. Their UI and their
+      renderer chunks are absent until the pack is on.
+- [x] **One plugin list** (Settings → Плагины): packs and code plugins share the list, and each row
+      is just a name plus **info / remove / enable**, with the description, what it adds, the
+      permissions and the folder behind the info button. A single **«Выбрать плагин на компьютере…»**
+      opens in the `plugins` folder — where the packs nobody picked during installation wait — and
+      accepts a folder or a `.zip` from anywhere on disk; the main process works out whether it is a
+      capability pack or a code plugin. A pack that was never added is not listed at all, and
+      removing one only takes it out of the list: its folder stays, so it can be added back.
 - [x] **UI language** (Settings → Основные): Russian and English ship with the app; German and
       Spanish come from the «Дополнительные языки» pack, and a new language is a JSON file dropped
       into that pack. Translation keys *are* the Russian strings, so an untranslated string degrades
-      to correct Russian instead of a raw key.
+      to correct Russian instead of a raw key. Coverage is verified empirically — the app is driven
+      in English and its DOM swept for Cyrillic, including the onboarding tour, the pack names read
+      from `plugin.json` and the seeded workspace/request names. Switching language reloads the
+      window so module-level label tables follow the change.
 - [x] **Update check against GitHub**: releases first, falling back to version tags for a repository
       that has not published a release yet; the result distinguishes "no releases", rate limiting,
       timeout and network failure, and shows the release date and notes.
+
+- [x] **Windows installer**: language selection (ru/en) that also becomes the app's UI language and
+      the language of the first-run tour — asked once, and inherited by the elevated instance that
+      "for all users" spawns; a page for picking which feature packs start enabled; and, on a real
+      uninstall, a prompt offering to delete `%APPDATA%\Relay` — the user's own Roaming folder even
+      when the uninstall itself runs per-machine (silent uninstalls keep the data).
+- [x] **Network** (Settings → Сеть): proxy off / **system** (Chromium resolves the OS settings and
+      PAC) / custom with auth and a bypass list; a **shared CA bundle** on top of the system trust
+      store; the SSL-verification switch; per-host client certificates (PEM or PFX); and a
+      **connection test** that sends a real request through exactly these settings.
+- [x] **Backups** (Settings → Данные): the whole workspace — collections, environments, globals and
+      history — exported to **JSON** in the base app, plus **ZIP** (one file per kind) and **SQLite**
+      from the «Дополнительные форматы резервных копий» pack. Restore either merges into the current
+      workspace or replaces it (two-step confirmation). Secrets are never written into a backup.
 
 ## Out of scope (needs a hosted backend)
 

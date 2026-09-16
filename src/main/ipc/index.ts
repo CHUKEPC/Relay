@@ -45,10 +45,14 @@ export function registerIpc(ctx: IpcContext): void {
   // decide which protocols, auth schemes, languages and pane counts exist.
   const features = new FeatureRegistry(ctx.storage)
   void features.load()
-  registerFeatureHandlers(features)
 
   // User plugins (docs/PLUGINS.md): discovery, grants, sandboxed dispatch.
   const plugins = registerPluginHandlers(ipcMain, ctx.storage, ctx.getWindow)
+
+  // Settings has one "pick a plugin" button; the pack registry owns the dialog
+  // and hands an archive that is not a capability pack to the code-plugin
+  // installer, so the user never has to know which kind they picked.
+  registerFeatureHandlers(features, (zipPath) => plugins.installZipAt(zipPath))
 
   // Networking core (CORS-free) — built by the http engine module. The plugins'
   // `request` hook may patch the spec before send (request:write); completed
@@ -125,6 +129,20 @@ export function registerIpc(ctx: IpcContext): void {
 
   // Read a user-picked text file (runner data files). Size-capped to avoid
   // loading an enormous file into memory; returns UTF-8 text.
+  // Same contract as readFile, but for binary backups (returned base64).
+  ipcMain.handle(IPC.dialog.readBinary, async (_e, path: string): Promise<string> => {
+    if (typeof path !== 'string' || !path) throw new Error('Invalid path')
+    if (!pickedPaths.has(path)) throw new Error('Path was not selected via a file dialog')
+    let size = 0
+    try {
+      size = statSync(path).size
+    } catch {
+      throw new Error('File not found')
+    }
+    if (size > MAX_READ_TEXT_BYTES) throw new Error('File is too large (max 25 MB)')
+    return (await readFile(path)).toString('base64')
+  })
+
   ipcMain.handle(IPC.dialog.readFile, async (_e, path: string): Promise<string> => {
     if (typeof path !== 'string' || !path) throw new Error('Invalid path')
     // Confine reads to files the user actually picked via a dialog — never an

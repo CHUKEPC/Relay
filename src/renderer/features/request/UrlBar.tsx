@@ -124,9 +124,9 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
     // With reflection the descriptors are fetched server-side, so a pasted .proto
     // is not required — only a selected service/method.
     if ((!g.useReflection && !g.proto?.trim()) || !g.service || !g.method) {
-      useUi.getState().showToast(
-        g.useReflection ? 'Выполните Discover и выберите сервис/метод' : 'Загрузите .proto и выберите сервис/метод'
-      )
+      useUi
+        .getState()
+        .showToast(g.useReflection ? tr('Выполните Discover и выберите сервис/метод') : tr('Загрузите .proto и выберите сервис/метод'))
       return
     }
     if (!grpcAddress.trim()) {

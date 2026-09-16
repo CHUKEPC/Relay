@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { BrowserWindow, ipcMain, nativeTheme, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { APP_NAME } from '@shared/constants'
 import { IPC } from '@shared/ipc-contract'
+import { mt } from './i18n'
 
 export interface AppWindowOptions {
   width: number
@@ -107,7 +108,7 @@ export function registerPaneHandlers(opts: {
       minHeight: PANE_MIN_H,
       x: pb ? pb.x + 80 + paneWindows.size * 32 : undefined,
       y: pb ? pb.y + 60 + paneWindows.size * 32 : undefined,
-      title: `${String(title || 'Запрос').slice(0, 80)} — ${APP_NAME}`,
+      title: `${String(title || mt('Запрос')).slice(0, 80)} — ${APP_NAME}`,
       hash: `pane=${encodeURIComponent(tabId)}`
     })
     paneWindows.set(tabId, win)

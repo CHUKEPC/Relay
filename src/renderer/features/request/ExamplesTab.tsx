@@ -12,7 +12,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
   if (examples.length === 0) {
     return (
       <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}>
-        Пока нет сохранённых примеров. Отправьте запрос и нажмите{' '}
+        {tr('Пока нет сохранённых примеров. Отправьте запрос и нажмите')}{' '}
         <Icon name="doc" size={12} style={{ verticalAlign: 'middle' }} /> {tr('«Сохранить как пример» в панели ответа.')} </div>
     )
   }
@@ -30,7 +30,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
               <div className="name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {ex.name}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--tx-3)' }}>{ex.contentType || 'нет типа'}</div>
+              <div style={{ fontSize: 11, color: 'var(--tx-3)' }}>{ex.contentType || tr('нет типа')}</div>
             </div>
             <button
               className="btn ghost"

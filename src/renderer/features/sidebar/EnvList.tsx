@@ -4,7 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useEnvironments } from '@renderer/store/environments'
 import { EnvEditor, type EnvEditorTarget } from '@renderer/features/environments/EnvEditor'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 export function EnvList() {
   const env = useEnvironments((s) => s.env)
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
@@ -22,7 +22,7 @@ export function EnvList() {
           style={{ width: 22, height: 22 }}
           title={tr('Новая среда')}
           onClick={() => {
-            const id = createEnv('Новая среда')
+            const id = createEnv(tr('Новая среда'))
             setEditor({ kind: 'env', id })
           }}
         >
@@ -70,7 +70,7 @@ export function EnvList() {
                   className="pop-item"
                   style={{ color: 'var(--s-5xx)' }}
                   onSelect={() => {
-                    if (window.confirm(`Удалить среду «${e.name}»?`)) deleteEnv(e.id)
+                    if (window.confirm(trf('Удалить среду «{name}»?', { name: tr(e.name) }))) deleteEnv(e.id)
                   }}
                 >
                   <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>

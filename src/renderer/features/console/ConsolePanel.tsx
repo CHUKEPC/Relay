@@ -5,7 +5,7 @@ import { useConsole, type ConsoleEntry } from '@renderer/store/console'
 import { useUi, type ConsoleDock } from '@renderer/store/ui'
 import { trackDrag } from '@renderer/lib/drag'
 import { clamp } from '@renderer/lib/math'
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-console.css'
 
 /* ============================================================
@@ -118,7 +118,7 @@ function BodyBlock({ title, body }: { title: string; body: string | undefined })
       <pre className="console-body">{text}</pre>
       {truncated && (
         <div className="console-section-note">
-          Показаны первые {BODY_LIMIT.toLocaleString('ru-RU')} символов из {body.length.toLocaleString('ru-RU')}.
+          {trf('Показаны первые {shown} символов из {total}.', { shown: BODY_LIMIT.toLocaleString(), total: body.length.toLocaleString() })}
         </div>
       )}
     </div>
@@ -166,7 +166,7 @@ function EntryRow({ e }: { e: ConsoleEntry }): JSX.Element {
  * ============================================================ */
 
 const DOCK_OPTIONS: { mode: ConsoleDock; icon: string; title: string }[] = [
-  { mode: 'bottom', icon: 'dockBottom', title: 'Закрепить снизу' },
+  { mode: 'bottom', icon: 'dockBottom', title: 'Закрепить снизу' }, // titles go through tr() at render
   { mode: 'left', icon: 'dockLeft', title: 'Закрепить слева' },
   { mode: 'right', icon: 'dockRight', title: 'Закрепить справа' },
   { mode: 'float', icon: 'floatWin', title: 'Плавающее окно' }
@@ -265,8 +265,8 @@ export function ConsolePanel(): JSX.Element | null {
               type="button"
               className={`icon-btn console-dock-btn${dock === o.mode ? ' on' : ''}`}
               onClick={() => setConsoleDock(o.mode)}
-              title={o.title}
-              aria-label={o.title}
+              title={tr(o.title)}
+              aria-label={tr(o.title)}
             >
               <Icon name={o.icon} size={14} />
             </button>

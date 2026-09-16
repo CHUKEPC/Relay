@@ -8,6 +8,8 @@ interface HistoryState {
   doc: HistoryDoc
   hydrate: (doc: HistoryDoc) => void
   add: (entry: HistoryEntry, maxHistory: number) => void
+  /** replace the whole log and persist it (backup restore) */
+  setAll: (entries: HistoryEntry[]) => void
   clear: () => void
 }
 
@@ -17,6 +19,11 @@ export const useHistory = create<HistoryState>((set, get) => ({
   add: (entry, maxHistory) => {
     // Respect maxHistory === 0 (history disabled) instead of forcing a floor of 1.
     const entries = [entry, ...get().doc.entries].slice(0, Math.max(0, maxHistory))
+    const doc = { version: STORAGE_VERSION, entries }
+    set({ doc })
+    persist('history', doc)
+  },
+  setAll: (entries) => {
     const doc = { version: STORAGE_VERSION, entries }
     set({ doc })
     persist('history', doc)

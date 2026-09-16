@@ -12,7 +12,7 @@ import { useUi } from './ui'
 import { useTabs } from './tabs'
 import { useResponse } from './response'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /** A contributed button paired with its source plugin (for toolbar rendering). */
 export interface PluginToolbarButton {
   pluginId: string
@@ -217,15 +217,15 @@ export const usePlugins = create<PluginsState>((set, get) => ({
     const name = get().plugins.find((p) => p.manifest.id === pluginId)?.manifest.name ?? pluginId
     try {
       const result = await window.api.pluginsInvokeButton(pluginId, buttonId, context)
-      if (result.toast) useUi.getState().showToast(`Плагин ${name}: ${result.toast.message}`, result.toast.kind)
-      else if (result.error) useUi.getState().showToast(`Плагин ${name}: ${result.error}`, 'error')
-      else useUi.getState().showToast(`Плагин ${name}: готово`)
+      if (result.toast) useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: result.toast.message }), result.toast.kind)
+      else if (result.error) useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: result.error }), 'error')
+      else useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: tr('готово') }))
       for (const line of result.logs) {
         // Plugin console output lands in devtools for plugin authors.
         console.log(`[plugin:${pluginId}]`, line.message)
       }
     } catch (err) {
-      useUi.getState().showToast(`Плагин ${name}: ошибка вызова`, 'error')
+      useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: tr('ошибка вызова') }), 'error')
       console.error('[plugins] invoke failed:', err)
     } finally {
       set((s) => {
@@ -244,11 +244,11 @@ export const usePlugins = create<PluginsState>((set, get) => ({
     const name = get().plugins.find((p) => p.manifest.id === pluginId)?.manifest.name ?? pluginId
     try {
       const result = await window.api.pluginsInvokeCommand(pluginId, commandId, activeTabContext())
-      if (result.toast) useUi.getState().showToast(`Плагин ${name}: ${result.toast.message}`, result.toast.kind)
-      else if (result.error) useUi.getState().showToast(`Плагин ${name}: ${result.error}`, 'error')
+      if (result.toast) useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: result.toast.message }), result.toast.kind)
+      else if (result.error) useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: result.error }), 'error')
       for (const line of result.logs) console.log(`[plugin:${pluginId}]`, line.message)
     } catch (err) {
-      useUi.getState().showToast(`Плагин ${name}: ошибка вызова`, 'error')
+      useUi.getState().showToast(trf('Плагин {name}: {message}', { name, message: tr('ошибка вызова') }), 'error')
       console.error('[plugins] invokeCommand failed:', err)
     }
   },
@@ -258,7 +258,7 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       return await window.api.pluginsInvokePanel(pluginId, panelId, context)
     } catch (err) {
       console.error('[plugins] invokePanel failed:', err)
-      return { logs: [], error: 'Ошибка вызова панели' }
+      return { logs: [], error: tr('Ошибка вызова панели') }
     }
   },
 
@@ -267,7 +267,7 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       return await window.api.pluginsPanelMessage(pluginId, panelId, message, context)
     } catch (err) {
       console.error('[plugins] panelMessage failed:', err)
-      return { logs: [], error: 'Ошибка панели' }
+      return { logs: [], error: tr('Ошибка панели') }
     }
   },
 
@@ -290,9 +290,9 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       const res = await window.api.pluginsInstallZip()
       if (!res) return // cancelled
       set({ plugins: overlayPending(res.plugins) })
-      useUi.getState().showToast(`Плагин «${res.id}» установлен — включите его в списке, чтобы выдать разрешения`)
+      useUi.getState().showToast(trf('Плагин «{id}» установлен — включите его в списке, чтобы выдать разрешения', { id: res.id }))
     } catch (err) {
-      useUi.getState().showToast(`Не удалось установить: ${(err as Error).message}`, 'error')
+      useUi.getState().showToast(trf('Не удалось установить: {message}', { message: (err as Error).message }), 'error')
       console.error('[plugins] installFromZip failed:', err)
     }
   },

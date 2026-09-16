@@ -34,6 +34,7 @@ import type {
 } from '@shared/types'
 import { requestSnapshotForPlugin, responseSnapshotForPlugin } from '@shared/plugin-context'
 import type { StorageManager } from '../storage'
+import { mt, mtf } from '../i18n'
 import { maskHeader, redactUrl } from './redact'
 import { applyRequestPatch, effectivePermissions } from './perms'
 import { isValidNetHost, MAIN_MAX_BYTES, MANIFEST_FILE, MANIFEST_MAX_BYTES, parseManifest } from './manifest'
@@ -534,7 +535,7 @@ export class PluginManager {
     const prev = this.lastToasts.get(pluginId)
     if (prev && prev.key === key && now - prev.at < TOAST_DEDUPE_MS) return
     this.lastToasts.set(pluginId, { key, at: now })
-    this.broadcast({ type: 'toast', pluginId, message: `Плагин ${name}: ${message}`, kind })
+    this.broadcast({ type: 'toast', pluginId, message: mtf('Плагин {name}: {message}', { name, message }), kind })
   }
 
   /** Build a fully-resolved sandbox payload for an enabled plugin (may throw). */
@@ -868,13 +869,20 @@ export class PluginManager {
   async installZip(): Promise<{ plugins: PluginInfo[]; id: string } | null> {
     const win = this.getWindow()
     const picked = await dialog.showOpenDialog(win ?? undefined!, {
-      title: 'Установить плагин из .zip',
+      title: mt('Установить плагин из .zip'),
       properties: ['openFile'],
       filters: [{ name: 'Plugin archive', extensions: ['zip'] }]
     })
     if (picked.canceled || !picked.filePaths.length) return null
-    const zipPath = picked.filePaths[0]
+    return this.installZipAt(picked.filePaths[0])
+  }
 
+  /**
+   * The body of `installZip` for an archive the user already picked — the
+   * Settings picker chooses a plugin once and the main process decides whether
+   * it is a capability pack or a code plugin.
+   */
+  async installZipAt(zipPath: string): Promise<{ plugins: PluginInfo[]; id: string }> {
     const ZIP_MAX_COMPRESSED = 8 * 1024 * 1024
     const ZIP_MAX_TOTAL_DECOMPRESSED = 16 * 1024 * 1024
     const ZIP_MAX_FILE_DECOMPRESSED = 4 * 1024 * 1024

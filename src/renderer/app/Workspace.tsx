@@ -7,7 +7,17 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useResponse } from '@renderer/store/response'
 import { useAi } from '@renderer/store/ai'
 import { useSettings } from '@renderer/store/settings'
-import { freeTabs, leavesOf, usePanes, type Direction, type DropZone, type PaneLeaf, type PaneNode, type PaneSplit } from '@renderer/store/panes'
+import {
+  freeTabs,
+  leavesInReadingOrder,
+  leavesOf,
+  usePanes,
+  type Direction,
+  type DropZone,
+  type PaneLeaf,
+  type PaneNode,
+  type PaneSplit
+} from '@renderer/store/panes'
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { useCollections } from '@renderer/store/collections'
 import { trackDrag } from '@renderer/lib/drag'
@@ -17,7 +27,7 @@ import { kbdCombo } from '@renderer/lib/keymap'
 import { interpolate } from '@shared/interpolate'
 import { RequestBuilder } from '@renderer/features/request/RequestBuilder'
 import { ResponsePanel } from '@renderer/features/response/ResponsePanel'
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-panes.css'
 
 // Protocol panels ship as feature packs: load their chunks only when a tab is
@@ -113,7 +123,7 @@ function EmptyPane({ paneId }: { paneId: string }) {
     <div className="pane-blank">
       <div className="pane-blank-title">{tr('Пустая панель')}</div>
       <div className="pane-blank-sub">
-        {hasFree ? 'Выберите вкладку в заголовке панели или создайте новый запрос.' : 'Создайте новый запрос.'}
+        {hasFree ? tr('Выберите вкладку в заголовке панели или создайте новый запрос.') : tr('Создайте новый запрос.')}
       </div>
       <button
         className="btn"
@@ -133,7 +143,7 @@ function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
   const root = usePanes((s) => s.root)
   const detached = usePanes((s) => s.detached)
   const current = tabs.find((t) => t.id === leaf.tabId) ?? null
-  const paneNumber = new Map(leavesOf(root).map((l, i) => [l.tabId, i + 1]))
+  const paneNumber = new Map(leavesInReadingOrder(root).map((l, i) => [l.tabId, i + 1]))
 
   return (
     <DropdownMenu.Root>
@@ -144,7 +154,7 @@ function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
               <span className={`method-tag m-${current.request.method}`}>
                 {current.request.method === 'DELETE' ? 'DEL' : current.request.method}
               </span>
-              <span className="label">{current.request.name || 'Без названия'}</span>
+              <span className="label">{tr(current.request.name || 'Без названия')}</span>
               {current.dirty && <span className="pane-dirty" title={tr('Несохранённые изменения')} />}
             </>
           ) : (
@@ -167,8 +177,8 @@ function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
                 onSelect={() => usePanes.getState().setLeafTab(leaf.id, t.id)}
               >
                 <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
-                <span className="pane-pick-name">{t.request.name || 'Без названия'}</span>
-                {inOther && <span className="pane-pick-note">панель {paneNumber.get(t.id)}</span>}
+                <span className="pane-pick-name">{tr(t.request.name || 'Без названия')}</span>
+                {inOther && <span className="pane-pick-note">{trf('панель {n}', { n: paneNumber.get(t.id) ?? '' })}</span>}
                 {inWindow && <span className="pane-pick-note">{tr('в окне')}</span>}
                 {leaf.tabId === t.id && <Icon name="check" size={14} className="tick" />}
               </DropdownMenu.Item>
@@ -218,7 +228,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
       <div className="grow" />
       <button
         className="icon-btn pane-act"
-        title={`${maximized ? 'Вернуть раскладку' : 'Развернуть панель'} (${kbdCombo('paneMaximize', keybindings)})`}
+        title={`${maximized ? tr('Вернуть раскладку') : tr('Развернуть панель')} (${kbdCombo('paneMaximize', keybindings)})`}
         onClick={() => panes().toggleMaximize(leaf.id)}
       >
         <Icon name={maximized ? 'restore' : 'maximize'} size={13} />
@@ -226,7 +236,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
       {leaf.tabId && (
         <button
           className="icon-btn pane-act"
-          title={`Открыть в отдельном окне (${kbdCombo('paneDetach', keybindings)})`}
+          title={trf('Открыть в отдельном окне ({key})', { key: kbdCombo('paneDetach', keybindings) })}
           onClick={() => void panes().detachTab(leaf.tabId!)}
         >
           <Icon name="floatWin" size={13} />
@@ -248,7 +258,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      <button className="icon-btn pane-act" title={`Закрыть панель (${kbdCombo('paneClose', keybindings)})`} onClick={() => panes().closePane(leaf.id)}>
+      <button className="icon-btn pane-act" title={trf('Закрыть панель ({key})', { key: kbdCombo('paneClose', keybindings) })} onClick={() => panes().closePane(leaf.id)}>
         <Icon name="close" size={13} />
       </button>
     </div>
@@ -440,7 +450,8 @@ export function Workspace() {
   const root = usePanes((s) => s.root)
   const maximizedId = usePanes((s) => s.maximizedId)
   const leaves = leavesOf(root)
-  const indexOf = new Map(leaves.map((l, i) => [l.id, i]))
+  // Numbers follow the layout, not the tree walk (see leavesInReadingOrder).
+  const indexOf = new Map(leavesInReadingOrder(root).map((l, i) => [l.id, i]))
   const maximized = maximizedId ? leaves.find((l) => l.id === maximizedId) : null
 
   return (
@@ -480,5 +491,5 @@ export function askAiAboutResponse(tabId?: string) {
     secretValues: currentSecretValues(tab.id)
   })
   const label = { label: `${req.method} ${req.url.replace(/\{\{[^}]+\}\}/g, '')}${result ? ` · ${result.status}` : ''}`, icon: 'doc' }
-  void useAi.getState().send('Объясни этот ответ: статус, структуру полей и есть ли проблемы.', snapshot, label)
+  void useAi.getState().send(tr('Объясни этот ответ: статус, структуру полей и есть ли проблемы.'), snapshot, label)
 }

@@ -3,7 +3,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useUi } from '@renderer/store/ui'
 import { UpdatesCard } from './UpdatesCard'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 const PLATFORM_LABELS: Record<string, string> = {
   darwin: 'macOS',
   win32: 'Windows',
@@ -34,7 +34,7 @@ export function AboutSection(): JSX.Element {
         </div>
         <div>
           <div className="about-name">{APP_NAME}</div>
-          <div className="about-version">Версия {APP_VERSION}</div>
+          <div className="about-version">{trf('Версия {version}', { version: APP_VERSION })}</div>
         </div>
       </div>
 

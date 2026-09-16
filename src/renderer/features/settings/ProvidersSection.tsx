@@ -43,13 +43,13 @@ function ProviderCard({
           {active && connected && <span className="badge-active">{tr('Активен')}</span>}
         </div>
         <div className="prov-sub">
-          {provider.sub}
+          {tr(provider.sub ?? '')}
           {connected && provider.defaultModel ? ` · ${provider.defaultModel}` : ''}
         </div>
       </div>
       <span className={`prov-status ${connected ? 'ok' : 'no'}`}>
         <span className="d" />
-        {connected ? 'Подключён' : 'Не подключён'}
+        {connected ? tr('Подключён') : tr('Не подключён')}
       </span>
       <Icon name="chevR" size={16} style={{ color: 'var(--tx-3)' }} />
     </div>
@@ -68,8 +68,8 @@ function AddProviderMenu({ onAdd, primary }: { onAdd: (id: ProviderTemplateId) =
         <DropdownMenu.Content className="popover" align="start" sideOffset={6} style={{ position: 'relative', minWidth: 280 }}>
           {PROVIDER_TEMPLATES.map((t) => (
             <DropdownMenu.Item key={t.id} className="pop-item" onSelect={() => onAdd(t.id)}>
-              <span style={{ fontWeight: 500 }}>{t.title}</span>
-              <span style={{ marginLeft: 'auto', paddingLeft: 12, color: 'var(--tx-3)', fontSize: 11.5 }}>{t.hint}</span>
+              <span style={{ fontWeight: 500 }}>{tr(t.title)}</span>
+              <span style={{ marginLeft: 'auto', paddingLeft: 12, color: 'var(--tx-3)', fontSize: 11.5 }}>{tr(t.hint)}</span>
             </DropdownMenu.Item>
           ))}
         </DropdownMenu.Content>
@@ -145,8 +145,9 @@ export function ProvidersSection(): JSX.Element {
         <div className="prov-empty">
           <div className="prov-empty-title">{tr('Провайдеры ещё не добавлены')}</div>
           <div className="prov-empty-sub">
-            Выберите сервис: облачный (Anthropic, OpenAI, OpenRouter) — нужен API-ключ; локальный (Ollama, LM Studio) —
-            работает без ключа. Подробнее — в разделе{' '}
+            {tr(
+              'Выберите сервис: облачный (Anthropic, OpenAI, OpenRouter) — нужен API-ключ; локальный (Ollama, LM Studio) — работает без ключа. Подробнее — в разделе'
+            )}{' '}
             <button className="link-btn" onClick={() => useUi.getState().openHelp('ai')}> {tr('Справка → AI-ассистент')} </button>
             .
           </div>

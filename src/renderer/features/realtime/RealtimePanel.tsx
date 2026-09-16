@@ -7,7 +7,7 @@ import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/r
 import { makeId } from '@shared/id'
 import { templatesForKind } from './templates'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf, trp } from '@renderer/lib/i18n'
 /** Bottom-panel view for WebSocket / SSE / Socket.IO / MQTT (replaces the HTTP response). */
 
 const KIND_LABEL: Record<RtKind, string> = {
@@ -118,7 +118,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
       useUi.getState().showToast(tr('Нечего сохранять — поле сообщения пустое'), 'error')
       return
     }
-    const name = window.prompt('Название шаблона:')?.trim()
+    const name = window.prompt(tr('Название шаблона:'))?.trim()
     if (!name) return
     const tpl: MessageTemplate = {
       id: makeId('mt'),
@@ -151,12 +151,17 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
       <div className="resp-statusbar">
         <span className="status-pill" style={{ color: sc, background: `color-mix(in oklch, ${sc} 14%, transparent)` }}>
           <span className="pulse" style={{ background: sc }} />
-          {STATUS_LABEL[rt.status]}
+          {tr(STATUS_LABEL[rt.status])}
         </span>
         <div className="resp-meta">
           <span>{KIND_LABEL[kind]}</span>
           <span className="sep">•</span>
-          <span>{rt.messages.filter((m) => m.dir !== 'system').length} сообщений</span>
+          <span>
+            {(() => {
+              const n = rt.messages.filter((m) => m.dir !== 'system').length
+              return `${n} ${trp(n, 'сообщение', 'сообщения', 'сообщений')}`
+            })()}
+          </span>
         </div>
         <div className="resp-actions">
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
@@ -260,7 +265,9 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
                 <Icon name="bolt" size={22} />
               </div>
               <p style={{ marginBottom: 0 }}>
-                Подключитесь, чтобы {kind === 'sse' ? 'получать события' : 'обмениваться сообщениями'} по {KIND_LABEL[kind]}.
+                {trf(kind === 'sse' ? 'Подключитесь, чтобы получать события по {protocol}.' : 'Подключитесь, чтобы обмениваться сообщениями по {protocol}.', {
+                  protocol: KIND_LABEL[kind]
+                })}
               </p>
             </div>
           </div>
@@ -322,7 +329,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           )}
           <textarea
             value={draft}
-            placeholder={open ? 'Сообщение… (Ctrl/⌘+Enter — отправить)' : 'Подключитесь, чтобы отправлять'}
+            placeholder={open ? tr('Сообщение… (Ctrl/⌘+Enter — отправить)') : tr('Подключитесь, чтобы отправлять')}
             disabled={!open}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -333,7 +340,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
             }}
           />
           <button className="btn primary" disabled={!open} onClick={doSend} style={{ alignSelf: 'flex-end' }}>
-            {kind === 'socketio' ? 'Emit' : kind === 'mqtt' ? 'Publish' : 'Отправить'}
+            {kind === 'socketio' ? 'Emit' : kind === 'mqtt' ? 'Publish' : tr('Отправить')}
             <Icon name="send" size={14} />
           </button>
         </div>

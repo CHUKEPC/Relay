@@ -2,7 +2,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useHistory } from '@renderer/store/history'
 import { useTabs } from '@renderer/store/tabs'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 function statusColor(s: number): string {
   if (s === 0) return 'var(--s-5xx)'
   if (s >= 500) return 'var(--s-5xx)'
@@ -13,10 +13,10 @@ function statusColor(s: number): string {
 
 function timeAgo(at: number): string {
   const diff = Math.max(0, Math.floor((Date.now() - at) / 1000))
-  if (diff < 60) return `${diff} сек назад`
-  if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} ч назад`
-  return `${Math.floor(diff / 86400)} дн назад`
+  if (diff < 60) return trf('{n} сек назад', { n: diff })
+  if (diff < 3600) return trf('{n} мин назад', { n: Math.floor(diff / 60) })
+  if (diff < 86400) return trf('{n} ч назад', { n: Math.floor(diff / 3600) })
+  return trf('{n} дн назад', { n: Math.floor(diff / 86400) })
 }
 
 export function HistoryList({ query }: { query: string }) {

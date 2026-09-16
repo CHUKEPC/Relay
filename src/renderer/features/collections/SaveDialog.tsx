@@ -53,8 +53,8 @@ export function SaveDialog({
 
   const confirm = () => {
     let target = parentId
-    if (!target) target = addCollection('Моя коллекция')
-    onSave(target, name.trim() || 'Без названия')
+    if (!target) target = addCollection(tr('Моя коллекция'))
+    onSave(target, name.trim() || tr('Без названия'))
     onOpenChange(false)
   }
 

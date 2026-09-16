@@ -7,6 +7,7 @@ import { flushPersistAndWait, persist } from './persist'
 import { useSettings } from './settings'
 import { buildContextBlock, SYSTEM_PROMPT } from '../lib/ai-context'
 import { TOOL_SPECS, executeTool, isMutating, describeToolCall } from '../lib/ai-tools'
+import { tr } from '../lib/i18n'
 
 export interface PendingConfirm {
   title: string
@@ -273,7 +274,10 @@ export const useAi = create<AiState>((set, get) => ({
             result = `Tool error: ${err instanceof Error ? err.message : String(err)}`
           }
           providerMessages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: result })
-          patchAssistant((m) => ({ ...m, content: `${m.content}${m.content ? '\n\n' : ''}_🔧 ${call.name}: ${approved ? 'выполнено' : 'отклонено'}_` }))
+          patchAssistant((m) => ({
+            ...m,
+            content: `${m.content}${m.content ? '\n\n' : ''}_🔧 ${call.name}: ${approved ? tr('выполнено') : tr('отклонено')}_`
+          }))
         }
       }
     } finally {

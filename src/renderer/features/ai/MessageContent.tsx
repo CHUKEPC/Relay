@@ -100,7 +100,7 @@ function CodeArtifact({ lang, code }: { lang: string; code: string }) {
       // Require a request line (method or URL) — otherwise parseHttpBlock would
       // happily turn arbitrary prose into a "body" and overwrite the request.
       if (!p.url && !p.method) {
-        showToast('Не удалось разобрать ```http блок')
+        showToast(tr('Не удалось разобрать ```http блок'))
         return
       }
       patch(p)
@@ -124,13 +124,13 @@ function CodeArtifact({ lang, code }: { lang: string; code: string }) {
 
   const applyLabel =
     lang === 'http'
-      ? 'Применить к запросу'
+      ? tr('Применить к запросу')
       : isCurl
-        ? 'Импортировать запрос'
+        ? tr('Импортировать запрос')
         : lang === 'javascript' || lang === 'js'
-          ? 'Вставить как тест'
+          ? tr('Вставить как тест')
           : lang === 'json'
-            ? 'Применить как тело'
+            ? tr('Применить как тело')
             : null
 
   return (

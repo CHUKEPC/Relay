@@ -192,13 +192,11 @@ function GraphqlBody({
       <div className="subbar" style={{ gap: 8 }}>
         <button className="btn ghost" style={{ height: 26 }} onClick={runIntrospect} disabled={status === 'loading'}>
           <Icon name="refresh" size={14} />
-          {status === 'loading' ? 'Загрузка схемы…' : 'Интроспекция схемы'}
+          {status === 'loading' ? tr('Загрузка схемы…') : tr('Интроспекция схемы')}
         </button>
         {entry?.schema && (
           <button className="btn ghost" style={{ height: 26 }} onClick={() => setDocsOpen((v) => !v)}>
-            <Icon name={docsOpen ? 'chevD' : 'chevR'} size={14} />
-            Схема (документация)
-          </button>
+            <Icon name={docsOpen ? 'chevD' : 'chevR'} size={14} /> {tr('Схема (документация)')} </button>
         )}
         {status === 'error' && entry?.error && (
           <span style={{ fontSize: 11.5, color: 'var(--danger, #e06)' }}>{entry.error}</span>
@@ -329,7 +327,7 @@ function FormDataTable({
               {r.type === 'file' ? (
                 <button className="btn ghost" style={{ height: 24, fontSize: 11.5 }} onClick={() => pickFile(i)}>
                   <Icon name="upload" size={13} />
-                  {r.fileName ?? 'Выбрать файл'}
+                  {r.fileName ?? tr('Выбрать файл')}
                 </button>
               ) : (
                 <input value={r.value} placeholder="value" onChange={(e) => update(i, { value: e.target.value })} />
@@ -359,7 +357,7 @@ function BinaryPicker({ body, onChange }: { body: Extract<RequestBody, { type: '
     <div style={{ padding: '20px 14px' }}>
       <button className="btn" onClick={pick}>
         <Icon name="upload" size={14} />
-        {body.fileName ?? 'Выбрать файл'}
+        {body.fileName ?? tr('Выбрать файл')}
       </button>
       {body.filePath && <div style={{ marginTop: 8, fontSize: 12, color: 'var(--tx-2)' }} className="mono">{body.filePath}</div>}
     </div>

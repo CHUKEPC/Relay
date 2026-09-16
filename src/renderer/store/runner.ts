@@ -11,6 +11,7 @@ import {
 } from '../lib/request-runner'
 import { useCollections } from './collections'
 import { useEnvironments } from './environments'
+import { tr } from '../lib/i18n'
 
 export interface RequestRunResult {
   id: string
@@ -104,8 +105,8 @@ export const useRunner = create<RunnerState>((set, get) => ({
   loadDataFile: async () => {
     const picked = await window.api.openFile({
       filters: [
-        { name: 'Файлы данных', extensions: ['csv', 'json'] },
-        { name: 'Все файлы', extensions: ['*'] }
+        { name: tr('Файлы данных'), extensions: ['csv', 'json'] },
+        { name: tr('Все файлы'), extensions: ['*'] }
       ]
     })
     if (!picked || !picked[0]) return
@@ -115,7 +116,7 @@ export const useRunner = create<RunnerState>((set, get) => ({
       let rows: Record<string, string>[]
       if (/\.json$/i.test(file.fileName)) {
         const parsed = JSON.parse(text)
-        if (!Array.isArray(parsed)) throw new Error('JSON-файл данных должен быть массивом объектов')
+        if (!Array.isArray(parsed)) throw new Error(tr('JSON-файл данных должен быть массивом объектов'))
         rows = parsed.map((row) => {
           const obj: Record<string, string> = {}
           for (const [k, v] of Object.entries(row ?? {})) obj[k] = v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v)
@@ -144,7 +145,7 @@ export const useRunner = create<RunnerState>((set, get) => ({
     if (!located) return
     const requests = flattenRequests(located.node)
     if (requests.length === 0) {
-      set({ dataError: 'В выбранном узле нет запросов' })
+      set({ dataError: tr('В выбранном узле нет запросов') })
       return
     }
 

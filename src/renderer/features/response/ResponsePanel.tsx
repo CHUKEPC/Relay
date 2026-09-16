@@ -16,7 +16,7 @@ import { CookieManager } from '@renderer/features/cookies/CookieManager'
 import { requestSnapshotForPlugin, responseSnapshotForPlugin } from '@shared/plugin-context'
 import type { PluginEventContext, ResponseResult, HttpErrorKind } from '@shared/types'
 
-import { tr } from '@renderer/lib/i18n'
+import { tr, trf } from '@renderer/lib/i18n'
 /* ============================================================
  * Helpers
  * ============================================================ */
@@ -69,7 +69,7 @@ const ERROR_KIND_LABEL: Record<HttpErrorKind, string> = {
 function errorTitle(result: ResponseResult): string {
   if (result.status > 0) return `${result.status} ${result.statusText}`.trim()
   const kind = result.error?.kind
-  return kind ? ERROR_KIND_LABEL[kind] : 'Ошибка сети'
+  return tr(kind ? ERROR_KIND_LABEL[kind] : 'Ошибка сети')
 }
 
 /** Status-pill label: real status line, or the SAME error-kind label as the body. */
@@ -121,8 +121,8 @@ function RespError({ result, onAskAI }: { result: ResponseResult; onAskAI: () =>
         <p>
           {result.error?.message ??
             (hasAi
-              ? 'Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки — или попросите AI разобраться.'
-              : 'Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки.')}
+              ? tr('Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки — или попросите AI разобраться.')
+              : tr('Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки.'))}
         </p>
         {hasAi && (
           <div className="empty-actions">
@@ -145,7 +145,7 @@ function PreviewPane({ result }: { result: ResponseResult }): JSX.Element {
   if (ct.startsWith('image/') && result.body.base64) {
     return (
       <div className="preview-image-wrap">
-        <img src={`data:${result.body.contentType};base64,${result.body.base64}`} alt="Предпросмотр ответа" />
+        <img src={`data:${result.body.contentType};base64,${result.body.base64}`} alt={tr('Предпросмотр ответа')} />
       </div>
     )
   }
@@ -204,7 +204,7 @@ function PluginPanelPane({
       .then((res) => {
         if (cancelled) return
         if (res.error) setError(res.error)
-        else if (res.panelHtml == null) setError('Плагин не вернул содержимое панели (relay.panel.set не вызван).')
+        else if (res.panelHtml == null) setError(tr('Плагин не вернул содержимое панели (relay.panel.set не вызван).'))
         else setHtml(res.panelHtml)
       })
       .finally(() => {
@@ -364,8 +364,8 @@ function TestsPane({ r }: { r: TabResponse }): JSX.Element {
     <div>
       {tests.length > 0 && (
         <div className="test-summary">
-          <span className="test-badge pass">{passed} пройдено</span>
-          <span className="test-badge fail">{failed} провалено</span>
+          <span className="test-badge pass">{trf('{n} пройдено', { n: passed })}</span>
+          <span className="test-badge fail">{trf('{n} провалено', { n: failed })}</span>
         </div>
       )}
       {tests.map((t, i) => (
@@ -653,7 +653,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
               <Icon name="send" size={22} />
             </div>
             <h3>{tr('Готов отправить запрос')}</h3>
-            <p> {tr('Нажмите')} <b style={{ color: 'var(--tx-0)' }}>{tr('Отправить')}</b> или{' '}
+            <p> {tr('Нажмите')} <b style={{ color: 'var(--tx-0)' }}>{tr('Отправить')}</b> {tr('или')}{' '}
               <span className="kbd">{kbd('↵')}</span> {tr('— ответ появится здесь.')} </p>
           </div>
         </div>

@@ -44,6 +44,7 @@ const PATHS: Record<string, string> = {
   upload: 'M10 13V4M6 7.5l4-4 4 4M4 16h12',
   winMin: 'M4 10h12',
   winMax: 'M5.5 5.5h9v9h-9z',
+  monitor: 'M3.5 4.5h13a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1ZM7.5 16.5h5M10 13.5v3',
   book: 'M10 6.5C8.4 5 6.2 4.5 3 4.5v11c3.2 0 5.4.5 7 2 1.6-1.5 3.8-2 7-2v-11c-3.2 0-5.4.5-7 2ZM10 6.5v11',
   layoutGrid: 'M3.5 3.5H9V9H3.5V3.5ZM11 3.5h5.5V9H11V3.5ZM3.5 11H9v5.5H3.5V11ZM11 11h5.5v5.5H11V11Z',
   dockBottom: 'M3.5 4.5h13a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM2.5 11.5h15M5.5 13.5h9',

@@ -34,7 +34,7 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
           </button>
         </div>
         <span className="label">
-          {which === 'pre' ? 'Выполняется ДО отправки' : 'Выполняется ПОСЛЕ ответа (тесты)'} · API:{' '}
+          {which === 'pre' ? tr('Выполняется ДО отправки') : tr('Выполняется ПОСЛЕ ответа (тесты)')} · API:{' '}
           <span className="mono">pm.test</span>, <span className="mono">pm.expect</span>, <span className="mono">pm.response</span>
         </span>
         <button

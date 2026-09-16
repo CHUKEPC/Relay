@@ -173,8 +173,10 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
             <KVTable rows={req.headers} onChange={(headers) => patch({ headers })} scope={scope} keyPlaceholder="Header-Name" keyAutocomplete={COMMON_HEADER_NAMES} />
             <div style={{ padding: '4px 18px 14px', fontSize: 11, color: 'var(--tx-3)' }}>
               {mode === 'http'
-                ? 'Host, Content-Length, User-Agent и др. добавляются автоматически. Чтобы переопределить любой из них — добавьте заголовок с тем же именем выше.'
-                : 'Заголовки рукопожатия отправляются при подключении.'}
+                ? tr(
+                    'Host, Content-Length, User-Agent и др. добавляются автоматически. Чтобы переопределить любой из них — добавьте заголовок с тем же именем выше.'
+                  )
+                : tr('Заголовки рукопожатия отправляются при подключении.')}
             </div>
           </>
         )}
