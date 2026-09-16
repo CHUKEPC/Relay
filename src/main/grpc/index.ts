@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import type * as grpc from '@grpc/grpc-js'
 import type * as protoLoader from '@grpc/proto-loader'
 import type * as descriptorNs from 'protobufjs/ext/descriptor'
-import type { BrowserWindow, IpcMain } from 'electron'
+import type { IpcMain, IpcMainInvokeEvent, WebContents } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { makeId } from '@shared/id'
 import type {
@@ -32,7 +32,6 @@ import type {
   RealtimeEvent
 } from '@shared/types'
 
-type GetWindow = () => BrowserWindow | null
 
 /**
  * The grpc stack is REQUIRED LAZILY, not imported at module scope: protobufjs
@@ -78,11 +77,16 @@ const LOAD_OPTS: protoLoader.Options = {
   oneofs: true
 }
 
-function emitter(getWindow: GetWindow, connId: string) {
+/** Which window (webContents id) started each call, so a closing window can cancel its own. */
+const owners = new Map<string, number>()
+
+/** Events go back to the window that started the call (main or a detached pane). */
+function emitter(sender: WebContents, connId: string) {
   const channel = `${IPC.grpc.event}:${connId}`
+  owners.set(connId, sender.id)
   return (event: RealtimeEvent): void => {
     try {
-      getWindow()?.webContents.send(channel, event)
+      if (!sender.isDestroyed()) sender.send(channel, event)
     } catch {
       /* window gone */
     }
@@ -684,6 +688,7 @@ function invoke(
 }
 
 function cancelCall(connId: string): void {
+  owners.delete(connId)
   const c = calls.get(connId)
   if (c) {
     c.cancel()
@@ -724,14 +729,14 @@ async function resolveInvokePackageDef(spec: GrpcInvokeSpec): Promise<ReflectPkg
   }
 }
 
-export function registerGrpcHandlers(ipcMain: IpcMain, getWindow: GetWindow): void {
+export function registerGrpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle(IPC.grpc.parse, async (_e, proto: string): Promise<GrpcParseResult> => parseProto(proto))
 
   ipcMain.handle(IPC.grpc.reflect, async (_e, spec: GrpcReflectSpec): Promise<GrpcParseResult> => reflectServices(spec))
 
-  ipcMain.handle(IPC.grpc.invoke, async (_e, spec: GrpcInvokeSpec) => {
+  ipcMain.handle(IPC.grpc.invoke, async (e: IpcMainInvokeEvent, spec: GrpcInvokeSpec) => {
     cancelCall(spec.connId) // replace any prior call on this id
-    const emit = emitter(getWindow, spec.connId)
+    const emit = emitter(e.sender, spec.connId)
 
     // Mark the call as in-flight immediately so a cancel during descriptor
     // resolution (reflection round-trip) is honoured.
@@ -768,4 +773,9 @@ export function registerGrpcHandlers(ipcMain: IpcMain, getWindow: GetWindow): vo
 /** Cancel every live call (call on window close / app quit). */
 export function abortAllGrpc(): void {
   for (const connId of [...calls.keys()]) cancelCall(connId)
+}
+
+/** Cancel the calls started by one window (a detached pane window closed). */
+export function abortGrpcFor(webContentsId: number): void {
+  for (const [connId, owner] of [...owners]) if (owner === webContentsId) cancelCall(connId)
 }

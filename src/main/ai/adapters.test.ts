@@ -437,15 +437,43 @@ describe('listModels', () => {
     expect(models).toEqual([{ id: 'gpt-4o' }, { id: 'gpt-4o-mini' }])
   })
 
-  it('returns a static Claude list for Anthropic without hitting the network', async () => {
+  it('drops non-chat models from the OpenAI list and sorts ids', async () => {
+    const impl = fakeJsonFetch({ data: [{ id: 'gpt-5' }, { id: 'text-embedding-3-small' }, { id: 'gpt-4o-mini-tts' }, { id: 'gpt-4.1' }] })
+    const models = await listModels(OPENAI, impl)
+    expect(models.map((m) => m.id)).toEqual(['gpt-4.1', 'gpt-5'])
+  })
+
+  it('pages through the Anthropic /models endpoint with the key headers', async () => {
+    const urls: string[] = []
+    const headers: Record<string, string>[] = []
+    const pages = [
+      { data: [{ id: 'claude-opus-5', display_name: 'Claude Opus 5' }], has_more: true, last_id: 'claude-opus-5' },
+      { data: [{ id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' }], has_more: false, last_id: 'claude-haiku-4-5' }
+    ]
+    const impl = (async (url: string, init: RequestInit) => {
+      urls.push(url)
+      headers.push(init.headers as Record<string, string>)
+      return new Response(JSON.stringify(pages[urls.length - 1]), { status: 200 })
+    }) as unknown as typeof fetch
+    const models = await listModels(ANTHROPIC, impl)
+    expect(models).toEqual([
+      { id: 'claude-opus-5', label: 'Claude Opus 5' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
+    ])
+    expect(urls[0]).toBe('https://api.anthropic.com/v1/models?limit=1000')
+    expect(urls[1]).toContain('after_id=claude-opus-5')
+    expect(headers[0]['x-api-key']).toBe('sk-ant')
+    expect(headers[0]['anthropic-version']).toBe('2023-06-01')
+  })
+
+  it('returns [] for Anthropic without a key, without hitting the network', async () => {
     let called = false
     const impl = (async () => {
       called = true
       return new Response('{}')
     }) as unknown as typeof fetch
-    const models = await listModels(ANTHROPIC, impl)
+    expect(await listModels({ kind: 'anthropic' }, impl)).toEqual([])
     expect(called).toBe(false)
-    expect(models.map((m) => m.id)).toContain('claude-opus-4-6')
   })
 
   it('returns [] on a failing models request', async () => {

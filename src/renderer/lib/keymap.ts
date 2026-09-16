@@ -20,21 +20,71 @@ export type KeyActionId =
   | 'settings'
   | 'save'
   | 'closeTab'
+  | 'panePreset1'
+  | 'panePreset2'
+  | 'panePreset3'
+  | 'panePreset4'
+  | 'panePreset8'
+  | 'paneSplitRight'
+  | 'paneSplitDown'
+  | 'paneClose'
+  | 'paneFocusLeft'
+  | 'paneFocusRight'
+  | 'paneFocusUp'
+  | 'paneFocusDown'
+  | 'paneMoveLeft'
+  | 'paneMoveRight'
+  | 'paneMoveUp'
+  | 'paneMoveDown'
+  | 'paneResizeLeft'
+  | 'paneResizeRight'
+  | 'paneResizeUp'
+  | 'paneResizeDown'
+  | 'paneMaximize'
+  | 'paneDetach'
+  | 'paneFlip'
+
+export type KeyActionGroup = 'general' | 'panes'
 
 export interface KeyActionDef {
   id: KeyActionId
   label: string
   defaultCombo: string
+  group: KeyActionGroup
 }
 
 export const KEY_ACTIONS: KeyActionDef[] = [
-  { id: 'palette', label: 'Командная палитра', defaultCombo: 'mod+k' },
-  { id: 'send', label: 'Отправить запрос', defaultCombo: 'mod+enter' },
-  { id: 'newRequest', label: 'Новый запрос', defaultCombo: 'mod+n' },
-  { id: 'toggleAi', label: 'Открыть/скрыть AI', defaultCombo: 'mod+j' },
-  { id: 'settings', label: 'Настройки', defaultCombo: 'mod+,' },
-  { id: 'save', label: 'Сохранить', defaultCombo: 'mod+s' },
-  { id: 'closeTab', label: 'Закрыть вкладку', defaultCombo: 'mod+w' }
+  { id: 'palette', label: 'Командная палитра', defaultCombo: 'mod+k', group: 'general' },
+  { id: 'send', label: 'Отправить запрос', defaultCombo: 'mod+enter', group: 'general' },
+  { id: 'newRequest', label: 'Новый запрос', defaultCombo: 'mod+n', group: 'general' },
+  { id: 'toggleAi', label: 'Открыть/скрыть AI', defaultCombo: 'mod+j', group: 'general' },
+  { id: 'settings', label: 'Настройки', defaultCombo: 'mod+,', group: 'general' },
+  { id: 'save', label: 'Сохранить', defaultCombo: 'mod+s', group: 'general' },
+  { id: 'closeTab', label: 'Закрыть вкладку', defaultCombo: 'mod+w', group: 'general' },
+
+  { id: 'panePreset1', label: 'Одна панель', defaultCombo: 'mod+alt+1', group: 'panes' },
+  { id: 'panePreset2', label: 'Разбить на 2 панели', defaultCombo: 'mod+alt+2', group: 'panes' },
+  { id: 'panePreset3', label: 'Разбить на 3 панели', defaultCombo: 'mod+alt+3', group: 'panes' },
+  { id: 'panePreset4', label: 'Разбить на 4 панели', defaultCombo: 'mod+alt+4', group: 'panes' },
+  { id: 'panePreset8', label: 'Разбить на 8 панелей', defaultCombo: 'mod+alt+8', group: 'panes' },
+  { id: 'paneSplitRight', label: 'Добавить панель справа', defaultCombo: 'mod+shift+e', group: 'panes' },
+  { id: 'paneSplitDown', label: 'Добавить панель снизу', defaultCombo: 'mod+shift+o', group: 'panes' },
+  { id: 'paneClose', label: 'Закрыть активную панель', defaultCombo: 'mod+shift+w', group: 'panes' },
+  { id: 'paneFocusLeft', label: 'Перейти в панель слева', defaultCombo: 'alt+arrowleft', group: 'panes' },
+  { id: 'paneFocusRight', label: 'Перейти в панель справа', defaultCombo: 'alt+arrowright', group: 'panes' },
+  { id: 'paneFocusUp', label: 'Перейти в панель сверху', defaultCombo: 'alt+arrowup', group: 'panes' },
+  { id: 'paneFocusDown', label: 'Перейти в панель снизу', defaultCombo: 'alt+arrowdown', group: 'panes' },
+  { id: 'paneMoveLeft', label: 'Переместить панель влево', defaultCombo: 'shift+alt+arrowleft', group: 'panes' },
+  { id: 'paneMoveRight', label: 'Переместить панель вправо', defaultCombo: 'shift+alt+arrowright', group: 'panes' },
+  { id: 'paneMoveUp', label: 'Переместить панель вверх', defaultCombo: 'shift+alt+arrowup', group: 'panes' },
+  { id: 'paneMoveDown', label: 'Переместить панель вниз', defaultCombo: 'shift+alt+arrowdown', group: 'panes' },
+  { id: 'paneResizeLeft', label: 'Сдвинуть границу панели влево', defaultCombo: 'mod+shift+alt+arrowleft', group: 'panes' },
+  { id: 'paneResizeRight', label: 'Сдвинуть границу панели вправо', defaultCombo: 'mod+shift+alt+arrowright', group: 'panes' },
+  { id: 'paneResizeUp', label: 'Сдвинуть границу панели вверх', defaultCombo: 'mod+shift+alt+arrowup', group: 'panes' },
+  { id: 'paneResizeDown', label: 'Сдвинуть границу панели вниз', defaultCombo: 'mod+shift+alt+arrowdown', group: 'panes' },
+  { id: 'paneMaximize', label: 'Развернуть / вернуть активную панель', defaultCombo: 'mod+shift+x', group: 'panes' },
+  { id: 'paneDetach', label: 'Открыть панель в отдельном окне / вернуть', defaultCombo: 'mod+shift+d', group: 'panes' },
+  { id: 'paneFlip', label: 'Поменять местами с соседней группой', defaultCombo: 'mod+shift+f', group: 'panes' }
 ]
 
 const MODIFIER_KEYS = new Set([
@@ -132,6 +182,8 @@ let bindingsCache: Map<string, KeyActionId> | null = null
 
 /** Match a keydown event against the effective bindings. */
 export function matchAction(e: KeyboardEvent, custom: Record<string, string>): KeyActionId | null {
+  // AltGr arrives as Ctrl+Alt on Windows; those presses type characters ({, [, @…).
+  if (e.getModifierState?.('AltGraph')) return null
   const combo = comboFromEvent(e)
   if (!combo) return null
   if (custom !== bindingsFor || !bindingsCache) {
@@ -188,4 +240,12 @@ export function findConflict(
     if (effectiveCombo(action, custom) === wanted) return action.id
   }
   return null
+}
+
+/** Human-readable effective combo for an action, e.g. 'Ctrl+Shift+E' ('' when unbound). */
+export function kbdCombo(id: KeyActionId, custom: Record<string, string>): string {
+  const action = KEY_ACTIONS.find((a) => a.id === id)
+  if (!action) return ''
+  const combo = effectiveCombo(action, custom)
+  return combo ? formatCombo(combo).join(isMac ? '' : '+') : ''
 }

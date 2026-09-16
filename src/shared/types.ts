@@ -459,6 +459,8 @@ export interface SettingsDoc extends DocEnvelope {
   keybindings: Record<string, string>
   updateCheckEnabled: boolean
   onboardingDone: boolean
+  /** UI language: 'ru'/'en' always, more from the «Дополнительные языки» pack */
+  language: string
   requestTimeoutMs: number
   followRedirects: boolean
   maxRedirects: number
@@ -474,6 +476,8 @@ export interface SettingsDoc extends DocEnvelope {
   clientCerts: ClientCert[]
   /** allow HTTP/2 negotiation for outbound requests */
   http2: boolean
+  /** run without the GPU: less video memory, softer scrolling (needs a restart) */
+  disableHardwareAcceleration: boolean
 }
 
 /* ============================================================
@@ -492,6 +496,8 @@ export interface ProviderConfig {
   apiKeyRef?: string
   /** whether a key has been stored (renderer hint; raw key never sent) */
   hasKey?: boolean
+  /** connected without a key (local OpenAI-compatible servers) */
+  keyless?: boolean
   defaultModel: string
   models: string[]
   extraHeaders?: Record<string, string>

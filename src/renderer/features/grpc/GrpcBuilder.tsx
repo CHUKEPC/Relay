@@ -11,6 +11,7 @@ import { useTabs } from '@renderer/store/tabs'
 import { useScope } from '@renderer/lib/hooks'
 import { interpolate } from '@shared/interpolate'
 
+import { tr } from '@renderer/lib/i18n'
 const KIND_LABEL: Record<GrpcMethodInfo['kind'], string> = {
   unary: 'unary',
   server_stream: 'server-stream',
@@ -145,12 +146,9 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
         ) : (
           <>
             <button className="btn ghost" style={{ height: 26 }} onClick={() => fileRef.current?.click()}>
-              <Icon name="upload" size={13} /> Загрузить .proto
-            </button>
+              <Icon name="upload" size={13} /> {tr('Загрузить .proto')} </button>
             {!grpc.proto && (
-              <button className="btn ghost" style={{ height: 26 }} onClick={() => { set({ proto: SAMPLE_PROTO }); void doParse(SAMPLE_PROTO) }}>
-                Пример
-              </button>
+              <button className="btn ghost" style={{ height: 26 }} onClick={() => { set({ proto: SAMPLE_PROTO }); void doParse(SAMPLE_PROTO) }}> {tr('Пример')} </button>
             )}
             <button className="btn" style={{ height: 26 }} disabled={parsing || !(grpc.proto ?? '').trim()} onClick={() => void doParse(grpc.proto ?? '')}>
               {parsing ? 'Разбор…' : 'Разобрать'}
@@ -170,9 +168,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
         />
       </div>
       {useReflection ? (
-        <div style={{ padding: '0 14px 4px', fontSize: 12, color: 'var(--tx-3)' }}>
-          Дескрипторы запрашиваются у сервера по адресу выше. Нажмите «Обнаружить».
-        </div>
+        <div style={{ padding: '0 14px 4px', fontSize: 12, color: 'var(--tx-3)' }}> {tr('Дескрипторы запрашиваются у сервера по адресу выше. Нажмите «Обнаружить».')} </div>
       ) : (
         <div style={{ height: 160, padding: '0 14px' }}>
           <CodeEditor
@@ -187,13 +183,13 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
       {/* Service + method pickers */}
       <div style={{ display: 'flex', gap: 8, padding: '8px 14px', flexWrap: 'wrap' }}>
         <Picker
-          label="Сервис"
+          label={tr('Сервис')}
           value={activeService?.name ?? '—'}
           disabled={services.length === 0}
           items={services.map((s) => ({ key: s.name, label: s.name, onSelect: () => { const m = s.methods[0]; if (m) selectMethod(s, m) } }))}
         />
         <Picker
-          label="Метод"
+          label={tr('Метод')}
           value={activeMethod ? activeMethod.name : '—'}
           disabled={!activeService}
           items={(activeService?.methods ?? []).map((m) => ({
@@ -225,7 +221,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
             type="number"
             min={0}
             style={{ width: 120, height: 30 }}
-            placeholder="нет"
+            placeholder={tr('нет')}
             value={grpc.deadlineMs ?? ''}
             onChange={(e) => {
               const n = Number(e.target.value)
@@ -236,7 +232,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
       </div>
       {!grpc.plaintext && (
         <div style={{ display: 'flex', gap: 8, padding: '0 14px 8px', flexWrap: 'wrap' }}>
-          <PemPicker label="CA-сертификат" path={grpc.caCertPath} onPick={() => void pickPem('caCertPath')} onClear={() => set({ caCertPath: undefined })} />
+          <PemPicker label={tr('CA-сертификат')} path={grpc.caCertPath} onPick={() => void pickPem('caCertPath')} onClear={() => set({ caCertPath: undefined })} />
           <PemPicker label="Client cert (mTLS)" path={grpc.clientCertPath} onPick={() => void pickPem('clientCertPath')} onClear={() => set({ clientCertPath: undefined })} />
           <PemPicker label="Client key (mTLS)" path={grpc.clientKeyPath} onPick={() => void pickPem('clientKeyPath')} onClear={() => set({ clientKeyPath: undefined })} />
         </div>
@@ -244,9 +240,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
 
       {/* Message / metadata tabs */}
       <div className="req-tabs" style={{ marginTop: 2 }}>
-        <button className={`tab ${section === 'message' ? 'on' : ''}`} onClick={() => setSection('message')}>
-          Сообщение
-        </button>
+        <button className={`tab ${section === 'message' ? 'on' : ''}`} onClick={() => setSection('message')}> {tr('Сообщение')} </button>
         <button className={`tab ${section === 'metadata' ? 'on' : ''}`} onClick={() => setSection('metadata')}>
           Metadata
           {(grpc.metadata?.filter((m) => m.enabled && m.key).length ?? 0) > 0 && (
@@ -292,7 +286,7 @@ function PemPicker({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name ?? 'Выбрать…'}</span>
         </button>
         {path && (
-          <button className="icon-btn" type="button" title="Очистить" aria-label="Очистить файл" onClick={onClear}>
+          <button className="icon-btn" type="button" title={tr('Очистить')} aria-label={tr('Очистить файл')} onClick={onClear}>
             <Icon name="close" size={13} />
           </button>
         )}
@@ -325,7 +319,7 @@ function Picker({
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="popover" align="start" sideOffset={6} style={{ position: 'relative', minWidth: 200, maxHeight: 320, overflow: 'auto' }}>
             {items.length === 0 ? (
-              <div className="pop-item" style={{ color: 'var(--tx-3)' }}>Нет элементов</div>
+              <div className="pop-item" style={{ color: 'var(--tx-3)' }}>{tr('Нет элементов')}</div>
             ) : (
               items.map((it) => (
                 <DropdownMenu.Item key={it.key} className="pop-item" onSelect={it.onSelect}>

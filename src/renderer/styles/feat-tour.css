@@ -68,19 +68,24 @@
 .tour-foot {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-.tour-progress {
+.tour-skip-text {
   margin-right: auto;
+  padding: 0 8px;
+  color: var(--tx-2);
+}
+
+.tour-progress {
+  margin: 0 0 4px;
+  padding-right: 24px;
   font-size: 11.5px;
   color: var(--tx-2);
 }
 
-/* Restart buttons (About card / Help quickstart). */
-.tour-restart {
-  margin-top: 12px;
-}
+/* Restart button (Help quickstart). */
 .tour-restart-help {
   margin-bottom: 12px;
 }

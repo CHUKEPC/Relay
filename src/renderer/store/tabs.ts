@@ -8,14 +8,16 @@ import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useResponse } from './response'
 import { persist } from './persist'
+import { forgetTab, recordPatch } from './undo-history'
 
 interface TabsState {
   doc: TabsDoc
   hydrate: (doc: TabsDoc) => void
   activeTab: () => TabModel | null
   activeRequest: () => RequestModel | null
-  setActive: (id: string) => void
-  openSaved: (request: RequestModel, savedRequestId: string) => void
+  /** null = the focused pane is empty */
+  setActive: (id: string | null) => void
+  openSaved: (request: RequestModel, savedRequestId: string) => string
   openNew: (request?: RequestModel) => string
   closeTab: (id: string) => void
   closeOthers: (id: string) => void
@@ -26,6 +28,14 @@ interface TabsState {
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
   markSaved: (tabId: string, savedRequestId: string) => void
+}
+
+type ActiveTabFallback = (remaining: TabModel[], closedIndex: number) => string | null
+let activeTabFallback: ActiveTabFallback | null = null
+
+/** Lets the pane layout choose which tab becomes active after the active one closes. */
+export function setActiveTabFallback(fn: ActiveTabFallback): void {
+  activeTabFallback = fn
 }
 
 export const useTabs = create<TabsState>((set, get) => {
@@ -39,6 +49,7 @@ export const useTabs = create<TabsState>((set, get) => {
   // so closing a realtime tab doesn't leak a socket/IPC listener. Must run for
   // EVERY closed tab, including bulk closes (close others/right/left/all).
   const teardownTab = (id: string) => {
+    forgetTab(id)
     useRealtime.getState().disconnect(id)
     useGrpc.getState().cancel(id)
     useResponse.setState((s) => {
@@ -79,10 +90,11 @@ export const useTabs = create<TabsState>((set, get) => {
       const existing = get().doc.tabs.find((t) => t.savedRequestId === savedRequestId)
       if (existing) {
         commit({ activeTabId: existing.id })
-        return
+        return existing.id
       }
       const tab: TabModel = { id: makeId('tab'), request: structuredClone(request), savedRequestId, dirty: false }
       commit({ tabs: [...get().doc.tabs, tab], activeTabId: tab.id })
+      return tab.id
     },
 
     openNew: (request) => {
@@ -105,7 +117,11 @@ export const useTabs = create<TabsState>((set, get) => {
       if (activeTabId === id) {
         // Activate the neighbour: the tab that shifts into the closed slot, else
         // the one to its left — not always the last tab.
-        activeTabId = tabs.length ? (tabs[idx] ?? tabs[idx - 1] ?? tabs[tabs.length - 1]).id : null
+        activeTabId = activeTabFallback
+          ? activeTabFallback(tabs, idx)
+          : tabs.length
+            ? (tabs[idx] ?? tabs[idx - 1] ?? tabs[tabs.length - 1]).id
+            : null
       }
       commit({ tabs, activeTabId })
     },
@@ -150,6 +166,8 @@ export const useTabs = create<TabsState>((set, get) => {
     },
 
     patchTab: (tabId, patch) => {
+      const before = get().doc.tabs.find((t) => t.id === tabId)
+      if (before) recordPatch(tabId, before.request, patch)
       const tabs = get().doc.tabs.map((t) =>
         t.id === tabId ? { ...t, request: { ...t.request, ...patch }, dirty: true } : t
       )

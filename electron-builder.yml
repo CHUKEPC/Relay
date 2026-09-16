@@ -10,6 +10,14 @@ files:
   - out/**/*
   - package.json
 
+# Feature packs ship as plain folders next to the app so a user can see, remove
+# or add one without repacking the asar (src/main/features reads them at boot).
+extraResources:
+  - from: plugins
+    to: plugins
+    filter:
+      - "**/*"
+
 # Keep the sql.js WebAssembly binary as a real on-disk file so emscripten can
 # read it at runtime (it's pure-WASM, not a native Node addon).
 asarUnpack:
@@ -22,11 +30,24 @@ win:
   target:
     - nsis
   artifactName: ${productName}-${version}-Setup.${ext}
+  # Installer and uninstaller must share one icon: when the Windows installer is
+  # built on macOS, electron-builder copies the installer's exe header into the
+  # uninstaller, and a different uninstaller icon breaks its NSIS CRC check.
+  icon: build/icon.ico
 
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  # Shortcuts are created by build/installer.nsh from the user's choice on the
+  # "Shortcuts" page, so the stock creation/removal is turned off.
+  include: build/installer.nsh
+  createDesktopShortcut: false
+  createStartMenuShortcut: false
+  # installer.nsh defines its page strings for exactly these two languages.
+  installerLanguages:
+    - en_US
+    - ru_RU
 
 mac:
   target:

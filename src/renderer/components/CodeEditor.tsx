@@ -1,75 +1,23 @@
-import '../lib/monaco'
-import Editor, { type OnMount } from '@monaco-editor/react'
-import { useEffect, useRef, useState } from 'react'
-import { makeId } from '@shared/id'
+import { lazy, Suspense } from 'react'
+import type { CodeEditorProps } from './CodeEditorMonaco'
 
-export interface CodeEditorProps {
-  value: string
-  language?: string
-  onChange?: (value: string) => void
-  readOnly?: boolean
-  /** show line numbers + folding (full editor) vs. minimal */
-  minimal?: boolean
-  wordWrap?: boolean
-  placeholder?: string
-}
+/**
+ * Lazy boundary in front of Monaco.
+ *
+ * Monaco is by far the heaviest dependency in the renderer — several megabytes
+ * of code plus its web workers. Loading it only when an editor is actually on
+ * screen keeps it out of startup entirely: a session that never opens a body,
+ * a script or a pretty-printed response never pays for it, and one that does
+ * pays after the first paint rather than before it.
+ */
+const Impl = lazy(() => import('./CodeEditorMonaco').then((m) => ({ default: m.CodeEditorMonaco })))
 
-function currentTheme(): 'relay-dark' | 'relay-light' {
-  return document.documentElement.getAttribute('data-theme') === 'light' ? 'relay-light' : 'relay-dark'
-}
+export type { CodeEditorProps }
 
-/** Shared Monaco wrapper that tracks the app theme and matches the design. */
-export function CodeEditor({ value, language = 'json', onChange, readOnly = false, minimal = false, wordWrap = false }: CodeEditorProps) {
-  const [theme, setTheme] = useState(currentTheme)
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
-  // A unique model URI per instance — without `path`, every <Editor> resolves to
-  // the SAME default model (Uri.parse("")) and they share/dispose one another's text.
-  const pathRef = useRef<string>()
-  if (!pathRef.current) pathRef.current = `inmemory://relay/${makeId('editor')}`
-
-  useEffect(() => {
-    const obs = new MutationObserver(() => setTheme(currentTheme()))
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => obs.disconnect()
-  }, [])
-
+export function CodeEditor(props: CodeEditorProps): JSX.Element {
   return (
-    <div className="monaco-host">
-      <Editor
-        path={pathRef.current}
-        saveViewState={false}
-        value={value}
-        language={language}
-        theme={theme}
-        onChange={(v) => onChange?.(v ?? '')}
-        onMount={(editor) => {
-          editorRef.current = editor
-        }}
-        options={{
-          readOnly,
-          minimap: { enabled: false },
-          fontFamily: 'var(--font-mono)',
-          fontSize: 12.5,
-          lineHeight: 20,
-          fontLigatures: false,
-          lineNumbers: minimal ? 'off' : 'on',
-          folding: !minimal,
-          glyphMargin: false,
-          lineDecorationsWidth: minimal ? 0 : 8,
-          lineNumbersMinChars: minimal ? 0 : 3,
-          renderLineHighlight: 'line',
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          tabSize: 2,
-          wordWrap: wordWrap ? 'on' : 'off',
-          padding: { top: 10, bottom: 10 },
-          scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
-          overviewRulerLanes: 0,
-          guides: { indentation: false },
-          contextmenu: false,
-          stickyScroll: { enabled: false }
-        }}
-      />
-    </div>
+    <Suspense fallback={<div className="monaco-host monaco-loading" />}>
+      <Impl {...props} />
+    </Suspense>
   )
 }

@@ -6,6 +6,7 @@ import { Icon } from '@renderer/components/Icon'
 import { makeId } from '@shared/id'
 import { useSettings } from '@renderer/store/settings'
 
+import { tr } from '@renderer/lib/i18n'
 /* ------------------------------------------------------------------ *
  * Helpers
  * ------------------------------------------------------------------ */
@@ -72,11 +73,8 @@ export function NetworkSection(): JSX.Element {
 
   return (
     <>
-      <div className="set-h">Сеть</div>
-      <div className="set-sub">
-        Прокси для исходящих запросов и клиентские TLS-сертификаты. Ключевой материал читается
-        в основном процессе — в интерфейсе хранятся только пути к файлам.
-      </div>
+      <div className="set-h">{tr('Сеть')}</div>
+      <div className="set-sub"> {tr('Прокси для исходящих запросов и клиентские TLS-сертификаты. Ключевой материал читается в основном процессе — в интерфейсе хранятся только пути к файлам.')} </div>
 
       {/* ============================ HTTP/2 ============================ */}
       <div className="set-row">
@@ -88,11 +86,11 @@ export function NetworkSection(): JSX.Element {
       </div>
 
       {/* ============================ PROXY ============================ */}
-      <div className="set-group-label">Прокси</div>
+      <div className="set-group-label">{tr('Прокси')}</div>
 
       <div className="set-row">
         <div className="label">
-          <div className="t">Использовать прокси</div>
+          <div className="t">{tr('Использовать прокси')}</div>
           <div className="d">Направлять HTTP/HTTPS-запросы через указанный прокси-сервер</div>
         </div>
         <Toggle checked={proxy.enabled} onChange={(enabled) => patchProxy({ enabled })} />
@@ -100,7 +98,7 @@ export function NetworkSection(): JSX.Element {
 
       <div className={`net-block${proxyOff ? ' net-block-off' : ''}`}>
         <div className="field">
-          <label htmlFor="net-proxy-url">Адрес прокси</label>
+          <label htmlFor="net-proxy-url">{tr('Адрес прокси')}</label>
           <input
             id="net-proxy-url"
             className="input mono"
@@ -114,26 +112,26 @@ export function NetworkSection(): JSX.Element {
 
         <div className="net-grid-2">
           <div className="field">
-            <label htmlFor="net-proxy-user">Имя пользователя</label>
+            <label htmlFor="net-proxy-user">{tr('Имя пользователя')}</label>
             <input
               id="net-proxy-user"
               className="input"
               type="text"
               autoComplete="off"
-              placeholder="необязательно"
+              placeholder={tr('необязательно')}
               value={proxy.auth?.username ?? ''}
               disabled={proxyOff}
               onChange={(e) => setAuthField('username', e.target.value)}
             />
           </div>
           <div className="field">
-            <label htmlFor="net-proxy-pass">Пароль</label>
+            <label htmlFor="net-proxy-pass">{tr('Пароль')}</label>
             <input
               id="net-proxy-pass"
               className="input"
               type="password"
               autoComplete="new-password"
-              placeholder="необязательно"
+              placeholder={tr('необязательно')}
               value={proxy.auth?.password ?? ''}
               disabled={proxyOff}
               onChange={(e) => setAuthField('password', e.target.value)}
@@ -153,20 +151,19 @@ export function NetworkSection(): JSX.Element {
           />
           <div className="hint">
             По одному хосту в строке (или через запятую). Поддерживаются точные хосты,
-            суффиксы вида <code>*.example.com</code> и <code>*</code>.
+            суффиксы вида <code>*.example.com</code> {tr('и')} <code>*</code>.
           </div>
         </div>
       </div>
 
       {/* ===================== CLIENT CERTIFICATES ===================== */}
-      <div className="set-group-label">Клиентские сертификаты</div>
-      <div className="net-cert-intro">
-        Сертификаты подбираются по хосту запроса — точное совпадение хоста или <code>host:port</code>.
+      <div className="set-group-label">{tr('Клиентские сертификаты')}</div>
+      <div className="net-cert-intro"> {tr('Сертификаты подбираются по хосту запроса — точное совпадение хоста или')} <code>host:port</code>.
         Используйте PEM (сертификат + ключ) или контейнер PFX/PKCS#12.
       </div>
 
       {certs.length === 0 && (
-        <div className="net-empty">Сертификаты не добавлены.</div>
+        <div className="net-empty">{tr('Сертификаты не добавлены.')}</div>
       )}
 
       <div className="net-cert-list">
@@ -180,9 +177,7 @@ export function NetworkSection(): JSX.Element {
         type="button"
         onClick={() => update({ clientCerts: [...certs, { id: makeId('cert'), host: '' }] })}
       >
-        <Icon name="plus" size={14} />
-        Добавить сертификат
-      </button>
+        <Icon name="plus" size={14} /> {tr('Добавить сертификат')} </button>
     </>
   )
 }
@@ -234,12 +229,12 @@ function CertRow({
         <input
           className="input net-cert-host"
           type="text"
-          placeholder="api.example.com или api.example.com:443"
+          placeholder={tr('api.example.com или api.example.com:443')}
           value={cert.host}
           onChange={(e) => patch({ host: e.target.value })}
-          aria-label="Хост сертификата"
+          aria-label={tr('Хост сертификата')}
         />
-        <div className="seg net-cert-mode" role="group" aria-label="Формат сертификата">
+        <div className="seg net-cert-mode" role="group" aria-label={tr('Формат сертификата')}>
           <button type="button" className={mode === 'pem' ? 'on' : ''} onClick={() => setMode('pem')}>
             PEM
           </button>
@@ -247,7 +242,7 @@ function CertRow({
             PFX
           </button>
         </div>
-        <button className="icon-btn" type="button" title="Удалить сертификат" aria-label="Удалить сертификат" onClick={remove}>
+        <button className="icon-btn" type="button" title={tr('Удалить сертификат')} aria-label={tr('Удалить сертификат')} onClick={remove}>
           <Icon name="trash" size={15} />
         </button>
       </div>
@@ -256,13 +251,13 @@ function CertRow({
         {mode === 'pem' ? (
           <>
             <FilePicker
-              label="Сертификат (CRT/PEM)"
+              label={tr('Сертификат (CRT/PEM)')}
               path={cert.certPath}
               onPick={() => pick('certPath', [{ name: 'Сертификат', extensions: ['crt', 'cert', 'pem'] }])}
               onClear={() => patch({ certPath: undefined })}
             />
             <FilePicker
-              label="Приватный ключ (KEY/PEM)"
+              label={tr('Приватный ключ (KEY/PEM)')}
               path={cert.keyPath}
               onPick={() => pick('keyPath', [{ name: 'Ключ', extensions: ['key', 'pem'] }])}
               onClear={() => patch({ keyPath: undefined })}
@@ -270,7 +265,7 @@ function CertRow({
           </>
         ) : (
           <FilePicker
-            label="Контейнер PFX/P12"
+            label={tr('Контейнер PFX/P12')}
             path={cert.pfxPath}
             onPick={() => pick('pfxPath', [{ name: 'PKCS#12', extensions: ['pfx', 'p12'] }])}
             onClear={() => patch({ pfxPath: undefined })}
@@ -278,7 +273,7 @@ function CertRow({
         )}
 
         <FilePicker
-          label="Дополнительный CA (необязательно)"
+          label={tr('Дополнительный CA (необязательно)')}
           path={cert.caPath}
           onPick={() => pick('caPath', [{ name: 'CA-сертификат', extensions: ['crt', 'cert', 'pem', 'ca'] }])}
           onClear={() => patch({ caPath: undefined })}
@@ -325,7 +320,7 @@ function FilePicker({
           <span className="net-pick-name">{name ?? 'Выбрать файл'}</span>
         </button>
         {path && (
-          <button className="icon-btn" type="button" title="Очистить" aria-label="Очистить файл" onClick={onClear}>
+          <button className="icon-btn" type="button" title={tr('Очистить')} aria-label={tr('Очистить файл')} onClick={onClear}>
             <Icon name="close" size={13} />
           </button>
         )}

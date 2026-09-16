@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, session } from 'electron'
 import { APP_NAME } from '@shared/constants'
@@ -6,8 +7,9 @@ import { StorageManager } from './storage'
 import { registerIpc } from './ipc'
 import { abortAllRequests } from './http'
 import { abortAllAiStreams } from './ai'
-import { abortAllRealtime } from './realtime'
-import { abortAllGrpc } from './grpc'
+import { abortAllRealtime, abortRealtimeFor } from './realtime'
+import { abortAllGrpc, abortGrpcFor } from './grpc'
+import { closeAllPaneWindows, createAppWindow, registerPaneHandlers } from './windows'
 import { startSandboxHost, stopScriptSandbox } from './scripting'
 import { startPluginSandboxHost, stopPluginSandbox } from './plugins/host'
 
@@ -35,57 +37,30 @@ function contentSecurityPolicy(): string {
   ].join('; ')
 }
 
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 1380,
-    height: 880,
-    minWidth: 940,
-    minHeight: 600,
-    show: false,
-    frame: false,
-    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
-    trafficLightPosition: { x: -100, y: -100 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#161619' : '#fbfbfc',
-    title: APP_NAME,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      spellcheck: false
+/**
+ * Hardware acceleration must be decided before the app is ready, long before
+ * the storage layer is up — so the one setting that needs it is read straight
+ * from its JSON file. A missing or unreadable file simply means "leave the GPU
+ * on", which is the default.
+ */
+function applyGpuPreference(): void {
+  try {
+    const file = join(app.getPath('userData'), 'relay-data', 'settings.json')
+    if (!existsSync(file)) return
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as { disableHardwareAcceleration?: unknown }
+    if (doc.disableHardwareAcceleration === true) {
+      app.disableHardwareAcceleration()
+      // Without a GPU process there is nothing to composite on the GPU; this
+      // keeps Chromium from allocating video memory for layers it cannot use.
+      app.commandLine.appendSwitch('disable-gpu-compositing')
     }
-  })
-
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
-
-  if (isDev) {
-    mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
-      if (level >= 2) console.log(`[renderer:${level}] ${message} (${source}:${line})`)
-    })
-    mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) =>
-      console.error('[renderer] did-fail-load', code, desc, url)
-    )
-    mainWindow.webContents.on('render-process-gone', (_e, details) =>
-      console.error('[renderer] render-process-gone', details)
-    )
+  } catch {
+    // Corrupt settings must never stop the app from starting.
   }
+}
 
-  // Block navigation to remote origins; open external links in the OS browser.
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  mainWindow.webContents.on('will-navigate', (e, url) => {
-    const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-    if (rendererUrl && url.startsWith(rendererUrl)) return
-    if (url.startsWith('file://')) return
-    e.preventDefault()
-  })
-
-  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-  if (rendererUrl) {
-    void mainWindow.loadURL(rendererUrl)
-  } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+function createWindow(): void {
+  mainWindow = createAppWindow({ isDev, width: 1380, height: 880, minWidth: 940, minHeight: 600, title: APP_NAME })
 
   mainWindow.on('closed', () => {
     // Drop any in-flight HTTP/AI work tied to this window (matters on macOS where
@@ -94,6 +69,7 @@ function createWindow(): void {
     abortAllAiStreams()
     abortAllRealtime()
     abortAllGrpc()
+    closeAllPaneWindows()
     mainWindow = null
   })
 }
@@ -106,6 +82,7 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
   // Re-forked as the isolated plugin sandbox (docs/PLUGINS.md) — same model.
   startPluginSandboxHost()
 } else {
+  applyGpuPreference()
   app.whenReady().then(async () => {
   // Content Security Policy for all sessions.
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
@@ -120,10 +97,22 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
   const storage = new StorageManager()
   await storage.init()
   registerIpc({ storage, getWindow: () => mainWindow })
+  registerPaneHandlers({
+    isDev,
+    getMainWindow: () => mainWindow,
+    onPaneWindowClosed: (webContentsId) => {
+      abortRealtimeFor(webContentsId)
+      abortGrpcFor(webContentsId)
+    }
+  })
+  // Pane windows show the previous workspace's tabs — close them on a switch.
+  storage.onWorkspaceSwitch(closeAllPaneWindows)
 
   // Relay native theme changes to the renderer (for 'system' theme mode).
   nativeTheme.on('updated', () => {
-    mainWindow?.webContents.send(IPC.app.themeChanged, nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.app.themeChanged, nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
+    }
   })
 
   createWindow()

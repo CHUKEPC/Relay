@@ -70,8 +70,11 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       disk (atomic JSON in userData) and survive restart.
 - [x] Settings screen: theme (light/dark/system), request timeout, SSL verification on/off,
       follow-redirects on/off, max history, word-wrap, AI-context toggle, accent color.
-- [x] AI provider settings: add providers, store API keys **encrypted** (safeStorage), pick default
-      provider/model, dynamic model listing.
+- [x] AI provider settings: add providers from templates (Anthropic, OpenAI, OpenRouter, Ollama,
+      LM Studio, custom OpenAI-compatible — nothing is pre-seeded), store API keys **encrypted**
+      (safeStorage) or connect local servers without a key, pick default provider/model. The model
+      list is fetched live from the provider (`/models`, incl. Anthropic's paginated endpoint) with
+      search, refresh and a free-text model id.
 
 ### AI assistant (the differentiator) — see docs/AI_ASSISTANT.md
 - [x] Dockable AI panel with a chat thread.
@@ -172,6 +175,37 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       lossless `json` columns. NOTE: per CLAUDE.md the **JSON document store remains the canonical
       backend** — SQLite is a backup/interchange format here, NOT a replacement storage engine
       (`better-sqlite3`, a native module, is still intentionally avoided to keep the build green).
+- [x] **Split panes (Terminator-style)**: the editor area is a binary split tree
+      (`store/panes.ts`). Presets for 1/2/3/4/8 panes, add a pane right/below, close a pane; every
+      split has a draggable divider and every pane its own builder/response divider and layout.
+      A tab can be shown by only one pane; the tab strip and the active pane stay in sync (click,
+      focus or typing inside a pane makes it active). Drag a pane header onto another pane to swap
+      (center) or re-split (edges). Keyboard: focus / move / resize by direction, maximize, flip
+      the big pane with the neighbouring group — all rebindable in Settings → Горячие клавиши.
+- [x] **Detached panes**: any tab can open in its own OS window (Alt+Tab-able, moved/resized with
+      the same shortcuts). Windows share data through main (`storage:changed` broadcast); the
+      response is handed over on detach/return; realtime/gRPC events route to the owning window.
+- [x] **Undo / redo in the request builder** (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y): per-tab history
+      grouped by area (URL, Params, Headers, Body, Auth, Scripts, name/description). Inside a field
+      it undoes that area even after focus moved away; with nothing focused it undoes the tab's
+      latest change, switches to that sub-tab and highlights it.
+
+- [x] **Drag a tab or a saved request into the grid**: dropping it on the middle of a pane shows
+      it there; dropping it on an edge splits that pane; dropping it on an outer edge of the whole
+      grid splits the layout itself (VS Code style). The base app allows up to four panes; the
+      «Дополнительные панели» pack raises the ceiling to 16 and unlocks the 8-pane preset.
+- [x] **Feature packs** (`plugins/` next to the app, see docs/PLUGINS.md §10): the base app is HTTP
+      + GraphQL, six auth schemes, ru/en and four panes. WebSocket, SSE, Socket.IO, MQTT, gRPC, the
+      AI assistant, the advanced auth schemes, extra languages and extra panes each live in their own
+      folder and can be switched off (or deleted) individually. Their UI and their renderer chunks
+      are absent until the pack is on.
+- [x] **UI language** (Settings → Основные): Russian and English ship with the app; German and
+      Spanish come from the «Дополнительные языки» pack, and a new language is a JSON file dropped
+      into that pack. Translation keys *are* the Russian strings, so an untranslated string degrades
+      to correct Russian instead of a raw key.
+- [x] **Update check against GitHub**: releases first, falling back to version tags for a repository
+      that has not published a release yet; the result distinguishes "no releases", rate limiting,
+      timeout and network failure, and shows the release date and notes.
 
 ## Out of scope (needs a hosted backend)
 

@@ -11,8 +11,8 @@ import { useSettings } from '@renderer/store/settings'
 import { useScope } from '@renderer/lib/hooks'
 import { beautify } from '@renderer/lib/beautify'
 import { useGraphqlSchema } from '@renderer/store/graphql'
-import { ensureGraphqlCompletion, setGraphqlSchema } from '@renderer/lib/graphql-completion'
 
+import { tr } from '@renderer/lib/i18n'
 const BODY_TYPES: { id: RequestBody['type']; label: string }[] = [
   { id: 'none', label: 'none' },
   { id: 'raw', label: 'raw' },
@@ -109,9 +109,7 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
       </div>
 
       {body.type === 'none' && (
-        <div style={{ padding: '30px 14px', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}>
-          Тело запроса отсутствует
-        </div>
+        <div style={{ padding: '30px 14px', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}> {tr('Тело запроса отсутствует')} </div>
       )}
 
       {body.type === 'raw' && (
@@ -162,13 +160,19 @@ function GraphqlBody({
   const [docsOpen, setDocsOpen] = useState(false)
 
   // Register the (single) Monaco completion provider once, and feed it this
-  // request's schema while the GraphQL body is mounted.
+  // request's schema while the GraphQL body is mounted. The provider pulls in
+  // Monaco, so it is imported on demand rather than at startup.
   useEffect(() => {
-    ensureGraphqlCompletion()
-  }, [])
-  useEffect(() => {
-    setGraphqlSchema(entry?.schema ?? null)
-    return () => setGraphqlSchema(null)
+    let live = true
+    void import('@renderer/lib/graphql-completion').then((m) => {
+      if (!live) return
+      m.ensureGraphqlCompletion()
+      m.setGraphqlSchema(entry?.schema ?? null)
+    })
+    return () => {
+      live = false
+      void import('@renderer/lib/graphql-completion').then((m) => m.setGraphqlSchema(null))
+    }
   }, [entry?.schema])
 
   const runIntrospect = () => {
@@ -298,9 +302,9 @@ function FormDataTable({
       <div className="kv-table">
         <div className="kv-head" style={{ gridTemplateColumns: '26px 1fr 90px 1.3fr 28px' }}>
           <span />
-          <span>Ключ</span>
-          <span>Тип</span>
-          <span>Значение</span>
+          <span>{tr('Ключ')}</span>
+          <span>{tr('Тип')}</span>
+          <span>{tr('Значение')}</span>
           <span />
         </div>
         {items.map((r, i) => (
@@ -339,9 +343,7 @@ function FormDataTable({
         <div className="kv-row" style={{ cursor: 'pointer' }} onClick={add}>
           <span />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--tx-2)', fontSize: 12, height: 30, paddingLeft: 9 }}>
-            <Icon name="plus" size={13} />
-            Добавить поле
-          </div>
+            <Icon name="plus" size={13} /> {tr('Добавить поле')} </div>
         </div>
       </div>
     </div>

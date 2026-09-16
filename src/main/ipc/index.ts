@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { IPC, type OpenFileOptions, type SaveFileOptions } from '@shared/ipc-contract'
 import type { FilePickResult } from '@shared/types'
 import { registerHttpHandlers } from '../http'
@@ -17,6 +17,7 @@ import { registerRealtimeHandlers } from '../realtime'
 import { registerGrpcHandlers } from '../grpc'
 import { registerSqliteHandlers } from '../sqlite'
 import { checkForUpdate } from '../update'
+import { FeatureRegistry, registerFeatureHandlers } from '../features'
 
 /** Max size of a user-picked text file the renderer may read (runner data files). */
 const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
@@ -34,9 +35,17 @@ export interface IpcContext {
 }
 
 export function registerIpc(ctx: IpcContext): void {
+  const windowOf = (sender: WebContents): BrowserWindow | null => BrowserWindow.fromWebContents(sender) ?? ctx.getWindow()
+
   // Persistent cookie jar (per workspace) — also injected into the HTTP engine.
   const cookieJar = new CookieManager(ctx.storage)
   void cookieJar.load()
+
+  // Feature plugins bundled in `plugins/`: declarative capability packs that
+  // decide which protocols, auth schemes, languages and pane counts exist.
+  const features = new FeatureRegistry(ctx.storage)
+  void features.load()
+  registerFeatureHandlers(features)
 
   // User plugins (docs/PLUGINS.md): discovery, grants, sandboxed dispatch.
   const plugins = registerPluginHandlers(ipcMain, ctx.storage, ctx.getWindow)
@@ -53,10 +62,10 @@ export function registerIpc(ctx: IpcContext): void {
   registerCookieHandlers(ipcMain, cookieJar)
 
   // Realtime: WebSocket + SSE clients (streamed to the renderer per connection).
-  registerRealtimeHandlers(ipcMain, ctx.getWindow)
+  registerRealtimeHandlers(ipcMain)
 
   // gRPC client (proto parse + unary/streaming calls, streamed per call).
-  registerGrpcHandlers(ipcMain, ctx.getWindow)
+  registerGrpcHandlers(ipcMain)
 
   // SQLite backup (optional, pure-WASM sql.js) — export/import a workspace.
   registerSqliteHandlers(ipcMain)
@@ -78,8 +87,8 @@ export function registerIpc(ctx: IpcContext): void {
   registerGraphqlHandlers(ipcMain)
 
   // Dialogs + filesystem bridges.
-  ipcMain.handle(IPC.dialog.openFile, async (_e, opts: OpenFileOptions): Promise<FilePickResult[] | null> => {
-    const win = ctx.getWindow()
+  ipcMain.handle(IPC.dialog.openFile, async (e, opts: OpenFileOptions): Promise<FilePickResult[] | null> => {
+    const win = windowOf(e.sender)
     const result = win
       ? await dialog.showOpenDialog(win, {
           properties: opts.multiple ? ['openFile', 'multiSelections'] : ['openFile'],
@@ -103,8 +112,8 @@ export function registerIpc(ctx: IpcContext): void {
     })
   })
 
-  ipcMain.handle(IPC.dialog.saveFile, async (_e, opts: SaveFileOptions): Promise<string | null> => {
-    const win = ctx.getWindow()
+  ipcMain.handle(IPC.dialog.saveFile, async (e, opts: SaveFileOptions): Promise<string | null> => {
+    const win = windowOf(e.sender)
     const result = win
       ? await dialog.showSaveDialog(win, { defaultPath: opts.defaultName, filters: opts.filters })
       : await dialog.showSaveDialog({ defaultPath: opts.defaultName, filters: opts.filters })
@@ -135,14 +144,15 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle(IPC.app.openExternal, async (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) await shell.openExternal(url)
   })
-  ipcMain.handle(IPC.app.minimize, () => ctx.getWindow()?.minimize())
-  ipcMain.handle(IPC.app.maximize, () => {
-    const win = ctx.getWindow()
+  // Window controls act on the window that asked (main or a detached pane).
+  ipcMain.handle(IPC.app.minimize, (e) => windowOf(e.sender)?.minimize())
+  ipcMain.handle(IPC.app.maximize, (e) => {
+    const win = windowOf(e.sender)
     if (!win) return
     if (win.isMaximized()) win.unmaximize()
     else win.maximize()
   })
-  ipcMain.handle(IPC.app.close, () => ctx.getWindow()?.close())
+  ipcMain.handle(IPC.app.close, (e) => windowOf(e.sender)?.close())
   ipcMain.handle(IPC.app.getVersion, () => app.getVersion())
 
   // Update checker — GitHub Releases, no own backend. Never throws.

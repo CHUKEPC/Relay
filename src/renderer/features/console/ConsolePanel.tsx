@@ -5,6 +5,7 @@ import { useConsole, type ConsoleEntry } from '@renderer/store/console'
 import { useUi, type ConsoleDock } from '@renderer/store/ui'
 import { trackDrag } from '@renderer/lib/drag'
 import { clamp } from '@renderer/lib/math'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-console.css'
 
 /* ============================================================
@@ -137,10 +138,10 @@ function EntryDetails({ e }: { e: ConsoleEntry }): JSX.Element {
           {e.error}
         </div>
       )}
-      <HeaderList title="Заголовки запроса" rows={e.requestHeaders} />
-      <HeaderList title="Заголовки ответа" rows={e.responseHeaders} />
-      <BodyBlock title="Тело запроса" body={e.requestBody} />
-      <BodyBlock title="Тело ответа" body={e.responseBody} />
+      <HeaderList title={tr('Заголовки запроса')} rows={e.requestHeaders} />
+      <HeaderList title={tr('Заголовки ответа')} rows={e.responseHeaders} />
+      <BodyBlock title={tr('Тело запроса')} body={e.requestBody} />
+      <BodyBlock title={tr('Тело ответа')} body={e.responseBody} />
     </div>
   )
 }
@@ -250,11 +251,11 @@ export function ConsolePanel(): JSX.Element | null {
         : { width: size }
 
   return (
-    <div className={`console-drawer dock-${dock}`} style={rootStyle} role="region" aria-label="Консоль">
+    <div className={`console-drawer dock-${dock}`} style={rootStyle} role="region" aria-label={tr('Консоль')}>
       {dock !== 'float' && <div className="console-resize" onMouseDown={onResizeDown} />}
       <div className="console-head" onMouseDown={onHeadDown}>
         <Icon name="code2" size={15} className="console-head-ico" />
-        <span className="console-head-title">Консоль</span>
+        <span className="console-head-title">{tr('Консоль')}</span>
         <span className="console-head-count">{entries.length}</span>
         <div className="console-head-spacer" />
         <div className="console-dock-group">
@@ -272,10 +273,8 @@ export function ConsolePanel(): JSX.Element | null {
           ))}
         </div>
         <button type="button" className="btn ghost console-head-btn" onClick={clear} disabled={entries.length === 0}>
-          <Icon name="trash" size={14} />
-          Очистить
-        </button>
-        <button type="button" className="icon-btn" onClick={() => setOpen(false)} title="Закрыть консоль" aria-label="Закрыть консоль">
+          <Icon name="trash" size={14} /> {tr('Очистить')} </button>
+        <button type="button" className="icon-btn" onClick={() => setOpen(false)} title={tr('Закрыть консоль')} aria-label={tr('Закрыть консоль')}>
           <Icon name="close" size={15} />
         </button>
       </div>
@@ -285,8 +284,8 @@ export function ConsolePanel(): JSX.Element | null {
           <div className="console-empty-ico">
             <Icon name="code2" size={22} />
           </div>
-          <div className="console-empty-title">Логи пусты</div>
-          <div className="console-empty-sub">Отправьте запрос — детали появятся здесь.</div>
+          <div className="console-empty-title">{tr('Логи пусты')}</div>
+          <div className="console-empty-sub">{tr('Отправьте запрос — детали появятся здесь.')}</div>
         </div>
       ) : (
         <div className="console-list">

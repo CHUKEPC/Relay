@@ -1,35 +1,71 @@
-/* Split-screen panes (app/Workspace.tsx).
-   The request-editor area can show 1-4 panes, each pinned to an open tab.
-   Reuses tokens from base.css; 1px grid gap over var(--line) draws the seams. */
+/* Split-screen panes (app/Workspace.tsx, store/panes.ts).
+   A binary split tree: every split has a draggable divider, every pane its own
+   header, tab and builder/response sizes. Reuses tokens from base.css. */
 
 .panes {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  display: grid;
-  gap: 1px;
+  display: flex;
+  background: var(--bg-0);
+  /* anchor for the outer edge drop strips */
+  position: relative;
+}
+
+.pane-split {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.pane-split.row {
+  flex-direction: row;
+}
+.pane-split.col {
+  flex-direction: column;
+}
+
+.pane-slot {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-grow: 0;
+  flex-shrink: 1;
+}
+
+.pane-divider {
+  flex: none;
+  position: relative;
   background: var(--line);
+  z-index: 5;
 }
-
-.panes-2 {
-  grid-template-columns: 1fr 1fr;
+.pane-divider.row {
+  width: 1px;
+  cursor: col-resize;
 }
-
-/* Terminator-style: left pane full height, right column split into two rows. */
-.panes-3 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+.pane-divider.col {
+  height: 1px;
+  cursor: row-resize;
 }
-.panes-3 > .pane:first-child {
-  grid-row: 1 / 3;
+/* Wider invisible grab area around the 1px seam. */
+.pane-divider::before {
+  content: '';
+  position: absolute;
 }
-
-.panes-4 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+.pane-divider.row::before {
+  inset: 0 -4px;
+}
+.pane-divider.col::before {
+  inset: -4px 0;
+}
+.pane-divider:hover,
+.pane-divider:active {
+  background: var(--accent);
 }
 
 .pane {
+  flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -38,33 +74,53 @@
   background: var(--bg-0);
 }
 
-/* slim 30px pane header */
+/* slim 30px pane header, draggable to move/swap panes */
 .pane-head {
   height: 30px;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 4px 0 8px;
+  gap: 4px;
+  padding: 0 4px 0 2px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-1);
   font-size: 12px;
   min-width: 0;
+  cursor: grab;
+  box-shadow: inset 0 2px 0 transparent;
+  transition: box-shadow 0.14s, background 0.14s;
+}
+.pane.active > .pane-head {
+  background: var(--bg-2);
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 
-.pane-head-label {
-  color: var(--tx-3);
+.pane-grip {
   flex: none;
-}
-.pane-head-name {
-  color: var(--tx-1);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--tx-3);
 }
 
-/* tab picker trigger (extra panes) */
+.pane-num {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--tx-3);
+  background: var(--bg-3);
+}
+.pane-num.on {
+  color: var(--accent-fg);
+  background: var(--accent);
+}
+
 .pane-tab-pick {
   display: inline-flex;
   align-items: center;
@@ -76,10 +132,15 @@
   color: var(--tx-1);
   min-width: 0;
   max-width: 100%;
+  cursor: pointer;
   transition: background 0.14s;
 }
 .pane-tab-pick:hover {
   background: var(--bg-hover);
+}
+.pane.active .pane-tab-pick {
+  color: var(--tx-0);
+  font-weight: 500;
 }
 .pane-tab-pick .label {
   overflow: hidden;
@@ -90,25 +151,163 @@
   color: var(--tx-3);
 }
 
+.pane-dirty {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .pane-pick-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pane-pick-note {
+  flex: none;
+  font-size: 11px;
+  color: var(--tx-3);
+}
 
-.pane-head .pane-close {
+.pane-head .pane-act {
   width: 22px;
   height: 22px;
   flex: none;
+  cursor: pointer;
 }
 
-/* empty slot body */
+.pane-menu-kbd {
+  flex: none;
+  margin-left: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tx-3);
+}
+
+/* empty pane body */
 .pane-blank {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.pane-blank-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-1);
+}
+.pane-blank-sub {
+  font-size: 12px;
   color: var(--tx-3);
+  max-width: 260px;
+}
+
+/* drop target while dragging a pane header */
+.pane-drop {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  transition: all 0.1s;
+}
+.pane-drop-center {
+  inset: 30px 0 0 0;
+}
+.pane-drop-left {
+  inset: 30px 50% 0 0;
+}
+.pane-drop-right {
+  inset: 30px 0 0 50%;
+}
+.pane-drop-up {
+  inset: 30px 0 50% 0;
+}
+.pane-drop-down {
+  inset: 50% 0 0 0;
+}
+/* Iframes and editors swallow drag events; ignore them while a pane is dragged. */
+body.pane-dragging .pane iframe,
+body.pane-dragging .pane .monaco-host {
+  pointer-events: none;
+}
+
+/* tab strip: tab visible in another pane / separate window */
+.rtab.in-pane {
+  box-shadow: inset 0 -2px 0 color-mix(in oklch, var(--accent) 45%, transparent);
+}
+.rtab .tab-window {
+  flex: none;
+  color: var(--accent);
+}
+
+/* detached pane window */
+.detached-app .titlebar {
+  gap: 8px;
+}
+.detached-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: 12.5px;
+  font-weight: 500;
+  color: var(--tx-0);
+}
+.detached-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detached-return {
+  height: 26px;
+}
+
+/* Narrow panes: the builder sub-tab row scrolls on its own instead of widening
+   the whole builder (which showed a horizontal scrollbar under it). */
+.pane .req-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pane .req-tabs::-webkit-scrollbar {
+  display: none;
+}
+.pane .req-tabs > * {
+  flex: none;
+}
+
+/* Outer edge strips: dropping here splits the whole grid, VS Code style.
+   Rendered only while a drop is in flight, so they never block the UI. */
+.pane-edge {
+  position: absolute;
+  z-index: 30;
+  background: transparent;
+  transition: background 0.1s;
+}
+.pane-edge.on {
+  background: color-mix(in oklch, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.pane-edge-left {
+  inset: 0 auto 0 0;
+  width: 44px;
+}
+.pane-edge-right {
+  inset: 0 0 0 auto;
+  width: 44px;
+}
+.pane-edge-up {
+  inset: 0 44px auto 44px;
+  height: 36px;
+}
+.pane-edge-down {
+  inset: auto 44px 0 44px;
+  height: 36px;
 }

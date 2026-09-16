@@ -5,6 +5,7 @@ import { statusColor } from '@renderer/lib/status-color'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
+import { tr } from '@renderer/lib/i18n'
 export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }): JSX.Element {
   const examples = req.examples ?? []
 
@@ -12,8 +13,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
     return (
       <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}>
         Пока нет сохранённых примеров. Отправьте запрос и нажмите{' '}
-        <Icon name="doc" size={12} style={{ verticalAlign: 'middle' }} /> «Сохранить как пример» в панели ответа.
-      </div>
+        <Icon name="doc" size={12} style={{ verticalAlign: 'middle' }} /> {tr('«Сохранить как пример» в панели ответа.')} </div>
     )
   }
 
@@ -37,13 +37,11 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
               style={{ height: 28 }}
               onClick={() => {
                 restoreExample(tabId, ex)
-                useUi.getState().showToast('Пример показан в панели ответа')
+                useUi.getState().showToast(tr('Пример показан в панели ответа'))
               }}
-              title="Показать в панели ответа"
+              title={tr('Показать в панели ответа')}
             >
-              <Icon name="eye" size={13} />
-              Открыть
-            </button>
+              <Icon name="eye" size={13} /> {tr('Открыть')} </button>
             <button
               className="icon-btn"
               style={{ width: 28, height: 28 }}
@@ -52,7 +50,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
                 if (useTabs.getState().doc.activeTabId !== tabId) useTabs.getState().setActive(tabId)
                 deleteExample(ex.id)
               }}
-              title="Удалить пример"
+              title={tr('Удалить пример')}
             >
               <Icon name="trash" size={14} />
             </button>

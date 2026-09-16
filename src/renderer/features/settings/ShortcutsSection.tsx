@@ -2,20 +2,32 @@ import { useEffect, useState } from 'react'
 import { Kbd } from '@renderer/components/primitives'
 import { MOD } from '@renderer/lib/platform'
 import { KEY_ACTIONS, comboFromEvent, findConflict, formatCombo } from '@renderer/lib/keymap'
-import type { KeyActionId } from '@renderer/lib/keymap'
+import type { KeyActionGroup, KeyActionId } from '@renderer/lib/keymap'
 import { useSettings } from '@renderer/store/settings'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-keys.css'
 
 /** Non-rebindable shortcuts shown as a static reference group. */
 const FIXED_SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: 'Закрыть оверлей', keys: ['Esc'] },
-  { label: 'Поиск в ответе', keys: [MOD, 'F'] }
+  { label: 'Поиск в ответе', keys: [MOD, 'F'] },
+  { label: 'Отменить изменение в запросе', keys: [MOD, 'Z'] },
+  { label: 'Вернуть изменение', keys: [MOD, 'Shift', 'Z'] }
 ]
 
-/** A combo is bindable when it includes the mod key or ends in an F-key. */
+/** A combo is bindable when it includes the mod or alt key, or ends in an F-key. */
 function isBindable(combo: string): boolean {
-  return combo.includes('mod') || /(^|\+)f\d{1,2}$/.test(combo)
+  return combo.includes('mod') || combo.includes('alt') || /(^|\+)f\d{1,2}$/.test(combo)
 }
+
+const GROUPS: { id: KeyActionGroup; title: string; hint?: string }[] = [
+  { id: 'general', title: 'Основные' },
+  {
+    id: 'panes',
+    title: 'Панели',
+    hint: 'Действуют на активную панель. В отдельном окне «переместить» двигает само окно, а «сдвинуть границу» меняет его размер.'
+  }
+]
 
 export function ShortcutsSection(): JSX.Element {
   const keybindings = useSettings((s) => s.settings.keybindings)
@@ -53,7 +65,7 @@ export function ShortcutsSection(): JSX.Element {
       const combo = comboFromEvent(e)
       if (!combo) return // pure-modifier press — keep waiting
       if (!isBindable(combo)) {
-        setCaptureError(`Сочетание должно содержать ${MOD} или F-клавишу`)
+        setCaptureError(`Сочетание должно содержать ${MOD}, Alt или F-клавишу`)
         return
       }
       const custom = useSettings.getState().settings.keybindings
@@ -77,8 +89,8 @@ export function ShortcutsSection(): JSX.Element {
 
   return (
     <>
-      <div className="set-h">Горячие клавиши</div>
-      <div className="set-sub">Назначайте собственные сочетания клавиш для действий Relay.</div>
+      <div className="set-h">{tr('Горячие клавиши')}</div>
+      <div className="set-sub">{tr('Назначайте собственные сочетания клавиш для действий Relay.')}</div>
 
       <div className="keys-toolbar">
         <button
@@ -88,13 +100,14 @@ export function ShortcutsSection(): JSX.Element {
             persist({})
             stopCapture()
           }}
-        >
-          Сбросить все
-        </button>
+        > {tr('Сбросить все')} </button>
       </div>
 
-      <div>
-        {KEY_ACTIONS.map((action) => {
+      {GROUPS.map((group) => (
+      <div key={group.id}>
+        <div className="set-group-label">{tr(group.title)}</div>
+        {group.hint && <div className="set-sub" style={{ marginTop: -6 }}>{group.hint}</div>}
+        {KEY_ACTIONS.filter((a) => a.group === group.id).map((action) => {
           const overridden = keybindings[action.id] !== undefined
           const combo = overridden ? keybindings[action.id] : action.defaultCombo
           const capturing = capturingId === action.id
@@ -102,18 +115,18 @@ export function ShortcutsSection(): JSX.Element {
             <div className="set-row" key={action.id}>
               <div className="label">
                 <div className="t">
-                  {action.label}
-                  {overridden && <span className="keys-badge">изменено</span>}
+                  {tr(action.label)}
+                  {overridden && <span className="keys-badge">{tr('изменено')}</span>}
                 </div>
                 {capturing && captureError && <div className="keys-conflict">{captureError}</div>}
               </div>
 
               {capturing ? (
-                <div className="keys-capture">Нажмите сочетание клавиш… Esc — отмена</div>
+                <div className="keys-capture">{tr('Нажмите сочетание клавиш… Esc — отмена')}</div>
               ) : (
                 <div className="keys-combo">
                   {combo === '' ? (
-                    <span className="keys-off">не назначено</span>
+                    <span className="keys-off">{tr('не назначено')}</span>
                   ) : (
                     formatCombo(combo).map((k, i) => <Kbd key={i}>{k}</Kbd>)
                   )}
@@ -122,9 +135,7 @@ export function ShortcutsSection(): JSX.Element {
 
               <div className="keys-actions">
                 {capturing ? (
-                  <button className="btn ghost" onClick={stopCapture}>
-                    Отмена
-                  </button>
+                  <button className="btn ghost" onClick={stopCapture}> {tr('Отмена')} </button>
                 ) : (
                   <>
                     <button
@@ -133,13 +144,9 @@ export function ShortcutsSection(): JSX.Element {
                         setCaptureError(null)
                         setCapturingId(action.id)
                       }}
-                    >
-                      Изменить
-                    </button>
+                    > {tr('Изменить')} </button>
                     {overridden && (
-                      <button className="btn ghost" onClick={() => resetOne(action.id)}>
-                        Сбросить
-                      </button>
+                      <button className="btn ghost" onClick={() => resetOne(action.id)}> {tr('Сбросить')} </button>
                     )}
                   </>
                 )}
@@ -148,13 +155,14 @@ export function ShortcutsSection(): JSX.Element {
           )
         })}
       </div>
+      ))}
 
-      <div className="set-group-label">Фиксированные</div>
+      <div className="set-group-label">{tr('Фиксированные')}</div>
       <div>
         {FIXED_SHORTCUTS.map((s) => (
           <div className="set-row" key={s.label}>
             <div className="label">
-              <div className="t">{s.label}</div>
+              <div className="t">{tr(s.label)}</div>
             </div>
             <div className="keys-combo">
               {s.keys.map((k, j) => (

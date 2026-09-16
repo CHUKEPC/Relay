@@ -23,6 +23,8 @@ export function defaultSettingsDoc(): SettingsDoc {
     customTheme: null,
     keybindings: {},
     updateCheckEnabled: true,
+    language: 'ru',
+    disableHardwareAcceleration: false,
     onboardingDone: false,
     requestTimeoutMs: 30000,
     followRedirects: true,

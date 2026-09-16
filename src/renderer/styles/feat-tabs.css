@@ -28,6 +28,13 @@
   min-width: 0; /* lets the ellipsis kick in inside a shrinking flex item */
 }
 
+/* The dot and the close X share one 16px slot: a dirty tab shows only the dot
+   until hovered, so the always-visible X of the active tab never covers it. */
+.rtab.is-dirty:not(:hover) .x {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .tabstrip-add {
   flex: none;
   align-self: center;

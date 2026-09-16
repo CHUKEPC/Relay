@@ -1,9 +1,9 @@
 import { APP_NAME, APP_VERSION, FEEDBACK_EMAIL } from '@shared/constants'
 import { Icon } from '@renderer/components/Icon'
 import { useUi } from '@renderer/store/ui'
-import { startTour } from '@renderer/features/onboarding/Tour'
 import { UpdatesCard } from './UpdatesCard'
 
+import { tr } from '@renderer/lib/i18n'
 const PLATFORM_LABELS: Record<string, string> = {
   darwin: 'macOS',
   win32: 'Windows',
@@ -17,16 +17,16 @@ export function AboutSection(): JSX.Element {
   const copyEmail = async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(FEEDBACK_EMAIL)
-      showToast('Email скопирован')
+      showToast(tr('Email скопирован'))
     } catch {
-      showToast('Не удалось скопировать', 'error')
+      showToast(tr('Не удалось скопировать'), 'error')
     }
   }
 
   return (
     <>
-      <div className="set-h">О приложении</div>
-      <div className="set-sub">Версия, платформа и обратная связь.</div>
+      <div className="set-h">{tr('О приложении')}</div>
+      <div className="set-sub">{tr('Версия, платформа и обратная связь.')}</div>
 
       <div className="about-hero">
         <div className="about-mark">
@@ -38,12 +38,12 @@ export function AboutSection(): JSX.Element {
         </div>
       </div>
 
-      <div className="about-tagline">API-клиент со встроенным AI-ассистентом.</div>
+      <div className="about-tagline">{tr('API-клиент со встроенным AI-ассистентом.')}</div>
 
       <div className="set-row">
         <div className="label">
-          <div className="t">Платформа</div>
-          <div className="d">Операционная система, на которой запущено приложение</div>
+          <div className="t">{tr('Платформа')}</div>
+          <div className="d">{tr('Операционная система, на которой запущено приложение')}</div>
         </div>
         <span className="mono" style={{ fontSize: 12.5, color: 'var(--tx-1)' }}>
           {platform}
@@ -53,8 +53,8 @@ export function AboutSection(): JSX.Element {
       <UpdatesCard />
 
       <div className="about-card">
-        <h3>Обратная связь</h3>
-        <p>Есть вопросы, пожелания или нашли баг — напишите нам.</p>
+        <h3>{tr('Обратная связь')}</h3>
+        <p>{tr('Есть вопросы, пожелания или нашли баг — напишите нам.')}</p>
         <div className="about-email">{FEEDBACK_EMAIL}</div>
         <div className="about-card-actions">
           <button
@@ -63,22 +63,10 @@ export function AboutSection(): JSX.Element {
               void window.api.openExternal('mailto:' + FEEDBACK_EMAIL + '?subject=Relay%20Feedback')
             }
           >
-            <Icon name="mail" size={14} /> Написать
-          </button>
+            <Icon name="mail" size={14} /> {tr('Написать')} </button>
           <button className="btn" onClick={() => void copyEmail()}>
-            <Icon name="copy" size={14} /> Копировать
-          </button>
+            <Icon name="copy" size={14} /> {tr('Копировать')} </button>
         </div>
-        <button
-          className="btn ghost tour-restart"
-          onClick={() => {
-            // The tour spotlights the main window — close settings first.
-            useUi.getState().closeSettings()
-            setTimeout(startTour, 250)
-          }}
-        >
-          <Icon name="refresh" size={14} /> Показать тур по интерфейсу
-        </button>
       </div>
     </>
   )

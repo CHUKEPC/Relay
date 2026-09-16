@@ -6,6 +6,7 @@ import { useUi } from '@renderer/store/ui'
 import { parseHttpBlock } from '@renderer/lib/parse-http'
 import { parseCurl } from '@shared/curl'
 
+import { tr } from '@renderer/lib/i18n'
 interface Segment {
   type: 'text' | 'code'
   lang?: string
@@ -103,21 +104,21 @@ function CodeArtifact({ lang, code }: { lang: string; code: string }) {
         return
       }
       patch(p)
-      showToast('Применено к текущему запросу')
+      showToast(tr('Применено к текущему запросу'))
     } else if (isCurl) {
       const { request } = parseCurl(code)
       openNew(request)
-      showToast('Импортировано как новый запрос')
+      showToast(tr('Импортировано как новый запрос'))
     } else if (lang === 'javascript' || lang === 'js') {
       patch({ testScript: code })
-      showToast('Вставлено как тест-скрипт')
+      showToast(tr('Вставлено как тест-скрипт'))
     } else if (lang === 'json') {
       // Set the body AND a matching Content-Type, preserving other headers.
       const cur = useTabs.getState().activeTab()?.request.headers ?? []
       const headers = cur.filter((h) => h.key.toLowerCase() !== 'content-type')
       headers.push({ key: 'Content-Type', value: 'application/json', enabled: true })
       patch({ body: { type: 'raw', language: 'json', text: code }, headers })
-      showToast('Применено как тело запроса')
+      showToast(tr('Применено как тело запроса'))
     }
   }
 

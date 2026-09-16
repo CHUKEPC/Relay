@@ -1,0 +1,9 @@
+{
+  "id": "websocket",
+  "name": "WebSocket",
+  "description": "Режим WebSocket: постоянное двустороннее соединение, отправка и приём сообщений, шаблоны сообщений.",
+  "version": "1.0.0",
+  "capabilities": [
+    "protocol.websocket"
+  ]
+}

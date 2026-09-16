@@ -7,6 +7,7 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
+import { tr } from '@renderer/lib/i18n'
 /** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
  *  so the user sees the clean, actionable message. */
 function cleanError(msg: string): string {
@@ -112,9 +113,9 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Импорт" width={620}>
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Импорт')} width={620}>
       <div className="field">
-        <label>Формат</label>
+        <label>{tr('Формат')}</label>
         <Segmented
           value={kind}
           onChange={setKind}
@@ -130,7 +131,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         />
       </div>
       <div className="field">
-        <label>Содержимое</label>
+        <label>{tr('Содержимое')}</label>
         <textarea
           className="input"
           style={{ height: 200, fontFamily: 'var(--font-mono)', fontSize: 12, padding: 10, resize: 'vertical' }}
@@ -150,18 +151,12 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           }}
         />
         <button className="btn" style={{ marginTop: 8 }} onClick={() => fileRef.current?.click()}>
-          <Icon name="upload" size={14} />
-          Выбрать файл
-        </button>
+          <Icon name="upload" size={14} /> {tr('Выбрать файл')} </button>
       </div>
       {error && <div style={{ color: 'var(--s-5xx)', fontSize: 12.5, marginTop: 4 }}>{error}</div>}
       <div className="modal-foot">
-        <button className="btn" onClick={() => onOpenChange(false)}>
-          Отмена
-        </button>
-        <button className="btn primary" onClick={doImport}>
-          Импортировать
-        </button>
+        <button className="btn" onClick={() => onOpenChange(false)}> {tr('Отмена')} </button>
+        <button className="btn primary" onClick={doImport}> {tr('Импортировать')} </button>
       </div>
     </Modal>
   )

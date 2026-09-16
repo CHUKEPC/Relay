@@ -5,6 +5,7 @@ import { serializeRows, parseBulk, mergeParsed } from '@renderer/lib/bulk-edit'
 import { Icon } from './Icon'
 import { HighlightedInput } from './HighlightedInput'
 
+import { tr } from '@renderer/lib/i18n'
 function Checkbox({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
     <div className={`ck ${on ? 'on' : ''}`} onClick={onClick} role="checkbox" aria-checked={on}>
@@ -100,9 +101,9 @@ export function KVTable({
                 Headers tab) so there is no confusing empty trailing input. */}
             <div className="kv-head" style={gridStyle}>
               <span />
-              <span>Ключ</span>
-              <span>Значение</span>
-              {showDescription && <span>Описание</span>}
+              <span>{tr('Ключ')}</span>
+              <span>{tr('Значение')}</span>
+              {showDescription && <span>{tr('Описание')}</span>}
               <span />
             </div>
             {rows.map((r, i) => (
@@ -129,12 +130,12 @@ export function KVTable({
                   <div className="kv-cell">
                     <input
                       value={r.description ?? ''}
-                      placeholder="описание"
+                      placeholder={tr('описание')}
                       onChange={(e) => update(i, { description: e.target.value })}
                     />
                   </div>
                 )}
-                <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => remove(i)} title="Удалить">
+                <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => remove(i)} title={tr('Удалить')}>
                   <Icon name="close" size={13} />
                 </button>
               </div>
@@ -142,9 +143,7 @@ export function KVTable({
             <div className="kv-row" style={{ ...gridStyle, cursor: 'pointer' }} onClick={add}>
               <span />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--tx-2)', fontSize: 12, height: 30, paddingLeft: 9 }}>
-                <Icon name="plus" size={13} />
-                Добавить
-              </div>
+                <Icon name="plus" size={13} /> {tr('Добавить')} </div>
             </div>
           </div>
         </>

@@ -169,3 +169,26 @@
 .pop-item.on { color: var(--tx-0); }
 .pop-item .tick { margin-left: auto; color: var(--accent); }
 .pop-sep { height: 1px; background: var(--line); margin: 4px 0; }
+
+/* ---------- providers: empty state, inline links, model picker ---------- */
+.prov-empty { border: 1px dashed var(--line-2); border-radius: var(--radius-md); padding: 20px; background: var(--bg-1); }
+.prov-empty-title { font-size: 13.5px; font-weight: 600; color: var(--tx-0); margin-bottom: 6px; }
+.prov-empty-sub { font-size: 12.5px; line-height: 1.55; color: var(--tx-2); }
+.link-btn { display: inline; padding: 0; border: none; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.model-pop { width: 340px; padding: 0; display: flex; flex-direction: column; max-height: 380px; }
+.model-pop-head { display: flex; gap: 4px; align-items: center; padding: 6px; border-bottom: 1px solid var(--line); }
+.model-pop-head .input { height: 30px; flex: 1; min-width: 0; font-size: 12px; }
+.model-pop-list { overflow-y: auto; padding: 5px; min-height: 0; }
+.model-pop-note { padding: 10px; font-size: 12px; line-height: 1.5; color: var(--tx-3); }
+.model-pop-foot { padding: 6px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--tx-3); }
+
+/* Update check: release notes block under the "check now" row. */
+.upd-notes { margin: 4px 0 0; padding: 10px 12px; border: 1px solid var(--bd-1); border-radius: 8px; background: var(--bg-2); }
+.upd-notes-date { font-size: 11px; color: var(--tx-3); margin-bottom: 6px; }
+.upd-notes-body { font-size: 12px; color: var(--tx-2); white-space: pre-wrap; max-height: 180px; overflow: auto; }
+
+/* Feature packs (bundled capability plugins) in Settings → Плагины. */
+.pack-ver { font-size: 11px; color: var(--tx-3); margin-left: 8px; font-weight: 400; }
+.pack-caps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pack-cap { font-size: 11px; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line-2); color: var(--tx-3); }

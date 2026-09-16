@@ -22,3 +22,4 @@ CLAUDE.md
 # QA test kit — local testing material, not part of the shipped source
 qa/
 chat/
+__MACOSX/

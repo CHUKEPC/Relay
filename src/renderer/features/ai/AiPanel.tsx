@@ -14,6 +14,7 @@ import { trackDrag } from '@renderer/lib/drag'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
 
+import { tr } from '@renderer/lib/i18n'
 const SUGGESTIONS = [
   { icon: 'info', text: 'Объясни этот ответ', prompt: 'Объясни текущий ответ: что он означает, структуру полей и есть ли проблемы.' },
   { icon: 'warn', text: 'Диагностировать ошибку', prompt: 'Разбери ошибку текущего ответа/запроса и предложи конкретное исправление.' },
@@ -63,7 +64,7 @@ function ResizableAiAside({ children }: { children: ReactNode }) {
         aria-hidden="true"
         onMouseDown={onHandleDown}
         onDoubleClick={() => setAiWidth(384)}
-        title="Перетащите, чтобы изменить ширину · двойной клик — сброс"
+        title={tr('Перетащите, чтобы изменить ширину · двойной клик — сброс')}
       />
       {children}
     </aside>
@@ -117,12 +118,10 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
         <div className="ai-title">
           <span className="ai-spark">
             <Icon name="sparkle" size={14} />
-          </span>
-          AI-ассистент
-        </div>
+          </span> {tr('AI-ассистент')} </div>
         <ModelPill />
         {thread.length > 0 && (
-          <button className="icon-btn" title="Новый диалог" onClick={() => useAi.getState().clearThread()}>
+          <button className="icon-btn" title={tr('Новый диалог')} onClick={() => useAi.getState().clearThread()}>
             <Icon name="plus" size={15} />
           </button>
         )}
@@ -141,8 +140,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
               Relay AI
             </div>
             <div className="bubble">
-              <p>
-                Привет! Я подключён к текущему запросу и ответу. Могу <strong>объяснить ответ</strong>, <strong>сгенерировать запрос</strong> из описания, разобрать ошибку, написать тесты или собрать <code>curl</code>.
+              <p> {tr('Привет! Я подключён к текущему запросу и ответу. Могу')} <strong>{tr('объяснить ответ')}</strong>, <strong>{tr('сгенерировать запрос')}</strong> {tr('из описания, разобрать ошибку, написать тесты или собрать')} <code>curl</code>.
               </p>
             </div>
             <div className="ai-suggest">
@@ -196,7 +194,7 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
       <div className="ai-composer">
         <div className="composer-box">
           <textarea
-            placeholder="Спросите про запрос, ошибку или API…"
+            placeholder={tr('Спросите про запрос, ошибку или API…')}
             value={input}
             rows={1}
             onChange={(e) => {
@@ -212,13 +210,11 @@ function AiPanelConnected({ onClose }: { onClose: () => void }) {
             }}
           />
           <div className="composer-foot">
-            <button className={`ctxbtn ${ctxOn ? 'on' : ''}`} onClick={() => setCtxOn((o) => !o)} title="Прикреплять контекст запроса/ответа">
-              <Icon name="link" size={13} />
-              Контекст запроса
-            </button>
+            <button className={`ctxbtn ${ctxOn ? 'on' : ''}`} onClick={() => setCtxOn((o) => !o)} title={tr('Прикреплять контекст запроса/ответа')}>
+              <Icon name="link" size={13} /> {tr('Контекст запроса')} </button>
             <div className="grow" />
             {isStreaming ? (
-              <button className="send-msg" onClick={() => cancel()} title="Остановить">
+              <button className="send-msg" onClick={() => cancel()} title={tr('Остановить')}>
                 <Icon name="stop" size={14} />
               </button>
             ) : (
@@ -291,7 +287,7 @@ function ModelPill() {
             </div>
           ))}
         {providers.filter((p) => p.hasKey).length === 0 && (
-          <div style={{ padding: 12, fontSize: 12, color: 'var(--tx-3)' }}>Нет подключённых провайдеров</div>
+          <div style={{ padding: 12, fontSize: 12, color: 'var(--tx-3)' }}>{tr('Нет подключённых провайдеров')}</div>
         )}
       </div>
     </Popover>
@@ -305,9 +301,7 @@ function AiPanelEmpty({ onClose, onConnect }: { onClose: () => void; onConnect: 
         <div className="ai-title">
           <span className="ai-spark">
             <Icon name="sparkle" size={14} />
-          </span>
-          AI-ассистент
-        </div>
+          </span> {tr('AI-ассистент')} </div>
         <button className="icon-btn" onClick={onClose}>
           <Icon name="close" size={15} />
         </button>
@@ -317,13 +311,11 @@ function AiPanelEmpty({ onClose, onConnect }: { onClose: () => void; onConnect: 
           <div className="empty-ico" style={{ color: 'var(--accent)', background: 'var(--accent-soft)', borderColor: 'transparent' }}>
             <Icon name="sparkle" size={24} />
           </div>
-          <h3>Подключите AI-провайдера</h3>
-          <p>Выберите OpenAI, Anthropic, OpenRouter или локальную модель и добавьте ключ — ассистент заработает прямо здесь.</p>
+          <h3>{tr('Подключите AI-провайдера')}</h3>
+          <p>{tr('Выберите OpenAI, Anthropic, OpenRouter или локальную модель и добавьте ключ — ассистент заработает прямо здесь.')}</p>
           <div className="empty-actions">
             <button className="btn primary" onClick={onConnect}>
-              <Icon name="bolt" size={14} />
-              Подключить провайдера
-            </button>
+              <Icon name="bolt" size={14} /> {tr('Подключить провайдера')} </button>
           </div>
         </div>
       </div>

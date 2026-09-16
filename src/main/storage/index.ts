@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ProviderConfig, WorkspaceMeta, WorkspacesDoc } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
@@ -10,6 +10,7 @@ import { SecretStore } from './secrets'
 import {
   defaultCollections,
   defaultCookies,
+  defaultFeatures,
   defaultEnvironments,
   defaultGlobals,
   defaultHistory,
@@ -28,7 +29,8 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   settings: defaultSettings,
   providers: defaultProviders,
   cookies: defaultCookies,
-  plugins: defaultPlugins
+  plugins: defaultPlugins,
+  features: defaultFeatures
 }
 
 /**
@@ -36,7 +38,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
  * settings, AI provider config (+ their safeStorage secrets). Everything else is
  * isolated per workspace.
  */
-const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins'])
+const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features'])
 /** Per-workspace document keys (the isolated working data set). */
 const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies'] as const
 
@@ -318,9 +320,14 @@ export function registerStorageHandlers(storage: StorageManager): void {
     if (!isKnownKey(key)) throw new Error(`Unknown storage key: ${key}`)
     return storage.get(key)
   })
-  ipcMain.handle(IPC.storage.save, async (_e, key: StorageKey, value: unknown) => {
+  ipcMain.handle(IPC.storage.save, async (e, key: StorageKey, value: unknown) => {
     if (!isKnownKey(key)) throw new Error(`Unknown storage key: ${key}`)
     storage.set(key, value as StorageMap[StorageKey])
+    // Keep detached pane windows and the main window showing the same data.
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed() || win.webContents.id === e.sender.id) continue
+      win.webContents.send(IPC.storage.changed, key, value)
+    }
   })
 
   // The `plugin:` namespace is owned by PluginManager (which validates the key

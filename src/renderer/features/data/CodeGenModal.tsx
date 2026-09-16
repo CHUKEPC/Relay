@@ -4,6 +4,7 @@ import { Modal } from '@renderer/components/primitives'
 import { useActiveRequest } from '@renderer/lib/hooks'
 import { CODE_TARGETS, generateCode, type CodeTarget } from '@renderer/lib/codegen'
 
+import { tr } from '@renderer/lib/i18n'
 export function CodeGenModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const req = useActiveRequest()
   const [target, setTarget] = useState<CodeTarget>('curl')
@@ -22,7 +23,7 @@ export function CodeGenModal({ open, onOpenChange }: { open: boolean; onOpenChan
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Сгенерировать код" width={680}>
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Сгенерировать код')} width={680}>
       <div className="seg" style={{ flexWrap: 'wrap', marginBottom: 14 }}>
         {CODE_TARGETS.map((t) => (
           <button key={t.id} className={target === t.id ? 'on' : ''} onClick={() => setTarget(t.id)}>

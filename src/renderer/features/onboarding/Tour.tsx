@@ -4,6 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
 import { kbd } from '@renderer/lib/platform'
 import { clamp } from '@renderer/lib/math'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-tour.css'
 
 interface TourStep {
@@ -57,7 +58,7 @@ const STEPS: TourStep[] = [
   {
     target: '[data-tour="settings"]',
     title: 'Настройки',
-    body: 'Темы, горячие клавиши, AI-провайдеры и справка. Тур можно перезапустить в разделе «О приложении».'
+    body: 'Темы, горячие клавиши, AI-провайдеры и справка. Тур можно перезапустить в разделе «Справка».'
   }
 ]
 
@@ -221,19 +222,20 @@ export function Tour(): JSX.Element | null {
         ref={cardRef}
         style={cardPos ? { top: cardPos.top, left: cardPos.left } : { top: -9999, left: -9999, visibility: 'hidden' }}
       >
-        <button className="tour-skip" title="Пропустить" onClick={() => useTour.getState().stop()}>
+        <button className="tour-skip" title={tr('Закрыть')} onClick={() => useTour.getState().stop()}>
           <Icon name="close" size={13} />
         </button>
+        <div className="tour-progress">
+          Шаг {step + 1} из {STEPS.length}
+        </div>
         <h4>{s.title}</h4>
         <p>{s.body}</p>
         <div className="tour-foot">
-          <span className="tour-progress">
-            {step + 1} из {STEPS.length}
-          </span>
+          {!last && (
+            <button className="btn ghost tour-skip-text" onClick={() => useTour.getState().stop()}> {tr('Пропустить')} </button>
+          )}
           {step > 0 && (
-            <button className="btn ghost" onClick={() => useTour.getState().prev()}>
-              Назад
-            </button>
+            <button className="btn ghost" onClick={() => useTour.getState().prev()}> {tr('Назад')} </button>
           )}
           <button className="btn primary" onClick={() => useTour.getState().next()}>
             {last ? 'Готово' : 'Далее'}

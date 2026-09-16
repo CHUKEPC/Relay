@@ -8,6 +8,7 @@ import { useSettings } from '@renderer/store/settings'
 import { useUi } from '@renderer/store/ui'
 import { STORAGE_VERSION } from '@shared/constants'
 
+import { tr } from '@renderer/lib/i18n'
 function gatherSnapshot(): SqliteSnapshot {
   const env = useEnvironments.getState()
   return {
@@ -29,7 +30,7 @@ export function DataSection(): JSX.Element {
       const snap = gatherSnapshot()
       const base64 = await window.api.sqliteExport(snap)
       if (!base64) {
-        showToast('Экспорт недоступен')
+        showToast(tr('Экспорт недоступен'))
         return
       }
       const saved = await window.api.saveFile({
@@ -38,7 +39,7 @@ export function DataSection(): JSX.Element {
         base64: true,
         filters: [{ name: 'SQLite', extensions: ['sqlite', 'db'] }]
       })
-      if (saved) showToast('Резервная копия SQLite сохранена')
+      if (saved) showToast(tr('Резервная копия SQLite сохранена'))
     } catch (err) {
       showToast(`Ошибка экспорта: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -96,13 +97,9 @@ export function DataSection(): JSX.Element {
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
         <button className="btn primary" onClick={() => void doExport()} disabled={busy}>
-          <Icon name="download" size={15} />
-          Экспорт в SQLite
-        </button>
+          <Icon name="download" size={15} /> {tr('Экспорт в SQLite')} </button>
         <button className="btn" onClick={() => void doImport()} disabled={busy}>
-          <Icon name="upload" size={15} />
-          Импорт из SQLite
-        </button>
+          <Icon name="upload" size={15} /> {tr('Импорт из SQLite')} </button>
       </div>
 
       <div className="set-sub" style={{ marginTop: 18, fontSize: 12 }}>

@@ -12,7 +12,6 @@ export type SettingsSection =
   | 'shortcuts'
   | 'help'
   | 'about'
-export type Layout = 'split-v' | 'split-h'
 export type ConsoleDock = 'bottom' | 'left' | 'right' | 'float'
 
 export interface ConsoleFloatRect {
@@ -22,29 +21,21 @@ export interface ConsoleFloatRect {
   h: number
 }
 
-export interface PanesState {
-  count: 1 | 2 | 3 | 4
-  /** tab ids shown in panes 2..count; null = empty pane */
-  extraTabIds: (string | null)[]
-}
-
 interface UiState {
   sideTab: SideTab
   sidebarCollapsed: boolean
   aiOpen: boolean
   settingsOpen: boolean
   settingsSection: SettingsSection
+  helpTopic: string
   paletteOpen: boolean
   saveDialogOpen: boolean
-  respPct: number
-  layout: Layout
   toast: { id: number; message: string; kind: 'ok' | 'error' } | null
   sidebarWidth: number
   aiWidth: number
   consoleDock: ConsoleDock
   consoleSize: number
   consoleFloat: ConsoleFloatRect
-  panes: PanesState
   importOpen: boolean
   setSideTab: (t: SideTab) => void
   toggleSidebar: () => void
@@ -52,19 +43,16 @@ interface UiState {
   toggleAi: () => void
   openSettings: (section?: SettingsSection) => void
   closeSettings: () => void
+  openHelp: (topic: string) => void
   setPaletteOpen: (v: boolean) => void
   togglePalette: () => void
   setSaveDialogOpen: (v: boolean) => void
-  setRespPct: (p: number) => void
-  toggleLayout: () => void
   showToast: (message: string, kind?: 'ok' | 'error') => void
   setSidebarWidth: (px: number) => void
   setAiWidth: (px: number) => void
   setConsoleDock: (d: ConsoleDock) => void
   setConsoleSize: (px: number) => void
   setConsoleFloat: (rect: ConsoleFloatRect) => void
-  setPaneCount: (c: 1 | 2 | 3 | 4) => void
-  setPaneTab: (index: number, tabId: string | null) => void
   setImportOpen: (v: boolean) => void
 }
 
@@ -150,17 +138,15 @@ export const useUi = create<UiState>((set, get) => {
     aiOpen: true,
     settingsOpen: false,
     settingsSection: 'providers',
+    helpTopic: 'quickstart',
     paletteOpen: false,
     saveDialogOpen: false,
-    respPct: 46,
-    layout: 'split-v',
     toast: null,
     sidebarWidth: typeof prefs.sidebarWidth === 'number' ? clamp(prefs.sidebarWidth, 200, 460) : 270,
     aiWidth: typeof prefs.aiWidth === 'number' ? clamp(prefs.aiWidth, 300, 640) : 384,
     consoleDock: prefs.consoleDock && DOCKS.includes(prefs.consoleDock) ? prefs.consoleDock : 'bottom',
     consoleSize: typeof prefs.consoleSize === 'number' ? clamp(prefs.consoleSize, 160, 800) : 340,
     consoleFloat: initialFloat(),
-    panes: { count: 1, extraTabIds: [] },
     importOpen: false,
     setSideTab: (t) => set({ sideTab: t }),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -168,11 +154,10 @@ export const useUi = create<UiState>((set, get) => {
     toggleAi: () => set((s) => ({ aiOpen: !s.aiOpen })),
     openSettings: (section) => set((s) => ({ settingsOpen: true, settingsSection: section ?? s.settingsSection })),
     closeSettings: () => set({ settingsOpen: false }),
+    openHelp: (topic) => set({ settingsOpen: true, settingsSection: 'help', helpTopic: topic }),
     setPaletteOpen: (v) => set({ paletteOpen: v }),
     togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
     setSaveDialogOpen: (v) => set({ saveDialogOpen: v }),
-    setRespPct: (p) => set({ respPct: Math.max(18, Math.min(82, p)) }),
-    toggleLayout: () => set((s) => ({ layout: s.layout === 'split-v' ? 'split-h' : 'split-v' })),
     showToast: (message, kind = 'ok') => {
       const id = ++toastSeq
       set({ toast: { id, message, kind } })
@@ -199,23 +184,6 @@ export const useUi = create<UiState>((set, get) => {
     setConsoleFloat: (rect) => {
       set({ consoleFloat: rect })
       persistPrefs()
-    },
-    setPaneCount: (c) =>
-      set((s) => {
-        // Keep existing assignments, pad with null up to c-1 extra panes, truncate when shrinking.
-        const extra = s.panes.extraTabIds.slice(0, c - 1)
-        while (extra.length < c - 1) extra.push(null)
-        return { panes: { count: c, extraTabIds: extra } }
-      }),
-    setPaneTab: (index, tabId) => {
-      // Guard against out-of-range slots (panes 2..count map to indices 0..count-2);
-      // a stray index would create a sparse array inconsistent with `count`.
-      if (index < 0 || index >= get().panes.count - 1) return
-      set((s) => {
-        const extra = s.panes.extraTabIds.slice()
-        extra[index] = tabId
-        return { panes: { ...s.panes, extraTabIds: extra } }
-      })
     },
     setImportOpen: (v) => set({ importOpen: v })
   }

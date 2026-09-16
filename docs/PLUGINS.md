@@ -504,6 +504,49 @@ Residual risks (documented, accepted for v1):
 
 ---
 
+## 10. Feature packs (bundled, declarative)
+
+Alongside the user plugin system above, Relay ships **feature packs** in a `plugins/`
+folder next to the executable (`extraResources`; the repo root while developing). They
+decide what the app *is*, rather than extending it with code:
+
+```
+plugins/
+├── websocket/plugin.json          → protocol.websocket
+├── sse/plugin.json                → protocol.sse
+├── socketio/plugin.json           → protocol.socketio
+├── mqtt/plugin.json               → protocol.mqtt
+├── grpc/plugin.json               → protocol.grpc
+├── ai-assistant/plugin.json       → ai
+├── advanced-auth/plugin.json      → auth.advanced
+├── extra-panes/plugin.json        → panes.extra
+└── extra-languages/
+    ├── plugin.json                → i18n.extra
+    └── locales/{de,es}.json
+```
+
+The base app without any pack is: HTTP + GraphQL, the six common auth schemes
+(inherit / no auth / Bearer / Basic / API key / OAuth 2.0), Russian and English, and up
+to four panes.
+
+**Why a separate mechanism.** A user plugin is untrusted code and runs in a sandbox with
+granted permissions. A feature pack executes nothing — it is a manifest (plus locale JSON
+for languages), so it needs no sandbox and no consent dialog. Deleting its folder removes
+the capability outright; the toggle in Settings → Плагины only hides it.
+
+| Piece | Where |
+|---|---|
+| capability list + manifest types | `src/shared/features.ts` |
+| folder scan, state, locale reads, IPC | `src/main/features/index.ts` |
+| renderer store + `useCap()` | `src/renderer/store/features.ts` |
+| settings UI | `src/renderer/features/settings/FeaturePacks.tsx` |
+| translation engine | `src/renderer/lib/i18n.ts`, `src/renderer/locales/en.json` |
+
+Enabled/disabled state lives in the app-level `features` document; a pack that is present
+and has never been switched off counts as enabled (shipping it *is* the decision).
+
+---
+
 ## 11. Roadmap
 
 All originally-deferred P1 **and P2** items are implemented: secret config, `storage`,

@@ -1,40 +1,61 @@
-import { useEffect, useState } from 'react'
-import { makeId } from '@shared/id'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Icon } from './components/Icon'
 import { useUi } from './store/ui'
 import { useTabs } from './store/tabs'
-import { useCollections } from './store/collections'
 import { bootstrap } from './store/bootstrap'
 import { sendActiveRequest } from './lib/request-runner'
-import { saveActiveRequest } from './lib/save'
+import { saveActiveAs, saveActiveRequest } from './lib/save'
+import { runPaneAction } from './lib/pane-actions'
+import { initPanes } from './store/panes'
+import { wireStorageSync } from './store/cross-window'
 import { matchAction } from './lib/keymap'
+import { handleUndoKey } from './lib/undo'
 import { useSettings } from './store/settings'
 import { Titlebar } from './app/Titlebar'
 import { TabStrip } from './app/TabStrip'
 import { Workspace } from './app/Workspace'
 import { Sidebar } from './features/sidebar/Sidebar'
-import { AiPanel } from './features/ai/AiPanel'
-import { CommandPalette } from './features/palette/CommandPalette'
-import { SettingsScreen } from './features/settings/SettingsScreen'
 import { SaveDialog } from './features/collections/SaveDialog'
-import { ToolConfirmModal } from './features/ai/ToolConfirmModal'
-import { RunnerPanel } from './features/runner/RunnerPanel'
-import { ConsolePanel } from './features/console/ConsolePanel'
 import { Tour, startTour } from './features/onboarding/Tour'
 import { useWorkspaces } from './store/workspaces'
+import { useCap, useFeatures } from './store/features'
+
+import { tr } from '@renderer/lib/i18n'
+// The AI assistant ships as a feature pack: keep its bundle out of the startup
+// path and load it only when the pack is enabled and the panel is opened.
+const AiPanel = lazy(() => import('./features/ai/AiPanel').then((m) => ({ default: m.AiPanel })))
+const ToolConfirmModal = lazy(() => import('./features/ai/ToolConfirmModal').then((m) => ({ default: m.ToolConfirmModal })))
+
+// Screens that are closed on startup and heavy when opened: the settings tree,
+// the command palette, the collection runner and the request console.
+const CommandPalette = lazy(() => import('./features/palette/CommandPalette').then((m) => ({ default: m.CommandPalette })))
+const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })))
+const RunnerPanel = lazy(() => import('./features/runner/RunnerPanel').then((m) => ({ default: m.RunnerPanel })))
+const ConsolePanel = lazy(() => import('./features/console/ConsolePanel').then((m) => ({ default: m.ConsolePanel })))
+
+/**
+ * Bootstrapping is per window, not per mount: changing the UI language remounts
+ * the whole tree (see main.tsx), and re-running bootstrap there would re-read
+ * the not-yet-flushed settings document and undo the switch.
+ */
+let booted = false
 
 export function App() {
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(booted)
 
   const aiOpen = useUi((s) => s.aiOpen)
+  const hasAi = useCap('ai')
   const settingsOpen = useUi((s) => s.settingsOpen)
-  const settingsSection = useUi((s) => s.settingsSection)
   const paletteOpen = useUi((s) => s.paletteOpen)
   const saveOpen = useUi((s) => s.saveDialogOpen)
   const toast = useUi((s) => s.toast)
 
   useEffect(() => {
+    if (booted) return
+    booted = true
+    wireStorageSync()
     bootstrap()
+      .then(() => initPanes())
       .then(() => useWorkspaces.getState().load())
       .then(() => {
         // First run only: give the UI a beat to paint before spotlighting it.
@@ -43,17 +64,6 @@ export function App() {
       .catch((err) => console.error('bootstrap failed', err))
       .finally(() => setReady(true))
   }, [])
-
-  const onSaveAs = (parentId: string, name: string) => {
-    const tab = useTabs.getState().activeTab()
-    if (!tab) return
-    const id = makeId('req')
-    const req = { ...tab.request, id, name }
-    useCollections.getState().addRequest(parentId, req)
-    useTabs.getState().patchTab(tab.id, { id, name })
-    useTabs.getState().markSaved(tab.id, id)
-    useUi.getState().showToast('Сохранено')
-  }
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -71,7 +81,8 @@ export function App() {
           return
         case 'toggleAi':
           e.preventDefault()
-          useUi.getState().toggleAi()
+          // Without the AI pack there is no panel to toggle.
+          if (useFeatures.getState().caps.has('ai')) useUi.getState().toggleAi()
           return
         case 'settings':
           e.preventDefault()
@@ -93,6 +104,11 @@ export function App() {
           }
           return
         }
+        default:
+          if (action && !useUi.getState().settingsOpen && runPaneAction(action)) {
+            e.preventDefault()
+            return
+          }
       }
       if (e.key === 'Escape') {
         // Close only the topmost overlay (palette sits above settings), not both.
@@ -106,16 +122,19 @@ export function App() {
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // Capture phase so request-field undo runs before Monaco's own handler.
+    window.addEventListener('keydown', handleUndoKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', handleUndoKey, true)
+    }
   }, [])
 
   if (!ready) {
     return (
       <div className="app" style={{ display: 'grid', placeItems: 'center' }}>
         <div style={{ color: 'var(--tx-2)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Icon name="bolt" size={20} style={{ color: 'var(--accent)' }} />
-          Загрузка Relay…
-        </div>
+          <Icon name="bolt" size={20} style={{ color: 'var(--accent)' }} /> {tr('Загрузка Relay…')} </div>
       </div>
     )
   }
@@ -127,19 +146,31 @@ export function App() {
       <div className="body">
         <Sidebar />
         <Workspace />
-        {aiOpen && <AiPanel onClose={() => useUi.getState().setAiOpen(false)} onConnect={() => useUi.getState().openSettings('providers')} />}
+        {hasAi && aiOpen && (
+          <Suspense fallback={null}>
+            <AiPanel onClose={() => useUi.getState().setAiOpen(false)} onConnect={() => useUi.getState().openSettings('providers')} />
+          </Suspense>
+        )}
       </div>
 
-      {settingsOpen && <SettingsScreen onClose={() => useUi.getState().closeSettings()} initialSection={settingsSection} />}
-      {paletteOpen && <CommandPalette />}
-      <ToolConfirmModal />
-      <RunnerPanel />
-      <ConsolePanel />
+      <Suspense fallback={null}>
+        {settingsOpen && <SettingsScreen onClose={() => useUi.getState().closeSettings()} />}
+        {paletteOpen && <CommandPalette />}
+      </Suspense>
+      {hasAi && (
+        <Suspense fallback={null}>
+          <ToolConfirmModal />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>
+        <RunnerPanel />
+        <ConsolePanel />
+      </Suspense>
       <SaveDialog
         open={saveOpen}
         initialName={useTabs.getState().activeTab()?.request.name ?? 'Без названия'}
         onOpenChange={(v) => useUi.getState().setSaveDialogOpen(v)}
-        onSave={onSaveAs}
+        onSave={saveActiveAs}
       />
 
       <Tour />

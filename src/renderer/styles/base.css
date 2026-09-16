@@ -147,6 +147,7 @@ input, textarea { background: none; border: none; outline: none; }
 }
 *::-webkit-scrollbar-thumb:hover { background: var(--tx-2); background-clip: padding-box; border: 3px solid transparent; }
 *::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
 
 /* ---------- transitions (theme) ---------- */
 .theming, .theming * { transition: background-color .35s var(--ease), border-color .35s var(--ease), color .35s var(--ease) !important; }

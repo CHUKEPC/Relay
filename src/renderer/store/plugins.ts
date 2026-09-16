@@ -12,6 +12,7 @@ import { useUi } from './ui'
 import { useTabs } from './tabs'
 import { useResponse } from './response'
 
+import { tr } from '@renderer/lib/i18n'
 /** A contributed button paired with its source plugin (for toolbar rendering). */
 export interface PluginToolbarButton {
   pluginId: string
@@ -163,7 +164,7 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       const plugins = overlayPending(await window.api.pluginsSetEnabled(id, enabled))
       set({ plugins })
     } catch (err) {
-      useUi.getState().showToast('Не удалось переключить плагин', 'error')
+      useUi.getState().showToast(tr('Не удалось переключить плагин'), 'error')
       console.error('[plugins] setEnabled failed:', err)
     }
   },
@@ -192,7 +193,7 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       const plugins = overlayPending(await window.api.pluginsSetSecret(id, key, value))
       set({ plugins })
     } catch (err) {
-      useUi.getState().showToast('Не удалось сохранить секрет', 'error')
+      useUi.getState().showToast(tr('Не удалось сохранить секрет'), 'error')
       console.error('[plugins] setSecret failed:', err)
     }
   },
@@ -202,7 +203,7 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       const plugins = overlayPending(await window.api.pluginsSetNetAllowlist(id, hosts))
       set({ plugins })
     } catch (err) {
-      useUi.getState().showToast('Не удалось обновить список хостов', 'error')
+      useUi.getState().showToast(tr('Не удалось обновить список хостов'), 'error')
       console.error('[plugins] setNetAllowlist failed:', err)
     }
   },
@@ -275,10 +276,10 @@ export const usePlugins = create<PluginsState>((set, get) => ({
       const { plugins, existed } = await window.api.pluginsInstallSample(force)
       set({ plugins: overlayPending(plugins) })
       if (existed) return 'exists'
-      useUi.getState().showToast('Пример плагина установлен')
+      useUi.getState().showToast(tr('Пример плагина установлен'))
       return 'ok'
     } catch (err) {
-      useUi.getState().showToast('Не удалось установить пример', 'error')
+      useUi.getState().showToast(tr('Не удалось установить пример'), 'error')
       console.error('[plugins] installSample failed:', err)
       return 'error'
     }
@@ -306,9 +307,9 @@ export const usePlugins = create<PluginsState>((set, get) => ({
     try {
       const plugins = overlayPending(await window.api.pluginsDelete(id))
       set({ plugins })
-      useUi.getState().showToast('Плагин удалён')
+      useUi.getState().showToast(tr('Плагин удалён'))
     } catch (err) {
-      useUi.getState().showToast('Не удалось удалить плагин', 'error')
+      useUi.getState().showToast(tr('Не удалось удалить плагин'), 'error')
       console.error('[plugins] delete failed:', err)
     }
   }

@@ -4,17 +4,24 @@ import { Icon } from '@renderer/components/Icon'
 import { IconButton } from '@renderer/components/primitives'
 import { useAi } from '@renderer/store/ai'
 
+import { tr } from '@renderer/lib/i18n'
 const MASKED_PLACEHOLDER = '••••••••••••••••'
 
 type KeyHint = { kind: 'ok' | 'neutral' | 'error'; text: string } | null
+
+const KEY_URLS: Partial<Record<ProviderConfig['kind'], string>> = {
+  anthropic: 'https://console.anthropic.com/settings/keys',
+  openai: 'https://platform.openai.com/api-keys',
+  openrouter: 'https://openrouter.ai/keys'
+}
 
 /** Whether this provider exposes an editable Base URL field. */
 function hasBaseUrl(kind: ProviderConfig['kind']): boolean {
   return kind === 'openrouter' || kind === 'openai-compatible'
 }
 
-/** A provider is "custom" (user-added, editable label + removable) when it is openai-compatible. */
-function isCustom(kind: ProviderConfig['kind']): boolean {
+/** Local/self-hosted OpenAI-compatible servers usually work without a key. */
+function keyOptional(kind: ProviderConfig['kind']): boolean {
   return kind === 'openai-compatible'
 }
 
@@ -33,6 +40,7 @@ export function ProviderDetail({
   const setProviderModel = useAi((s) => s.setProviderModel)
   const updateProvider = useAi((s) => s.updateProvider)
   const removeProvider = useAi((s) => s.removeProvider)
+  const refreshModels = useAi((s) => s.refreshModels)
 
   const [reveal, setReveal] = useState(false)
   const [draftKey, setDraftKey] = useState('')
@@ -55,39 +63,32 @@ export function ProviderDetail({
     }
   }, [])
 
-  // Reset transient field state when switching between providers.
-  useEffect(() => {
-    setReveal(false)
-    setDraftKey('')
-    setSaving(false)
-    setKeyHint(null)
-    setModelOpen(false)
-  }, [provider.id])
-
   const editingKey = draftKey.length > 0
   const showMasked = provider.hasKey && !editingKey
+  const canConnectWithoutKey = keyOptional(provider.kind) && !provider.hasKey && !editingKey
 
   const handleSaveKey = async (): Promise<void> => {
     const key = draftKey.trim()
-    if (!key || saving) return
+    if ((!key && !canConnectWithoutKey) || saving) return
+    if (hasBaseUrl(provider.kind) && provider.kind !== 'openrouter' && !provider.baseUrl?.trim()) {
+      setKeyHint({ kind: 'error', text: 'Сначала укажите Base URL сервера.' })
+      return
+    }
     setSaving(true)
     setKeyHint(null)
     try {
       await setProviderKey(provider.id, key)
       setDraftKey('')
       setReveal(false)
-      // Optional, non-blocking verification: fetch models and merge them in.
-      try {
-        const models = await window.api.aiListModels(provider.id)
-        if (models.length > 0) {
-          updateProvider(provider.id, { models: models.map((m) => m.id) })
-          setKeyHint({ kind: 'ok', text: `Проверено · найдено моделей: ${models.length}` })
-        } else {
-          setKeyHint({ kind: 'neutral', text: 'Ключ сохранён. Список моделей получить не удалось.' })
-        }
-      } catch {
-        setKeyHint({ kind: 'neutral', text: 'Ключ сохранён. Проверка моделей недоступна.' })
-      }
+      const found = await refreshModels(provider.id)
+      setKeyHint(
+        found > 0
+          ? { kind: 'ok', text: `Подключено · доступно моделей: ${found}` }
+          : {
+              kind: 'neutral',
+              text: 'Сохранено, но список моделей получить не удалось — проверьте ключ и адрес или впишите модель вручную.'
+            }
+      )
     } catch (err) {
       setKeyHint({ kind: 'error', text: `Не удалось сохранить ключ: ${(err as Error).message}` })
     } finally {
@@ -107,9 +108,10 @@ export function ProviderDetail({
     onRemoved()
   }
 
+  const keyUrl = KEY_URLS[provider.kind]
+
   return (
     <div className="prov-detail">
-      {/* header: logo + (editable) name + active controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
         <div
           className="prov-logo"
@@ -124,105 +126,24 @@ export function ProviderDetail({
           {provider.glyph}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {isCustom(provider.kind) ? (
-            <input
-              className="input"
-              value={provider.label}
-              aria-label="Название провайдера"
-              onChange={(e) => updateProvider(provider.id, { label: e.target.value })}
-              style={{ height: 30, fontWeight: 600, maxWidth: 280 }}
-            />
-          ) : (
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{provider.label}</div>
-          )}
+          <input
+            className="input"
+            value={provider.label}
+            aria-label={tr('Название провайдера')}
+            onChange={(e) => updateProvider(provider.id, { label: e.target.value })}
+            style={{ height: 30, fontWeight: 600, maxWidth: 280 }}
+          />
           {provider.sub && <div className="prov-sub">{provider.sub}</div>}
         </div>
         {provider.hasKey && !isActive && (
-          <button className="btn primary" onClick={() => setActiveProvider(provider.id)}>
-            Сделать активным
-          </button>
+          <button className="btn primary" onClick={() => setActiveProvider(provider.id)}> {tr('Сделать активным')} </button>
         )}
         {isActive && (
           <span className="prov-status ok">
-            <span className="d" />
-            Активный провайдер
-          </span>
+            <span className="d" /> {tr('Активный провайдер')} </span>
         )}
       </div>
 
-      {/* API key */}
-      <div className="field">
-        <label>API-ключ</label>
-        <div className="input-row">
-          <div className="input-key">
-            <input
-              className="input mono"
-              type={reveal ? 'text' : 'password'}
-              value={draftKey}
-              placeholder={showMasked ? MASKED_PLACEHOLDER : 'sk-…'}
-              onChange={(e) => setDraftKey(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSaveKey()
-              }}
-              aria-label="API-ключ"
-            />
-            <IconButton
-              icon="eye"
-              className="reveal"
-              size={15}
-              active={reveal}
-              title={reveal ? 'Скрыть' : 'Показать'}
-              onClick={() => setReveal((r) => !r)}
-            />
-          </div>
-          <button className="btn primary" disabled={!editingKey || saving} onClick={() => void handleSaveKey()}>
-            {saving ? 'Сохранение…' : provider.hasKey ? 'Обновить' : 'Подключить'}
-          </button>
-          {provider.hasKey && (
-            <button className="btn" onClick={() => void handleClearKey()}>
-              Удалить ключ
-            </button>
-          )}
-        </div>
-        {keyHint && (
-          <div
-            className="hint"
-            style={{
-              color:
-                keyHint.kind === 'ok'
-                  ? 'var(--m-get)'
-                  : keyHint.kind === 'error'
-                    ? 'var(--s-5xx)'
-                    : 'var(--tx-3)'
-            }}
-          >
-            {keyHint.text}
-          </div>
-        )}
-        <div className="hint">
-          {secretsOk === false
-            ? '⚠ OS-хранилище ключей недоступно — ключ сохраняется локально в открытом виде (base64). Настройте системный keychain, чтобы он шифровался.'
-            : 'Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к провайдеру.'}
-        </div>
-      </div>
-
-      {/* Default model */}
-      <div className="field">
-        <label>Модель по умолчанию</label>
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          <ModelPicker
-            provider={provider}
-            open={modelOpen}
-            onOpenChange={setModelOpen}
-            onPick={(m) => {
-              setProviderModel(provider.id, m)
-              setModelOpen(false)
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Base URL for openrouter / openai-compatible */}
       {hasBaseUrl(provider.kind) && (
         <div className="field">
           <label>Base URL{provider.kind === 'openrouter' ? ' (необязательно)' : ''}</label>
@@ -236,20 +157,95 @@ export function ProviderDetail({
         </div>
       )}
 
-      {/* Delete custom provider */}
-      {isCustom(provider.kind) && (
-        <div className="field">
-          <button className="btn" style={{ color: 'var(--s-5xx)' }} onClick={handleRemove}>
-            <Icon name="trash" size={15} />
-            Удалить провайдера
+      <div className="field">
+        <label>API-ключ{keyOptional(provider.kind) ? ' (если сервер его требует)' : ''}</label>
+        <div className="input-row">
+          <div className="input-key">
+            <input
+              className="input mono"
+              type={reveal ? 'text' : 'password'}
+              value={draftKey}
+              placeholder={showMasked ? (provider.keyless ? 'подключено без ключа' : MASKED_PLACEHOLDER) : 'sk-…'}
+              onChange={(e) => setDraftKey(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleSaveKey()
+              }}
+              aria-label={tr('API-ключ')}
+            />
+            <IconButton
+              icon="eye"
+              className="reveal"
+              size={15}
+              active={reveal}
+              title={reveal ? 'Скрыть' : 'Показать'}
+              onClick={() => setReveal((r) => !r)}
+            />
+          </div>
+          <button
+            className="btn primary"
+            disabled={(!editingKey && !canConnectWithoutKey) || saving}
+            onClick={() => void handleSaveKey()}
+          >
+            {saving
+              ? 'Подключение…'
+              : provider.hasKey
+                ? 'Обновить'
+                : canConnectWithoutKey
+                  ? 'Подключить без ключа'
+                  : 'Подключить'}
           </button>
+          {provider.hasKey && (
+            <button className="btn" onClick={() => void handleClearKey()}> {tr('Отключить')} </button>
+          )}
         </div>
-      )}
+        {keyHint && (
+          <div
+            className="hint"
+            style={{
+              color: keyHint.kind === 'ok' ? 'var(--m-get)' : keyHint.kind === 'error' ? 'var(--s-5xx)' : 'var(--tx-3)'
+            }}
+          >
+            {keyHint.text}
+          </div>
+        )}
+        <div className="hint">
+          {secretsOk === false
+            ? '⚠ OS-хранилище ключей недоступно — ключ сохраняется локально в открытом виде (base64). Настройте системный keychain, чтобы он шифровался.'
+            : 'Ключ хранится локально в зашифрованном виде (Electron safeStorage) и не покидает устройство, кроме запросов к провайдеру.'}
+          {keyUrl && (
+            <>
+              {' '}
+              <button className="link-btn" onClick={() => void window.api.openExternal(keyUrl)}> {tr('Где взять ключ?')} </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="field">
+        <label>{tr('Модель по умолчанию')}</label>
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <ModelPicker
+            provider={provider}
+            open={modelOpen}
+            onOpenChange={setModelOpen}
+            onPick={(m) => {
+              setProviderModel(provider.id, m)
+              setModelOpen(false)
+            }}
+          />
+        </div>
+        <div className="hint"> {tr('Список запрашивается у провайдера по вашему ключу — видны все доступные вам модели.')} </div>
+      </div>
+
+      <div className="field">
+        <button className="btn" style={{ color: 'var(--s-5xx)' }} onClick={handleRemove}>
+          <Icon name="trash" size={15} /> {tr('Удалить провайдера')} </button>
+      </div>
     </div>
   )
 }
 
-/** Select-box that opens a popover listing the provider's models. */
+/** Select-box with a searchable popover of the provider's live model list. */
 function ModelPicker({
   provider,
   open,
@@ -261,11 +257,44 @@ function ModelPicker({
   onOpenChange: (o: boolean) => void
   onPick: (model: string) => void
 }): JSX.Element {
+  const refreshModels = useAi((s) => s.refreshModels)
   const boxRef = useRef<HTMLDivElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const fetchedRef = useRef(false)
   const current = provider.defaultModel || 'Выберите модель'
 
-  // Close on outside click / Escape while open.
+  const canFetch = !!provider.hasKey || provider.kind === 'openai-compatible' || provider.kind === 'openrouter'
+
+  const refresh = async (): Promise<void> => {
+    if (loading) return
+    setLoading(true)
+    setFailed(false)
+    try {
+      const n = await refreshModels(provider.id)
+      setFailed(n === 0)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // First open fetches the live list; afterwards it is refreshed on demand.
+  useEffect(() => {
+    if (!open) {
+      setQuery('')
+      return
+    }
+    if (!fetchedRef.current && canFetch) {
+      fetchedRef.current = true
+      void refresh()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent): void => {
@@ -274,15 +303,22 @@ function ModelPicker({
       onOpenChange(false)
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onOpenChange(false)
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onOpenChange(false)
+      }
     }
     document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onKey, true)
     }
   }, [open, onOpenChange])
+
+  const q = query.trim()
+  const visible = q ? provider.models.filter((m) => m.toLowerCase().includes(q.toLowerCase())) : provider.models
+  const exact = provider.models.includes(q)
 
   return (
     <>
@@ -305,24 +341,54 @@ function ModelPicker({
         <Icon name="chevDsm" size={14} style={{ marginLeft: 'auto', color: 'var(--tx-3)' }} />
       </div>
       {open && (
-        <div ref={popRef} className="popover" style={{ top: 42, left: 0, minWidth: 240, maxHeight: 320, overflowY: 'auto' }}>
-          {provider.models.length === 0 && (
-            <div className="pop-item" style={{ color: 'var(--tx-3)', cursor: 'default' }}>
-              Нет доступных моделей
-            </div>
-          )}
-          {provider.models.map((m) => (
-            <div
-              key={m}
-              className={`pop-item${m === provider.defaultModel ? ' on' : ''}`}
-              onClick={() => onPick(m)}
-            >
-              <span className="mono" style={{ fontSize: 12 }}>
-                {m}
-              </span>
-              {m === provider.defaultModel && <Icon name="check" size={14} className="tick" />}
-            </div>
-          ))}
+        <div ref={popRef} className="popover model-pop" style={{ top: 42, left: 0 }}>
+          <div className="model-pop-head">
+            <input
+              className="input mono"
+              autoFocus
+              value={query}
+              placeholder={tr('Поиск или название модели…')}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && q) {
+                  e.preventDefault()
+                  onPick(visible.length === 1 ? visible[0] : q)
+                }
+              }}
+            />
+            <button className="icon-btn" title={tr('Обновить список моделей')} disabled={loading} onClick={() => void refresh()}>
+              <Icon name="refresh" size={14} className={loading ? 'spin' : undefined} />
+            </button>
+          </div>
+          <div className="model-pop-list">
+            {loading && provider.models.length === 0 && <div className="model-pop-note">{tr('Загрузка списка моделей…')}</div>}
+            {!loading && failed && provider.models.length === 0 && (
+              <div className="model-pop-note">
+                {canFetch
+                  ? 'Провайдер не вернул список. Проверьте ключ и адрес или впишите модель вручную.'
+                  : 'Подключите ключ, чтобы загрузить список моделей.'}
+              </div>
+            )}
+            {!loading && !failed && provider.models.length === 0 && !canFetch && (
+              <div className="model-pop-note">{tr('Подключите ключ, чтобы загрузить список моделей.')}</div>
+            )}
+            {visible.map((m) => (
+              <div key={m} className={`pop-item${m === provider.defaultModel ? ' on' : ''}`} onClick={() => onPick(m)}>
+                <span className="mono" style={{ fontSize: 12 }}>
+                  {m}
+                </span>
+                {m === provider.defaultModel && <Icon name="check" size={14} className="tick" />}
+              </div>
+            ))}
+            {q && !exact && (
+              <div className="pop-item" onClick={() => onPick(q)}>
+                <Icon name="plus" size={14} />
+                <span> {tr('Использовать')} <span className="mono">«{q}»</span>
+                </span>
+              </div>
+            )}
+          </div>
+          {provider.models.length > 0 && <div className="model-pop-foot">Моделей: {provider.models.length}</div>}
         </div>
       )}
     </>

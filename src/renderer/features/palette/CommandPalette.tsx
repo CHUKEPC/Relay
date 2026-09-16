@@ -5,12 +5,14 @@ import { useCollections } from '@renderer/store/collections'
 import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
+import { hasCap } from '@renderer/store/features'
 import { useSettings } from '@renderer/store/settings'
 import { collectCommands, usePlugins } from '@renderer/store/plugins'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { exportRequestJson } from '@renderer/lib/export'
 import { MOD } from '@renderer/lib/platform'
 
+import { tr } from '@renderer/lib/i18n'
 interface Item {
   id: string
   title: string
@@ -64,11 +66,13 @@ export function CommandPalette() {
       } },
       { id: 'export-request', title: 'Экспортировать текущий запрос (JSON)', icon: 'upload', run: () => {
         const req = useTabs.getState().activeRequest()
-        if (!req) useUi.getState().showToast('Нет активного запроса', 'error')
+        if (!req) useUi.getState().showToast(tr('Нет активного запроса'), 'error')
         else void exportRequestJson(req)
       } },
       { id: 'export-data', title: 'Экспорт данных (бэкап)…', icon: 'upload', run: () => useUi.getState().openSettings('data') },
-      { id: 'ai', title: 'Открыть AI-ассистента', icon: 'sparkle', kbd: [MOD, 'J'], run: () => useUi.getState().setAiOpen(true) },
+      ...(hasCap('ai')
+        ? [{ id: 'ai', title: 'Открыть AI-ассистента', icon: 'sparkle', kbd: [MOD, 'J'], run: () => useUi.getState().setAiOpen(true) }]
+        : []),
       { id: 'settings', title: 'Открыть настройки', icon: 'settings', kbd: [MOD, ','], run: () => useUi.getState().openSettings() },
       { id: 'theme', title: 'Переключить тему', icon: 'moon', run: () => {
         const cur = useSettings.getState().resolvedTheme
@@ -140,7 +144,7 @@ export function CommandPalette() {
           <Icon name="search" size={18} />
           <input
             ref={inputRef}
-            placeholder="Поиск запросов и действий…"
+            placeholder={tr('Поиск запросов и действий…')}
             value={q}
             onChange={(e) => {
               setQ(e.target.value)
@@ -150,10 +154,10 @@ export function CommandPalette() {
           <span className="kbd">esc</span>
         </div>
         <div className="palette-list">
-          {flat.length === 0 && <div style={{ padding: 26, textAlign: 'center', color: 'var(--tx-3)', fontSize: 13 }}>Ничего не найдено</div>}
+          {flat.length === 0 && <div style={{ padding: 26, textAlign: 'center', color: 'var(--tx-3)', fontSize: 13 }}>{tr('Ничего не найдено')}</div>}
           {filtered.map((g) => (
             <div key={g.label}>
-              <div className="pal-group-label">{g.label}</div>
+              <div className="pal-group-label">{tr(g.label)}</div>
               {g.items.map((it) => {
                 runningIndex++
                 const isSel = runningIndex === clampedSel
@@ -174,7 +178,7 @@ export function CommandPalette() {
                     <div className="pal-text">
                       <div className="pal-title">
                         {it.method && <span className={`mt m-${it.method}`}>{it.method}</span>}
-                        {it.title}
+                        {tr(it.title)}
                       </div>
                       {it.desc && <div className="pal-desc">{it.desc}</div>}
                     </div>
@@ -196,13 +200,9 @@ export function CommandPalette() {
         <div className="pal-foot">
           <span>
             <span className="kbd">↑</span>
-            <span className="kbd">↓</span>
-            навигация
-          </span>
+            <span className="kbd">↓</span> {tr('навигация')} </span>
           <span>
-            <span className="kbd">↵</span>
-            выбрать
-          </span>
+            <span className="kbd">↵</span> {tr('выбрать')} </span>
           <div className="grow" />
           <span>
             <Icon name="bolt" size={12} />

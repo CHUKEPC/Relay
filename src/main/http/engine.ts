@@ -629,6 +629,10 @@ function classifyError(err: unknown): HttpError {
     )
   ) {
     kind = 'tls'
+  } else if (/UND_ERR_CONNECT_TIMEOUT|ETIMEDOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT/.test(upper)) {
+    // undici gives up on the connect/headers/body phase before our own timer;
+    // that is still a timeout, not an unclassified failure.
+    kind = 'timeout'
   } else if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|EPIPE|ECONNABORTED|UND_ERR_SOCKET/.test(upper)) {
     kind = 'connect'
   } else if (/UND_ERR_HEADERS_OVERFLOW|UND_ERR_RESPONSE|HPE_|ERR_INVALID_HTTP/.test(upper)) {

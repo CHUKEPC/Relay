@@ -3,6 +3,7 @@ import type { ResponseResult, VisualizerPayload } from '@shared/types'
 import { renderTemplate } from '@shared/visualizer-template'
 import { Icon } from '@renderer/components/Icon'
 
+import { tr } from '@renderer/lib/i18n'
 /**
  * Response "Visualize" tab.
  *
@@ -52,7 +53,7 @@ function TemplateView({ payload }: { payload: VisualizerPayload }): JSX.Element 
   return (
     <iframe
       className="preview-frame"
-      title="Визуализация ответа"
+      title={tr('Визуализация ответа')}
       // sandbox="" → scripts, forms, same-origin, popups all disabled.
       sandbox=""
       srcDoc={doc}

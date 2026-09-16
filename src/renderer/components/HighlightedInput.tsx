@@ -3,6 +3,7 @@ import type { VariableScope } from '@shared/types'
 import { resolveString } from '@shared/interpolate'
 import { Tooltip } from './primitives'
 
+import { tr } from '@renderer/lib/i18n'
 interface Segment {
   text: string
   isVar: boolean
@@ -72,7 +73,7 @@ export function HighlightedInput({
           <div key={i}>
             <span className="mono">{`{{${r.name}}}`}</span>{' '}
             {r.value === null ? (
-              <span style={{ color: 'var(--s-4xx)' }}>не определена</span>
+              <span style={{ color: 'var(--s-4xx)' }}>{tr('не определена')}</span>
             ) : (
               <>
                 = <span className="mono">{r.value}</span>{' '}

@@ -6,7 +6,22 @@
  */
 import type { RelayApi } from '@shared/ipc-contract'
 import type { AiStreamEvent, ResponseResult } from '@shared/types'
+import { CAPABILITIES, type FeaturePluginInfo } from '@shared/features'
 import { APP_VERSION, STORAGE_VERSION } from '@shared/constants'
+
+/** One synthetic pack holding every capability — preview shows the full UI. */
+const MOCK_FEATURES: FeaturePluginInfo[] = [
+  {
+    id: 'preview-all',
+    name: 'Все возможности (превью)',
+    description: 'Заглушка веб-превью: включены все возможности.',
+    version: APP_VERSION,
+    capabilities: [...CAPABILITIES],
+    locales: ['de', 'fr', 'es', 'zh'],
+    enabled: true,
+    dir: ''
+  }
+]
 
 if (!window.api) {
   const mem: Record<string, unknown> = {
@@ -84,19 +99,12 @@ if (!window.api) {
       wordWrapResponse: false,
       sendAiContext: true,
       autoApplyAiTools: false,
-      defaultProviderId: 'anthropic',
+      defaultProviderId: null,
       proxy: { enabled: false, url: '', bypass: [] },
       clientCerts: [],
       http2: false
     },
-    providers: {
-      version: STORAGE_VERSION,
-      activeProviderId: 'anthropic',
-      providers: [
-        { id: 'anthropic', kind: 'anthropic', label: 'Anthropic', sub: 'Claude', defaultModel: 'claude-sonnet-4-6', models: ['claude-opus-4-6', 'claude-sonnet-4-6'], hue: 18, glyph: 'A', hasKey: true, apiKeyRef: 'provider:anthropic' },
-        { id: 'openai', kind: 'openai', label: 'OpenAI', sub: 'ChatGPT', defaultModel: 'gpt-4o', models: ['gpt-4o', 'gpt-4o-mini'], hue: 158, glyph: 'O' }
-      ]
-    },
+    providers: { version: STORAGE_VERSION, activeProviderId: null, providers: [] },
     cookies: { version: STORAGE_VERSION, cookies: [] }
   }
 
@@ -136,7 +144,10 @@ if (!window.api) {
       cb({ type: 'done' })
     },
     aiCancel: async () => {},
-    aiListModels: async () => [],
+    aiListModels: async () => {
+      await delay(300)
+      return [{ id: 'mock-model-large' }, { id: 'mock-model-small' }]
+    },
     onAiStream: (streamId, cb) => {
       listeners.set(streamId, cb)
       return () => listeners.delete(streamId)
@@ -170,6 +181,16 @@ if (!window.api) {
     mqttSubscribe: async () => {},
     mqttClose: async () => {},
     onRealtime: () => () => {},
+    onStorageChanged: () => () => {},
+    // Separate OS windows exist only in the desktop app; the browser preview can't open them.
+    paneDetach: async () => {},
+    paneAttach: async () => {},
+    paneFocus: async () => {},
+    paneList: async () => [],
+    panePutSnapshot: () => {},
+    paneTakeSnapshot: async () => null,
+    onPaneClosed: () => () => {},
+    windowNudge: async () => {},
     grpcParse: async () => ({ services: [], error: 'gRPC недоступен в web-режиме' }),
     grpcInvoke: async () => {},
     grpcSend: async () => {},
@@ -184,6 +205,14 @@ if (!window.api) {
       snapshot: { collections: [], environments: [], activeEnvironmentId: null, globals: [], history: [] },
       summary: { collections: 0, requests: 0, environments: 0, globals: 0, history: 0 }
     }),
+    // Browser preview: pretend every bundled feature pack is present and on, so
+    // the whole UI is reachable without the main process.
+    featuresList: async () => MOCK_FEATURES,
+    featuresSetEnabled: async () => MOCK_FEATURES,
+    featuresLocale: async () => null,
+    featuresOpenFolder: async () => false,
+    onFeaturesChanged: () => () => {},
+
     pluginsList: async () => [],
     pluginsSetEnabled: async () => [],
     pluginsSetConfig: async () => {},

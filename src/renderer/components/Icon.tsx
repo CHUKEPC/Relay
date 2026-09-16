@@ -51,7 +51,13 @@ const PATHS: Record<string, string> = {
   dockRight: 'M3.5 4.5h13a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1ZM13 4.5v11M14.7 7.5h.8M14.7 10h.8',
   floatWin: 'M7 7V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M4 7h8a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z',
   pencil: 'M3.5 16.5l.6-3.1L13.6 4a1.9 1.9 0 0 1 2.7 2.7l-9.5 9.4-3.3.4ZM12.3 5.3l2.7 2.7',
-  mail: 'M3.5 5h13a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM3 6l7 5.5L17 6'
+  mail: 'M3.5 5h13a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM3 6l7 5.5L17 6',
+  grip: 'M7.5 5h.01M12.5 5h.01M7.5 10h.01M12.5 10h.01M7.5 15h.01M12.5 15h.01',
+  maximize: 'M4 8V4h4M16 8V4h-4M4 12v4h4M16 12v4h-4',
+  restore: 'M8 4v4H4M12 4v4h4M8 16v-4H4M12 16v-4h4',
+  splitRight: 'M3.5 4.5h13v11h-13zM10 4.5v11',
+  splitDown: 'M3.5 4.5h13v11h-13zM3.5 10h13',
+  swap: 'M4 7h11M12 4l3 3-3 3M16 13H5M8 10l-3 3 3 3'
 }
 
 const FILLED: Record<string, boolean> = { send: true, play: true, sparkle: true, bolt: true, stop: true }

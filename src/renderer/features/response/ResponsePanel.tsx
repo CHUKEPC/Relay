@@ -4,10 +4,10 @@ import { collectButtons, usePlugins, type PluginToolbarButton } from '@renderer/
 import { useSettings } from '@renderer/store/settings'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
+import { useCap } from '@renderer/store/features'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { Icon } from '@renderer/components/Icon'
 import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
-import { monaco } from '@renderer/lib/monaco'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
 import { kbd } from '@renderer/lib/platform'
@@ -16,6 +16,7 @@ import { CookieManager } from '@renderer/features/cookies/CookieManager'
 import { requestSnapshotForPlugin, responseSnapshotForPlugin } from '@shared/plugin-context'
 import type { PluginEventContext, ResponseResult, HttpErrorKind } from '@shared/types'
 
+import { tr } from '@renderer/lib/i18n'
 /* ============================================================
  * Helpers
  * ============================================================ */
@@ -102,6 +103,7 @@ function RespLoading(): JSX.Element {
  * ============================================================ */
 
 function RespError({ result, onAskAI }: { result: ResponseResult; onAskAI: () => void }): JSX.Element {
+  const hasAi = useCap('ai')
   return (
     <div className="empty" style={{ alignItems: 'flex-start', paddingTop: 30 }}>
       <div className="empty-card">
@@ -116,13 +118,18 @@ function RespError({ result, onAskAI }: { result: ResponseResult; onAskAI: () =>
           <Icon name="warn" size={24} />
         </div>
         <h3>{errorTitle(result)}</h3>
-        <p>{result.error?.message ?? 'Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки — или попросите AI разобраться.'}</p>
-        <div className="empty-actions">
-          <button className="btn primary" onClick={onAskAI}>
-            <Icon name="sparkle" size={14} />
-            Спросить AI о причине
-          </button>
-        </div>
+        <p>
+          {result.error?.message ??
+            (hasAi
+              ? 'Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки — или попросите AI разобраться.'
+              : 'Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки.')}
+        </p>
+        {hasAi && (
+          <div className="empty-actions">
+            <button className="btn primary" onClick={onAskAI}>
+              <Icon name="sparkle" size={14} /> {tr('Спросить AI о причине')} </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -147,7 +154,7 @@ function PreviewPane({ result }: { result: ResponseResult }): JSX.Element {
     // sandbox="" disables scripts; the CSP meta further restricts the document.
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'">`
     const srcDoc = `${csp}${result.body.text}`
-    return <iframe className="preview-frame" title="Предпросмотр HTML" sandbox="" srcDoc={srcDoc} />
+    return <iframe className="preview-frame" title={tr('Предпросмотр HTML')} sandbox="" srcDoc={srcDoc} />
   }
 
   return (
@@ -156,7 +163,7 @@ function PreviewPane({ result }: { result: ResponseResult }): JSX.Element {
         <div className="empty-ico">
           <Icon name="eye" size={22} />
         </div>
-        <p style={{ marginBottom: 0 }}>Предпросмотр недоступен для этого типа.</p>
+        <p style={{ marginBottom: 0 }}>{tr('Предпросмотр недоступен для этого типа.')}</p>
       </div>
     </div>
   )
@@ -249,9 +256,7 @@ function PluginPanelPane({
           </div>
           <p style={{ marginBottom: 10 }}>{error}</p>
           <button className="btn ghost" onClick={() => setNonce((n) => n + 1)}>
-            <Icon name="refresh" size={14} />
-            Повторить
-          </button>
+            <Icon name="refresh" size={14} /> {tr('Повторить')} </button>
         </div>
       </div>
     )
@@ -265,14 +270,12 @@ function PluginPanelPane({
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 10px' }}>
         <button className="btn ghost" style={{ height: 26 }} onClick={() => setNonce((n) => n + 1)}>
-          <Icon name="refresh" size={13} />
-          Обновить
-        </button>
+          <Icon name="refresh" size={13} /> {tr('Обновить')} </button>
       </div>
       <iframe
         ref={frameRef}
         className="preview-frame"
-        title="Панель плагина"
+        title={tr('Панель плагина')}
         sandbox={interactive ? 'allow-scripts' : ''}
         srcDoc={`${csp}${html ?? ''}`}
         style={{ flex: 1, border: 'none', width: '100%' }}
@@ -348,7 +351,7 @@ function TestsPane({ r }: { r: TabResponse }): JSX.Element {
           <div className="empty-ico">
             <Icon name="check" size={22} />
           </div>
-          <p style={{ marginBottom: 0 }}>Нет тестов. Добавьте скрипт во вкладке Tests запроса.</p>
+          <p style={{ marginBottom: 0 }}>{tr('Нет тестов. Добавьте скрипт во вкладке Tests запроса.')}</p>
         </div>
       </div>
     )
@@ -409,6 +412,7 @@ function StatusBar({
   onPluginButton: (pluginId: string, buttonId: string) => void
 }): JSX.Element {
   const sc = statusColor(result.status)
+  const hasAi = useCap('ai')
   return (
     <div className="resp-statusbar">
       <span
@@ -448,7 +452,7 @@ function StatusBar({
         {pluginButtons.length > 3 && (
           <Menu
             trigger={
-              <button className="btn ghost" style={{ height: 28 }} title="Ещё кнопки плагинов">
+              <button className="btn ghost" style={{ height: 28 }} title={tr('Ещё кнопки плагинов')}>
                 <Icon name="dots" size={14} />
               </button>
             }
@@ -459,13 +463,13 @@ function StatusBar({
             }))}
           />
         )}
-        <button className="ask-ai-btn" onClick={onAskAI}>
-          <Icon name="sparkle" size={14} />
-          Спросить AI
-        </button>
-        <IconButton icon={copied ? 'check' : 'copy'} title="Копировать" onClick={onCopy} />
-        <IconButton icon="save" title="Сохранить в файл" onClick={onSave} />
-        <IconButton icon="doc" title="Сохранить как пример" onClick={onSaveExample} />
+        {hasAi && (
+          <button className="ask-ai-btn" onClick={onAskAI}>
+            <Icon name="sparkle" size={14} /> {tr('Спросить AI')} </button>
+        )}
+        <IconButton icon={copied ? 'check' : 'copy'} title={tr('Копировать')} onClick={onCopy} />
+        <IconButton icon="save" title={tr('Сохранить в файл')} onClick={onSave} />
+        <IconButton icon="doc" title={tr('Сохранить как пример')} onClick={onSaveExample} />
       </div>
     </div>
   )
@@ -521,7 +525,7 @@ function TabsRow({
           <div className="side-search" style={{ margin: 0, height: 26, minWidth: 150 }}>
             <Icon name="search" size={12} />
             <input
-              placeholder="Поиск в ответе…"
+              placeholder={tr('Поиск в ответе…')}
               style={{ fontSize: 12 }}
               value={search}
               onChange={(e) => onSearch(e.target.value)}
@@ -576,8 +580,8 @@ function ExampleNameModal({
     onOpenChange(false)
   }
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Сохранить как пример" width={420}>
-      <Field label="Имя примера">
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Сохранить как пример')} width={420}>
+      <Field label={tr('Имя примера')}>
         <input
           className="input"
           autoFocus
@@ -589,12 +593,8 @@ function ExampleNameModal({
         />
       </Field>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-        <button className="btn ghost" onClick={() => onOpenChange(false)}>
-          Отмена
-        </button>
-        <button className="btn primary" onClick={commit}>
-          Сохранить
-        </button>
+        <button className="btn ghost" onClick={() => onOpenChange(false)}> {tr('Отмена')} </button>
+        <button className="btn primary" onClick={commit}> {tr('Сохранить')} </button>
       </div>
     </Modal>
   )
@@ -652,11 +652,9 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
             <div className="empty-ico">
               <Icon name="send" size={22} />
             </div>
-            <h3>Готов отправить запрос</h3>
-            <p>
-              Нажмите <b style={{ color: 'var(--tx-0)' }}>Отправить</b> или{' '}
-              <span className="kbd">{kbd('↵')}</span> — ответ появится здесь.
-            </p>
+            <h3>{tr('Готов отправить запрос')}</h3>
+            <p> {tr('Нажмите')} <b style={{ color: 'var(--tx-0)' }}>{tr('Отправить')}</b> или{' '}
+              <span className="kbd">{kbd('↵')}</span> {tr('— ответ появится здесь.')} </p>
           </div>
         </div>
       </div>
@@ -669,9 +667,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
       <div className="response" style={{ flex: 1 }}>
         <div className="resp-statusbar">
           <div className="resp-meta">
-            <Icon name="refresh" size={14} className="spin" />
-            Отправка запроса…
-          </div>
+            <Icon name="refresh" size={14} className="spin" /> {tr('Отправка запроса…')} </div>
         </div>
         <div className="resp-body">
           <RespLoading />
@@ -708,17 +704,22 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
     })
   }
 
-  // Trigger Monaco's native find widget on the visible response editor (Pretty view).
+  // Trigger Monaco's native find widget on the visible response editor (Pretty
+  // view). Imported on demand: by the time this runs the editor chunk is
+  // already loaded, and keeping the import dynamic keeps Monaco out of the
+  // startup bundle.
   const triggerFind = (): void => {
     const host = bodyHostRef.current
     if (!host) return
-    const editor = monaco.editor.getEditors().find((ed) => {
-      const node = ed.getDomNode()
-      return node ? host.contains(node) : false
+    void import('@renderer/lib/monaco').then(({ monaco }) => {
+      const editor = monaco.editor.getEditors().find((ed) => {
+        const node = ed.getDomNode()
+        return node ? host.contains(node) : false
+      })
+      if (!editor) return
+      editor.focus()
+      void editor.getAction('actions.find')?.run()
     })
-    if (!editor) return
-    editor.focus()
-    void editor.getAction('actions.find')?.run()
   }
 
   const testCount = r.testResults?.length ?? 0
@@ -775,7 +776,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         defaultName={statusLabel(result)}
         onSave={(name) => {
           saveResponseExample(name, result)
-          useUi.getState().showToast('Пример сохранён')
+          useUi.getState().showToast(tr('Пример сохранён'))
         }}
       />
 
@@ -822,13 +823,9 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         {effectiveTab === 'cookies' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px' }}>
-              <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
-                Set-Cookie из этого ответа. Постоянное хранилище — в менеджере.
-              </span>
+              <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}> {tr('Set-Cookie из этого ответа. Постоянное хранилище — в менеджере.')} </span>
               <button className="btn ghost" style={{ height: 28 }} onClick={() => setCookieMgrOpen(true)}>
-                <Icon name="cookie" size={14} />
-                Управление cookies
-              </button>
+                <Icon name="cookie" size={14} /> {tr('Управление cookies')} </button>
             </div>
             {result.cookies.length > 0 ? (
               <table className="resp-table">
@@ -854,9 +851,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
                 </tbody>
               </table>
             ) : (
-              <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--tx-3)' }}>
-                В этом ответе нет Set-Cookie.
-              </div>
+              <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--tx-3)' }}> {tr('В этом ответе нет Set-Cookie.')} </div>
             )}
           </div>
         )}

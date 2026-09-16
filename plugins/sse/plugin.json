@@ -1,0 +1,9 @@
+{
+  "id": "sse",
+  "name": "Server-Sent Events",
+  "description": "Режим SSE: подписка на поток событий сервера по HTTP.",
+  "version": "1.0.0",
+  "capabilities": [
+    "protocol.sse"
+  ]
+}

@@ -1,19 +1,25 @@
 import { useMemo } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
+import { useCap } from '@renderer/store/features'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { useEnvironments } from '@renderer/store/environments'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd, MOD } from '@renderer/lib/platform'
+import { kbdCombo, type KeyActionId } from '@renderer/lib/keymap'
+import { leavesOf, PANE_PRESETS, usePanes } from '@renderer/store/panes'
 import { WorkspaceSwitcher } from '@renderer/features/workspaces/WorkspaceSwitcher'
 
+import { tr } from '@renderer/lib/i18n'
 export function Titlebar() {
   const setTheme = useSettings((s) => s.setTheme)
   const resolvedTheme = useSettings((s) => s.resolvedTheme)
   const themeChoice = useSettings((s) => s.settings.theme)
   const aiOpen = useUi((s) => s.aiOpen)
-  const paneCount = useUi((s) => s.panes.count)
+  const hasAi = useCap('ai')
+  const paneCount = usePanes((s) => leavesOf(s.root).length)
+  const keybindings = useSettings((s) => s.settings.keybindings)
   const environments = useEnvironments((s) => s.env.environments)
   const activeEnvId = useEnvironments((s) => s.env.activeEnvironmentId)
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
@@ -28,9 +34,9 @@ export function Titlebar() {
     <div className="titlebar drag-region">
       {isMac && (
         <div className="win-dots nodrag">
-          <i title="Закрыть" onClick={() => void window.api.closeWindow()} />
-          <i title="Свернуть" onClick={() => void window.api.minimizeWindow()} />
-          <i title="Развернуть" onClick={() => void window.api.maximizeWindow()} />
+          <i title={tr('Закрыть')} onClick={() => void window.api.closeWindow()} />
+          <i title={tr('Свернуть')} onClick={() => void window.api.minimizeWindow()} />
+          <i title={tr('Развернуть')} onClick={() => void window.api.maximizeWindow()} />
         </div>
       )}
       <div className="brand" style={{ marginLeft: isMac ? 6 : 4 }}>
@@ -43,7 +49,7 @@ export function Titlebar() {
       <div className="grow" />
       <div className="global-search nodrag" data-tour="search" onClick={() => useUi.getState().setPaletteOpen(true)}>
         <Icon name="search" size={14} />
-        <span className="ph">Поиск или команда…</span>
+        <span className="ph">{tr('Поиск или команда…')}</span>
         <span className="kbd">{kbd('K')}</span>
       </div>
       <div className="grow" />
@@ -75,7 +81,7 @@ export function Titlebar() {
           <DropdownMenu.Content className="popover" align="end" sideOffset={6} style={{ position: 'relative', minWidth: 200 }}>
             <DropdownMenu.Item className={`pop-item ${activeEnvId === null ? 'on' : ''}`} onSelect={() => setActiveEnv(null)}>
               <Icon name="env" size={14} style={{ color: 'var(--tx-3)' }} />
-              <span style={{ flex: 1 }}>Без окружения</span>
+              <span style={{ flex: 1 }}>{tr('Без окружения')}</span>
               {activeEnvId === null && <Icon name="check" size={14} className="tick" />}
             </DropdownMenu.Item>
             {environments.map((e) => (
@@ -91,50 +97,69 @@ export function Titlebar() {
 
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button className={`icon-btn nodrag ${paneCount > 1 ? 'on' : ''}`} title="Разбить экран">
+          <button className={`icon-btn nodrag ${paneCount > 1 ? 'on' : ''}`} title={tr('Разбить экран')}>
             <Icon name="layoutGrid" size={15} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="popover" align="end" sideOffset={6} style={{ position: 'relative', minWidth: 150 }}>
-            {([1, 2, 3, 4] as const).map((n) => (
+          <DropdownMenu.Content className="popover" align="end" sideOffset={6} style={{ position: 'relative', minWidth: 270 }}>
+            {PANE_PRESETS.map((n) => (
               <DropdownMenu.Item
                 key={n}
                 className={`pop-item ${paneCount === n ? 'on' : ''}`}
-                onSelect={() => useUi.getState().setPaneCount(n)}
+                onSelect={() => usePanes.getState().applyPreset(n)}
               >
                 <span style={{ flex: 1 }}>
-                  {n} {n === 1 ? 'панель' : 'панели'}
+                  {n} {n === 1 ? 'панель' : n < 5 ? 'панели' : 'панелей'}
                 </span>
+                <span className="pane-menu-kbd">{kbdCombo(`panePreset${n}` as KeyActionId, keybindings)}</span>
                 {paneCount === n && <Icon name="check" size={14} className="tick" />}
               </DropdownMenu.Item>
             ))}
+            <DropdownMenu.Separator className="pop-sep" />
+            <DropdownMenu.Item className="pop-item" onSelect={() => usePanes.getState().splitActive('row')}>
+              <Icon name="splitRight" size={14} />
+              <span style={{ flex: 1 }}>{tr('Добавить панель справа')}</span>
+              <span className="pane-menu-kbd">{kbdCombo('paneSplitRight', keybindings)}</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className="pop-item" onSelect={() => usePanes.getState().splitActive('col')}>
+              <Icon name="splitDown" size={14} />
+              <span style={{ flex: 1 }}>{tr('Добавить панель снизу')}</span>
+              <span className="pane-menu-kbd">{kbdCombo('paneSplitDown', keybindings)}</span>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="pop-sep" />
+            <DropdownMenu.Item className="pop-item" onSelect={() => useUi.getState().openSettings('shortcuts')}>
+              <Icon name="bolt" size={14} />
+              <span style={{ flex: 1 }}>{tr('Горячие клавиши панелей…')}</span>
+            </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
       <div className="theme-toggle nodrag">
-        <button className={resolvedTheme === 'light' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('light')} title="Светлая">
+        <button className={resolvedTheme === 'light' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('light')} title={tr('Светлая')}>
           <Icon name="sun" size={15} />
         </button>
-        <button className={resolvedTheme === 'dark' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('dark')} title="Тёмная">
+        <button className={resolvedTheme === 'dark' && themeChoice !== 'system' ? 'on' : ''} onClick={() => setTheme('dark')} title={tr('Тёмная')}>
           <Icon name="moon" size={14} />
         </button>
       </div>
-      <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} data-tour="ai" onClick={() => useUi.getState().toggleAi()} title={`AI-ассистент (${MOD}J)`}>
-        <Icon name="sparkle" size={16} />
-      </button>
+      {hasAi && (
+        <button className={`icon-btn nodrag ${aiOpen ? 'on' : ''}`} data-tour="ai" onClick={() => useUi.getState().toggleAi()} title={`AI-ассистент (${MOD}J)`}>
+          <Icon name="sparkle" size={16} />
+        </button>
+      )}
 
       {/* Windows / Linux native-style window controls (macOS uses the dots above). */}
       {!isMac && (
         <div className="win-controls nodrag">
-          <button className="wc" title="Свернуть" onClick={() => void window.api.minimizeWindow()}>
+          <button className="wc" title={tr('Свернуть')} onClick={() => void window.api.minimizeWindow()}>
             <Icon name="winMin" size={14} />
           </button>
-          <button className="wc" title="Развернуть" onClick={() => void window.api.maximizeWindow()}>
+          <button className="wc" title={tr('Развернуть')} onClick={() => void window.api.maximizeWindow()}>
             <Icon name="winMax" size={12} />
           </button>
-          <button className="wc close" title="Закрыть" onClick={() => void window.api.closeWindow()}>
+          <button className="wc close" title={tr('Закрыть')} onClick={() => void window.api.closeWindow()}>
             <Icon name="close" size={14} />
           </button>
         </div>

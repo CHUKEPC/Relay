@@ -1,0 +1,9 @@
+{
+  "id": "ai-assistant",
+  "name": "AI-ассистент",
+  "description": "Встроенный ИИ-помощник: подключение своих провайдеров (OpenAI, Anthropic, OpenRouter, локальные модели) и чат по текущему запросу и ответу.",
+  "version": "1.0.0",
+  "capabilities": [
+    "ai"
+  ]
+}

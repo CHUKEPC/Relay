@@ -1,0 +1,9 @@
+{
+  "id": "advanced-auth",
+  "name": "Продвинутая Authorization",
+  "description": "Дополнительные схемы авторизации: Digest, JWT Bearer, OAuth 1.0, AWS Signature v4, Hawk, Akamai EdgeGrid, ASAP, NTLM.",
+  "version": "1.0.0",
+  "capabilities": [
+    "auth.advanced"
+  ]
+}

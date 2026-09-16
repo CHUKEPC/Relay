@@ -48,6 +48,14 @@ import type {
   WorkspaceMeta,
   WsConnectSpec
 } from './types'
+import type { FeaturePluginInfo } from './features'
+
+/** Persisted enable/disable state of the bundled feature plugins (app-level). */
+export interface FeaturePluginsDoc {
+  version: number
+  /** plugin id -> enabled; a missing id means "enabled" (shipped = wanted) */
+  enabled: Record<string, boolean>
+}
 
 /** Channel names, grouped. Use these constants on both ends. */
 export const IPC = {
@@ -70,7 +78,20 @@ export const IPC = {
   },
   storage: {
     load: 'storage:load',
-    save: 'storage:save'
+    save: 'storage:save',
+    /** main → other windows after a save, so every window shows the same data */
+    changed: 'storage:changed'
+  },
+  panes: {
+    detach: 'panes:detach',
+    attach: 'panes:attach',
+    focus: 'panes:focus',
+    putSnapshot: 'panes:putSnapshot',
+    takeSnapshot: 'panes:takeSnapshot',
+    /** main → main window when a detached pane window closed (payload: tabId) */
+    closed: 'panes:closed',
+    nudge: 'panes:nudge',
+    list: 'panes:list'
   },
   data: {
     import: 'data:import',
@@ -125,6 +146,15 @@ export const IPC = {
     delete: 'workspace:delete',
     switch: 'workspace:switch'
   },
+  /** feature plugins bundled with the app (declarative capability packs) */
+  features: {
+    list: 'features:list',
+    setEnabled: 'features:setEnabled',
+    locale: 'features:locale',
+    openFolder: 'features:openFolder',
+    /** broadcast: the enabled set changed (sent to every window) */
+    changed: 'features:changed'
+  },
   plugins: {
     list: 'plugins:list',
     setEnabled: 'plugins:setEnabled',
@@ -171,8 +201,27 @@ export const IPC = {
  * machine-readable error string.
  */
 export type UpdateCheckResult =
-  | { ok: true; currentVersion: string; latestVersion: string; updateAvailable: boolean; url: string }
-  | { ok: false; error: string }
+  | {
+      ok: true
+      currentVersion: string
+      latestVersion: string
+      updateAvailable: boolean
+      url: string
+      /** where the version came from: a published release or a plain git tag */
+      source: 'release' | 'tag'
+      /** release publication date (ISO), when the source is a release */
+      publishedAt?: string
+      /** release notes, trimmed; only for releases that carry a body */
+      notes?: string
+    }
+  | { ok: false; error: UpdateCheckError }
+
+/**
+ * Why a check could not produce a version.
+ * `no-releases` is a normal state for a fresh repository, not a failure of the
+ * app — the UI says so instead of blaming the network.
+ */
+export type UpdateCheckError = 'no-releases' | 'rate-limit' | 'timeout' | 'network' | 'ipc' | 'web-mode' | `http-${number}`
 
 /** Type-safe map of persisted documents keyed by storage name. */
 export interface StorageMap {
@@ -185,6 +234,7 @@ export interface StorageMap {
   providers: ProvidersDoc
   cookies: CookiesDoc
   plugins: PluginsStateDoc
+  features: FeaturePluginsDoc
 }
 
 export type StorageKey = keyof StorageMap
@@ -230,6 +280,24 @@ export interface RelayApi {
   /* ---- storage ---- */
   storageLoad<K extends StorageKey>(key: K): Promise<StorageMap[K] | null>
   storageSave<K extends StorageKey>(key: K, value: StorageMap[K]): Promise<void>
+  /** A document was saved by ANOTHER window. Returns an unsubscribe fn. */
+  onStorageChanged(cb: <K extends StorageKey>(key: K, value: StorageMap[K]) => void): () => void
+
+  /* ---- detached panes (one request per separate OS window) ---- */
+  /** Open (or focus) a separate window showing only this tab. */
+  paneDetach(tabId: string, title: string): Promise<void>
+  /** Close the tab's separate window (the tab returns to the main window). */
+  paneAttach(tabId: string): Promise<void>
+  paneFocus(tabId: string): Promise<void>
+  /** Tabs currently shown in separate windows (main window re-syncs after a reload). */
+  paneList(): Promise<string[]>
+  /** Hand a tab's volatile response state to the window that shows it next. */
+  panePutSnapshot(tabId: string, snapshot: unknown): void
+  paneTakeSnapshot(tabId: string): Promise<unknown>
+  /** Main window: a detached pane window was closed. Returns an unsubscribe fn. */
+  onPaneClosed(cb: (tabId: string) => void): () => void
+  /** Move/resize the calling window by a pixel delta (keyboard pane control). */
+  windowNudge(dx: number, dy: number, dw: number, dh: number): Promise<void>
 
   /* ---- import / export ---- */
   importData(kind: ImportKind, text: string): Promise<ImportResult[]>
@@ -286,6 +354,17 @@ export interface RelayApi {
   grpcReflect(spec: GrpcReflectSpec): Promise<GrpcParseResult>
   /** Subscribe to gRPC events for a call. Returns an unsubscribe fn. */
   onGrpc(connId: string, cb: (event: RealtimeEvent) => void): () => void
+
+  /* ---- feature plugins bundled in `plugins/` (docs/PLUGINS.md §10) ---- */
+  featuresList(): Promise<FeaturePluginInfo[]>
+  /** Turn a bundled feature pack on or off. Returns the updated list. */
+  featuresSetEnabled(id: string, enabled: boolean): Promise<FeaturePluginInfo[]>
+  /** Read one UI locale catalog contributed by an enabled language pack. */
+  featuresLocale(code: string): Promise<Record<string, string> | null>
+  /** Reveal the bundled plugins folder; false when it is missing. */
+  featuresOpenFolder(): Promise<boolean>
+  /** Subscribe to enable/disable changes made in any window. Returns an unsubscribe fn. */
+  onFeaturesChanged(cb: (list: FeaturePluginInfo[]) => void): () => void
 
   /* ---- plugins (docs/PLUGINS.md) ---- */
   pluginsList(): Promise<PluginInfo[]>

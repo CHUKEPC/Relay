@@ -9,8 +9,11 @@ import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useRunner } from './runner'
 import { usePlugins } from './plugins'
+import { useFeatures, wireFeatures } from './features'
+import { applyLanguage } from '../lib/i18n'
 import { useUi } from './ui'
-import { flushPersist } from './persist'
+import { flushPersist, persist } from './persist'
+import { LEGACY_PRESET_IDS } from '../lib/provider-templates'
 import {
   defaultSettingsDoc,
   emptyCollections,
@@ -21,10 +24,27 @@ import {
   emptyTabs
 } from './defaults'
 
+import { tr } from '@renderer/lib/i18n'
 let unloadWired = false
 
+/**
+ * Older versions seeded Anthropic/OpenAI/OpenRouter/Local on first run, which
+ * showed "active" providers nobody had configured. Remove the ones that were
+ * never connected; anything with a key stays.
+ */
+function dropUntouchedLegacyPresets(): void {
+  const doc = useAi.getState().providers
+  const providers = doc.providers.filter((p) => !(LEGACY_PRESET_IDS.has(p.id) && !p.hasKey && !p.apiKeyRef))
+  const activeValid = providers.some((p) => p.id === doc.activeProviderId && p.hasKey)
+  const activeProviderId = activeValid ? doc.activeProviderId : (providers.find((p) => p.hasKey)?.id ?? null)
+  if (providers.length === doc.providers.length && activeProviderId === doc.activeProviderId) return
+  const next = { ...doc, providers, activeProviderId }
+  useAi.setState({ providers: next })
+  persist('providers', next)
+}
+
 /** Load all persisted documents from main and hydrate the stores. */
-export async function bootstrap(): Promise<void> {
+export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void> {
   // Wire the unload flush FIRST — before any await — so a rejected storageLoad
   // can't skip past it and lose the unload-time flush for the whole session.
   if (!unloadWired) {
@@ -32,17 +52,23 @@ export async function bootstrap(): Promise<void> {
     window.addEventListener('beforeunload', flushPersist)
   }
 
-  const [collections, environments, globals, history, tabs, settings, providers] = await Promise.all([
+  // Feature packs decide which UI even exists (protocols, AI, auth, languages),
+  // so they are loaded with the documents, before the first render.
+  const [collections, environments, globals, history, tabs, settings, providers, features] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
     window.api.storageLoad('globals'),
     window.api.storageLoad('history'),
     window.api.storageLoad('tabs'),
     window.api.storageLoad('settings'),
-    window.api.storageLoad('providers')
+    window.api.storageLoad('providers'),
+    window.api.featuresList().catch(() => [])
   ])
 
+  useFeatures.getState().setPlugins(features)
   useSettings.getState().hydrate(settings ?? defaultSettingsDoc())
+  // Language depends on the packs above (a plugin language needs its pack on).
+  await applyLanguage(useSettings.getState().settings.language || 'ru')
   useCollections.getState().hydrate(collections ?? emptyCollections())
   useEnvironments.getState().hydrate(environments ?? emptyEnvironments(), globals ?? emptyGlobals())
   useHistory.getState().hydrate(history ?? emptyHistory())
@@ -57,12 +83,19 @@ export async function bootstrap(): Promise<void> {
       if (has !== !!p.hasKey) useAi.getState().updateProvider(p.id, { hasKey: has })
     }
   }
+  // A detached pane window shows one existing tab; the main window owns first-run setup.
+  if (opts.detached) {
+    watchSystemTheme()
+    return
+  }
 
+  dropUntouchedLegacyPresets()
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 
   // Plugins load opportunistically — a broken plugins dir must not stall boot.
   void usePlugins.getState().init()
 
+  wireFeatures()
   watchSystemTheme()
   scheduleUpdateCheck()
 }
@@ -79,7 +112,7 @@ function scheduleUpdateCheck(): void {
       .checkUpdates()
       .then((res) => {
         if (res.ok && res.updateAvailable) {
-          useUi.getState().showToast('Доступна новая версия ' + res.latestVersion + ' — Настройки → О приложении')
+          useUi.getState().showToast(tr('Доступна новая версия ') + res.latestVersion + ' — Настройки → О приложении')
         }
       })
       .catch(() => {

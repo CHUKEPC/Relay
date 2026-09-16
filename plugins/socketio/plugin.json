@@ -1,0 +1,9 @@
+{
+  "id": "socketio",
+  "name": "Socket.IO",
+  "description": "Режим Socket.IO: подключение к серверу Socket.IO, отправка и приём именованных событий.",
+  "version": "1.0.0",
+  "capabilities": [
+    "protocol.socketio"
+  ]
+}

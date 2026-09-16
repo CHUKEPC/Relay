@@ -6,6 +6,7 @@ import * as SwitchPrimitive from '@radix-ui/react-switch'
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from './Icon'
 
+import { tr } from '@renderer/lib/i18n'
 /* ---------- buttons ---------- */
 export function IconButton({
   icon,
@@ -63,9 +64,22 @@ export function Segmented<T extends string>({
 }
 
 /* ---------- toggle ---------- */
-export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({
+  checked,
+  onChange,
+  disabled
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
   return (
-    <SwitchPrimitive.Root className={`toggle ${checked ? 'on' : ''}`} checked={checked} onCheckedChange={onChange}>
+    <SwitchPrimitive.Root
+      className={`toggle ${checked ? 'on' : ''}`}
+      checked={checked}
+      disabled={disabled}
+      onCheckedChange={onChange}
+    >
       <SwitchPrimitive.Thumb />
     </SwitchPrimitive.Root>
   )
@@ -196,7 +210,7 @@ export function Modal({
         <DialogPrimitive.Overlay className="modal-scrim" />
         <DialogPrimitive.Content className="modal" style={{ width }} aria-describedby={undefined}>
           {title && <DialogPrimitive.Title className="modal-title">{title}</DialogPrimitive.Title>}
-          {!title && <DialogPrimitive.Title style={{ display: 'none' }}>Диалог</DialogPrimitive.Title>}
+          {!title && <DialogPrimitive.Title style={{ display: 'none' }}>{tr('Диалог')}</DialogPrimitive.Title>}
           {children}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

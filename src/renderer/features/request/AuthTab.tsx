@@ -5,6 +5,12 @@ import { HighlightedInput } from '@renderer/components/HighlightedInput'
 import { useTabs } from '@renderer/store/tabs'
 import { useScope, useTab } from '@renderer/lib/hooks'
 import { useCollections } from '@renderer/store/collections'
+import { useUi } from '@renderer/store/ui'
+import { useCap } from '@renderer/store/features'
+import { CORE_AUTH_TYPES } from '@shared/features'
+
+import { tr } from '@renderer/lib/i18n'
+const CORE_AUTH = new Set<Auth['type']>(CORE_AUTH_TYPES)
 
 const AUTH_TYPES: { id: Auth['type']; label: string }[] = [
   { id: 'inherit', label: 'Inherit' },
@@ -31,6 +37,10 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
   const tab = useTab(tabId)
   const inheritedAuth = useCollections((s) => s.inheritedAuthFor(tab?.savedRequestId ?? null))
   const auth = req.auth
+  const hasAdvanced = useCap('auth.advanced')
+  // The scheme a request already uses stays selectable even with the pack off,
+  // so an imported request never silently loses its auth.
+  const authTypes = AUTH_TYPES.filter((t) => hasAdvanced || CORE_AUTH.has(t.id) || t.id === auth.type)
 
   const setAuth = (a: Auth) => patch({ auth: a })
 
@@ -82,23 +92,29 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
 
   return (
     <div style={{ padding: '16px 14px', maxWidth: 600 }}>
-      <Field label="Тип авторизации">
+      <Field label={tr('Тип авторизации')}>
         <div className="seg" style={{ flexWrap: 'wrap' }}>
-          {AUTH_TYPES.map((t) => (
+          {authTypes.map((t) => (
             <button key={t.id} className={auth.type === t.id ? 'on' : ''} onClick={() => changeType(t.id)}>
               {t.label}
             </button>
           ))}
         </div>
       </Field>
+      {!hasAdvanced && (
+        <div style={{ color: 'var(--tx-3)', fontSize: 12, margin: '-4px 0 10px' }}>
+          Digest, JWT, OAuth 1.0, AWS Signature, Hawk, Akamai, ASAP и NTLM — в плагине{' '}
+          <button className="link-btn" onClick={() => useUi.getState().openSettings('plugins')}> {tr('«Продвинутая Authorization»')} </button>
+          .
+        </div>
+      )}
 
       {auth.type === 'inherit' && (
-        <div style={{ color: 'var(--tx-2)', fontSize: 12.5, padding: '8px 0' }}>
-          Наследует авторизацию от родителя — сейчас это <b style={{ color: 'var(--tx-0)' }}>{inheritedAuth.type}</b>.
+        <div style={{ color: 'var(--tx-2)', fontSize: 12.5, padding: '8px 0' }}> {tr('Наследует авторизацию от родителя — сейчас это')} <b style={{ color: 'var(--tx-0)' }}>{inheritedAuth.type}</b>.
         </div>
       )}
       {auth.type === 'none' && (
-        <div style={{ color: 'var(--tx-2)', fontSize: 12.5, padding: '8px 0' }}>Этот запрос не использует авторизацию.</div>
+        <div style={{ color: 'var(--tx-2)', fontSize: 12.5, padding: '8px 0' }}>{tr('Этот запрос не использует авторизацию.')}</div>
       )}
 
       {auth.type === 'bearer' && (
@@ -131,7 +147,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               <HighlightedInput value={auth.value} onChange={(value) => setAuth({ ...auth, value })} scope={scope} placeholder="{{api_key}}" />
             </div>
           </Field>
-          <Field label="Добавить в">
+          <Field label={tr('Добавить в')}>
             <Segmented
               value={auth.addTo}
               onChange={(addTo) => setAuth({ ...auth, addTo })}
@@ -162,25 +178,21 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
                 <input className="input mono" value={auth.realm ?? ''} onChange={(e) => setAuth({ ...auth, realm: e.target.value })} placeholder="example.com" />
               </Field>
               <Field label="Nonce">
-                <input className="input mono" value={auth.nonce ?? ''} onChange={(e) => setAuth({ ...auth, nonce: e.target.value })} placeholder="из предыдущего ответа сервера" />
+                <input className="input mono" value={auth.nonce ?? ''} onChange={(e) => setAuth({ ...auth, nonce: e.target.value })} placeholder={tr('из предыдущего ответа сервера')} />
               </Field>
               <Field label="QOP">
-                <input className="input mono" value={auth.qop ?? ''} onChange={(e) => setAuth({ ...auth, qop: e.target.value })} placeholder="auth (необязательно)" />
+                <input className="input mono" value={auth.qop ?? ''} onChange={(e) => setAuth({ ...auth, qop: e.target.value })} placeholder={tr('auth (необязательно)')} />
               </Field>
               <Field label="Opaque">
-                <input className="input mono" value={auth.opaque ?? ''} onChange={(e) => setAuth({ ...auth, opaque: e.target.value })} placeholder="(необязательно)" />
+                <input className="input mono" value={auth.opaque ?? ''} onChange={(e) => setAuth({ ...auth, opaque: e.target.value })} placeholder={tr('(необязательно)')} />
               </Field>
-              <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
-                Preemptive требует известных <span className="mono">realm</span> и{' '}
+              <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}> {tr('Preemptive требует известных')} <span className="mono">realm</span> и{' '}
                 <span className="mono">nonce</span> (например, из предыдущего ответа 401). Заголовок{' '}
-                <span className="mono">Authorization</span> вычисляется и отправляется в первом же запросе.
-              </div>
+                <span className="mono">Authorization</span> {tr('вычисляется и отправляется в первом же запросе.')} </div>
             </>
           )}
           {!auth.preemptive && (
-            <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
-              Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с
-              заголовком <span className="mono">WWW-Authenticate: Digest</span> автоматически
+            <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}> {tr('Полный Digest по RFC 7616: запрос отправляется без авторизации, а на ответ 401 с заголовком')} <span className="mono">WWW-Authenticate: Digest</span> автоматически
               вычисляется ответ (MD5/SHA-256, qop=auth) и запрос повторяется.
             </div>
           )}
@@ -191,7 +203,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
 
       {auth.type === 'jwt' && (
         <>
-          <Field label="Алгоритм">
+          <Field label={tr('Алгоритм')}>
             <select className="input mono" value={auth.algorithm} onChange={(e) => setAuth({ ...auth, algorithm: e.target.value as JwtAlg })}>
               {JWT_ALGS.map((a) => (
                 <option key={a} value={a}>
@@ -200,7 +212,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               ))}
             </select>
           </Field>
-          <Field label="Secret или приватный ключ (PEM для RS/PS)">
+          <Field label={tr('Secret или приватный ключ (PEM для RS/PS)')}>
             <textarea
               className="input mono"
               value={auth.secret}
@@ -223,10 +235,10 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               style={{ resize: 'vertical', minHeight: 96 }}
             />
           </Field>
-          <Field label="Префикс заголовка">
+          <Field label={tr('Префикс заголовка')}>
             <input className="input mono" value={auth.headerPrefix} onChange={(e) => setAuth({ ...auth, headerPrefix: e.target.value })} placeholder="Bearer" />
           </Field>
-          <Field label="Добавить в">
+          <Field label={tr('Добавить в')}>
             <Segmented
               value={auth.addTo}
               onChange={(addTo) => setAuth({ ...auth, addTo })}
@@ -237,7 +249,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             />
           </Field>
           {auth.addTo === 'query' && (
-            <Field label="Имя query-параметра">
+            <Field label={tr('Имя query-параметра')}>
               <input className="input mono" value={auth.queryParamName ?? ''} onChange={(e) => setAuth({ ...auth, queryParamName: e.target.value })} placeholder="token" />
             </Field>
           )}
@@ -256,11 +268,11 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
           </Field>
           <Field label="Token">
             <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
-              <HighlightedInput value={auth.token ?? ''} onChange={(token) => setAuth({ ...auth, token })} scope={scope} placeholder="(необязательно)" />
+              <HighlightedInput value={auth.token ?? ''} onChange={(token) => setAuth({ ...auth, token })} scope={scope} placeholder={tr('(необязательно)')} />
             </div>
           </Field>
           <Field label="Token Secret">
-            <input className="input mono" type="password" value={auth.tokenSecret ?? ''} onChange={(e) => setAuth({ ...auth, tokenSecret: e.target.value })} placeholder="(необязательно)" />
+            <input className="input mono" type="password" value={auth.tokenSecret ?? ''} onChange={(e) => setAuth({ ...auth, tokenSecret: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
           <Field label="Signature Method">
             <Segmented
@@ -273,8 +285,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
               ]}
             />
           </Field>
-          <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}>
-            Подпись добавляется в заголовок <span className="mono">Authorization: OAuth …</span>.
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5 }}> {tr('Подпись добавляется в заголовок')} <span className="mono">Authorization: OAuth …</span>.
           </div>
         </>
       )}
@@ -297,7 +308,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
           </Field>
           <Field label="Session Token">
             <div className="input mono" style={{ display: 'flex', alignItems: 'center' }}>
-              <HighlightedInput value={auth.sessionToken ?? ''} onChange={(sessionToken) => setAuth({ ...auth, sessionToken })} scope={scope} placeholder="(необязательно)" />
+              <HighlightedInput value={auth.sessionToken ?? ''} onChange={(sessionToken) => setAuth({ ...auth, sessionToken })} scope={scope} placeholder={tr('(необязательно)')} />
             </div>
           </Field>
         </>
@@ -324,7 +335,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             />
           </Field>
           <Field label="Ext">
-            <input className="input mono" value={auth.ext ?? ''} onChange={(e) => setAuth({ ...auth, ext: e.target.value })} placeholder="(необязательно)" />
+            <input className="input mono" value={auth.ext ?? ''} onChange={(e) => setAuth({ ...auth, ext: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
         </>
       )}
@@ -369,7 +380,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             />
           </Field>
           <Field label="Subject">
-            <input className="input mono" value={auth.subject ?? ''} onChange={(e) => setAuth({ ...auth, subject: e.target.value })} placeholder="(необязательно)" />
+            <input className="input mono" value={auth.subject ?? ''} onChange={(e) => setAuth({ ...auth, subject: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
         </>
       )}
@@ -383,15 +394,12 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             <input className="input" type="password" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} />
           </Field>
           <Field label="Domain" hint="Домен Windows (необязательно)">
-            <input className="input" value={auth.domain ?? ''} onChange={(e) => setAuth({ ...auth, domain: e.target.value })} placeholder="(необязательно)" />
+            <input className="input" value={auth.domain ?? ''} onChange={(e) => setAuth({ ...auth, domain: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
           <Field label="Workstation" hint="Имя рабочей станции (необязательно)">
-            <input className="input" value={auth.workstation ?? ''} onChange={(e) => setAuth({ ...auth, workstation: e.target.value })} placeholder="(необязательно)" />
+            <input className="input" value={auth.workstation ?? ''} onChange={(e) => setAuth({ ...auth, workstation: e.target.value })} placeholder={tr('(необязательно)')} />
           </Field>
-          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: 4 }}>
-            NTLMv2: запрос отправляется с Type 1, на 401 с Type 2 движок отвечает Type 3 по тому же
-            keep-alive соединению.
-          </div>
+          <div style={{ color: 'var(--tx-3)', fontSize: 11.5, marginTop: 4 }}> {tr('NTLMv2: запрос отправляется с Type 1, на 401 с Type 2 движок отвечает Type 3 по тому же keep-alive соединению.')} </div>
         </>
       )}
     </div>
@@ -487,7 +495,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
         </select>
       </Field>
       <Field label="Access Token">
-        <input className="input mono" value={auth.accessToken} placeholder="(пусто — получите ниже)" onChange={(e) => setAuth({ ...auth, accessToken: e.target.value })} />
+        <input className="input mono" value={auth.accessToken} placeholder={tr('(пусто — получите ниже)')} onChange={(e) => setAuth({ ...auth, accessToken: e.target.value })} />
       </Field>
       <Field label="Token URL">
         <input className="input mono" value={auth.tokenUrl ?? ''} onChange={(e) => setAuth({ ...auth, tokenUrl: e.target.value })} placeholder="https://auth.example.com/oauth/token" />
@@ -521,15 +529,13 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       {auth.grant === 'authorization_code' && (
         <>
           <Field label="Authorization Code">
-            <input className="input mono" value={auth.code ?? ''} onChange={(e) => setAuth({ ...auth, code: e.target.value })} placeholder="код, полученный после редиректа" />
+            <input className="input mono" value={auth.code ?? ''} onChange={(e) => setAuth({ ...auth, code: e.target.value })} placeholder={tr('код, полученный после редиректа')} />
           </Field>
           <Field label="Redirect URI">
             <input className="input mono" value={auth.redirectUri ?? ''} onChange={(e) => setAuth({ ...auth, redirectUri: e.target.value })} placeholder="https://app.example.com/callback" />
           </Field>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
-            <input type="checkbox" checked={pkceOn} onChange={(e) => togglePkce(e.target.checked)} />
-            Использовать PKCE
-          </label>
+            <input type="checkbox" checked={pkceOn} onChange={(e) => togglePkce(e.target.checked)} /> {tr('Использовать PKCE')} </label>
           {pkceOn && (
             <Field label="Code Verifier" hint="отправляется при обмене кода на токен">
               <input className="input mono" value={auth.codeVerifier ?? ''} readOnly />
@@ -539,7 +545,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       )}
       {auth.grant === 'refresh_token' && (
         <Field label="Refresh Token">
-          <input className="input mono" value={auth.refreshToken ?? ''} onChange={(e) => setAuth({ ...auth, refreshToken: e.target.value })} placeholder="refresh token для обмена" />
+          <input className="input mono" value={auth.refreshToken ?? ''} onChange={(e) => setAuth({ ...auth, refreshToken: e.target.value })} placeholder={tr('refresh token для обмена')} />
         </Field>
       )}
       {auth.grant === 'device_code' && (
@@ -548,7 +554,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
             <input className="input mono" value={auth.deviceAuthUrl ?? ''} onChange={(e) => setAuth({ ...auth, deviceAuthUrl: e.target.value })} placeholder="https://auth.example.com/device/code" />
           </Field>
           <Field label="Device Code" hint="заполняется кнопкой ниже">
-            <input className="input mono" value={auth.deviceCode ?? ''} onChange={(e) => setAuth({ ...auth, deviceCode: e.target.value })} placeholder="(получите device code)" />
+            <input className="input mono" value={auth.deviceCode ?? ''} onChange={(e) => setAuth({ ...auth, deviceCode: e.target.value })} placeholder={tr('(получите device code)')} />
           </Field>
         </>
       )}
@@ -564,9 +570,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
           {busy ? 'Запрос…' : 'Получить токен'}
         </button>
         {auth.grant === 'device_code' && (
-          <button className="btn" onClick={requestDeviceCode} disabled={busy}>
-            Запросить device code
-          </button>
+          <button className="btn" onClick={requestDeviceCode} disabled={busy}> {tr('Запросить device code')} </button>
         )}
         {msg && <span style={{ fontSize: 12, color: 'var(--tx-2)' }}>{msg}</span>}
       </div>

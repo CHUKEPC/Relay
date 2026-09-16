@@ -31,6 +31,9 @@ export default defineConfig({
     root: 'src/renderer',
     resolve: { alias },
     plugins: [react()],
+    // Node 17+ binds "localhost" to ::1 on Windows while Electron dials
+    // 127.0.0.1, so the window got ERR_CONNECTION_REFUSED. Pin the address.
+    server: { host: '127.0.0.1' },
     build: {
       rollupOptions: {
         input: { index: resolve('src/renderer/index.html') }

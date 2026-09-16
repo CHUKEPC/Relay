@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import type { OpenFileOptions, RelayApi, SaveFileOptions, StorageKey, StorageMap } from '@shared/ipc-contract'
+import type { FeaturePluginInfo } from '@shared/features'
 import type {
   AiChatStart,
   AiStreamEvent,
@@ -57,6 +58,25 @@ const api: RelayApi = {
     ipcRenderer.invoke(IPC.storage.load, key) as Promise<StorageMap[K] | null>,
   storageSave: <K extends StorageKey>(key: K, value: StorageMap[K]) =>
     ipcRenderer.invoke(IPC.storage.save, key, value) as Promise<void>,
+  onStorageChanged: (cb) => {
+    const handler = (_e: unknown, key: StorageKey, value: StorageMap[StorageKey]) => cb(key, value)
+    ipcRenderer.on(IPC.storage.changed, handler)
+    return () => ipcRenderer.removeListener(IPC.storage.changed, handler)
+  },
+
+  /* ---- detached panes ---- */
+  paneDetach: (tabId: string, title: string) => ipcRenderer.invoke(IPC.panes.detach, tabId, title),
+  paneAttach: (tabId: string) => ipcRenderer.invoke(IPC.panes.attach, tabId),
+  paneFocus: (tabId: string) => ipcRenderer.invoke(IPC.panes.focus, tabId),
+  paneList: () => ipcRenderer.invoke(IPC.panes.list),
+  panePutSnapshot: (tabId: string, snapshot: unknown) => ipcRenderer.send(IPC.panes.putSnapshot, tabId, snapshot),
+  paneTakeSnapshot: (tabId: string) => ipcRenderer.invoke(IPC.panes.takeSnapshot, tabId),
+  onPaneClosed: (cb: (tabId: string) => void) => {
+    const handler = (_e: unknown, tabId: string) => cb(tabId)
+    ipcRenderer.on(IPC.panes.closed, handler)
+    return () => ipcRenderer.removeListener(IPC.panes.closed, handler)
+  },
+  windowNudge: (dx: number, dy: number, dw: number, dh: number) => ipcRenderer.invoke(IPC.panes.nudge, dx, dy, dw, dh),
 
   /* ---- import / export ---- */
   importData: (kind: ImportKind, text: string) => ipcRenderer.invoke(IPC.data.import, kind, text),
@@ -114,6 +134,17 @@ const api: RelayApi = {
     const handler = (_e: unknown, event: RealtimeEvent) => cb(event)
     ipcRenderer.on(channel, handler)
     return () => ipcRenderer.removeListener(channel, handler)
+  },
+
+  /* ---- feature plugins (bundled capability packs) ---- */
+  featuresList: () => ipcRenderer.invoke(IPC.features.list),
+  featuresSetEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke(IPC.features.setEnabled, id, enabled),
+  featuresLocale: (code: string) => ipcRenderer.invoke(IPC.features.locale, code),
+  featuresOpenFolder: () => ipcRenderer.invoke(IPC.features.openFolder),
+  onFeaturesChanged: (cb: (list: FeaturePluginInfo[]) => void) => {
+    const handler = (_e: unknown, list: FeaturePluginInfo[]) => cb(list)
+    ipcRenderer.on(IPC.features.changed, handler)
+    return () => ipcRenderer.removeListener(IPC.features.changed, handler)
   },
 
   /* ---- plugins ---- */

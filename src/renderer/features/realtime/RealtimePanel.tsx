@@ -7,6 +7,7 @@ import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/r
 import { makeId } from '@shared/id'
 import { templatesForKind } from './templates'
 
+import { tr } from '@renderer/lib/i18n'
 /** Bottom-panel view for WebSocket / SSE / Socket.IO / MQTT (replaces the HTTP response). */
 
 const KIND_LABEL: Record<RtKind, string> = {
@@ -114,7 +115,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
   const saveTemplate = (): void => {
     const content = draft
     if (!content.trim()) {
-      useUi.getState().showToast('Нечего сохранять — поле сообщения пустое', 'error')
+      useUi.getState().showToast(tr('Нечего сохранять — поле сообщения пустое'), 'error')
       return
     }
     const name = window.prompt('Название шаблона:')?.trim()
@@ -128,7 +129,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
     }
     const existing = req?.messageTemplates ?? []
     patchReq({ messageTemplates: [...existing, tpl] })
-    useUi.getState().showToast('Шаблон сохранён')
+    useUi.getState().showToast(tr('Шаблон сохранён'))
   }
 
   const deleteTemplate = (id: string): void => {
@@ -158,10 +159,8 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           <span>{rt.messages.filter((m) => m.dir !== 'system').length} сообщений</span>
         </div>
         <div className="resp-actions">
-          <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title="Очистить лог">
-            <Icon name="trash" size={13} />
-            Очистить
-          </button>
+          <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
+            <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>
       </div>
 
@@ -218,7 +217,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
       {/* Saved message templates (not applicable to SSE — it has no outbound channel). */}
       {kind !== 'sse' && (
         <div className="rt-templates" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid var(--line)', overflowX: 'auto' }}>
-          <span style={{ fontSize: 11, color: 'var(--tx-3)', flex: 'none', textTransform: 'uppercase', letterSpacing: '.04em' }}>Шаблоны</span>
+          <span style={{ fontSize: 11, color: 'var(--tx-3)', flex: 'none', textTransform: 'uppercase', letterSpacing: '.04em' }}>{tr('Шаблоны')}</span>
           {templates.length === 0 ? (
             <span style={{ fontSize: 12, color: 'var(--tx-3)' }}>—</span>
           ) : (
@@ -236,7 +235,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
                   className="btn ghost"
                   style={{ height: 20, width: 20, padding: 0, justifyContent: 'center' }}
                   onClick={() => deleteTemplate(t.id)}
-                  title="Удалить шаблон"
+                  title={tr('Удалить шаблон')}
                 >
                   <Icon name="close" size={11} />
                 </button>
@@ -247,11 +246,9 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
             className="btn ghost"
             style={{ height: 24, marginLeft: 'auto', flex: 'none' }}
             onClick={saveTemplate}
-            title="Сохранить текущее сообщение как шаблон"
+            title={tr('Сохранить текущее сообщение как шаблон')}
           >
-            <Icon name="plus" size={12} />
-            Сохранить как шаблон
-          </button>
+            <Icon name="plus" size={12} /> {tr('Сохранить как шаблон')} </button>
         </div>
       )}
 
@@ -277,7 +274,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
         <div className="rt-composer" style={{ borderTop: '1px solid var(--line)', paddingBottom: 0 }}>
           <input
             className="input mono"
-            placeholder="Топик для подписки, напр. sensors/#"
+            placeholder={tr('Топик для подписки, напр. sensors/#')}
             value={subTopic}
             disabled={!open}
             onChange={(e) => setSubTopic(e.target.value)}
@@ -297,9 +294,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
               setSubTopic('')
             }}
             style={{ alignSelf: 'flex-end' }}
-          >
-            Подписаться
-          </button>
+          > {tr('Подписаться')} </button>
         </div>
       )}
 
@@ -318,7 +313,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           {kind === 'mqtt' && (
             <input
               className="input mono"
-              placeholder="топик для публикации"
+              placeholder={tr('топик для публикации')}
               value={topic}
               disabled={!open}
               onChange={(e) => setTopic(e.target.value)}

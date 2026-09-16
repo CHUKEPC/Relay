@@ -212,7 +212,35 @@
   font: inherit;
   color: var(--tx-0);
   width: 100%;
+  min-width: 0;
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.inline-edit-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.inline-edit-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.inline-edit-btn.ok {
+  color: var(--m-get);
+}
+.inline-edit-btn.cancel {
+  color: var(--s-5xx);
+}
+.inline-edit-btn:hover {
+  background: var(--bg-hover);
 }
 
 /* ---------- code gen / textarea blocks ---------- */
@@ -1121,3 +1149,19 @@
 }
 .snippet-item:hover { background: var(--bg-hover); color: var(--tx-0); }
 .snippet-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- undo reveal: briefly highlights the restored area ---------- */
+@keyframes undoFlash {
+  0% { box-shadow: 0 0 0 2px var(--accent) inset; background-color: var(--accent-soft); }
+  100% { box-shadow: 0 0 0 2px transparent inset; background-color: transparent; }
+}
+.undo-flash {
+  animation: undoFlash 0.9s var(--ease) 1;
+  border-radius: var(--radius-sm);
+}
+
+/* Placeholder while the code editor chunk loads (Monaco is lazy). */
+.monaco-loading {
+  background: var(--bg-1);
+  border-radius: var(--radius-sm);
+}

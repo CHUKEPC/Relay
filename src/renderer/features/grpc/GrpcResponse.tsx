@@ -3,6 +3,7 @@ import type { RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useGrpc, type GrpcStatus } from '@renderer/store/grpc'
 
+import { tr } from '@renderer/lib/i18n'
 /** Bottom/right-panel view for a gRPC call (replaces the HTTP response). */
 
 const STATUS_LABEL: Record<GrpcStatus, string> = {
@@ -79,10 +80,8 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
           <span>{inCount} ответ(ов)</span>
         </div>
         <div className="resp-actions">
-          <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title="Очистить лог">
-            <Icon name="trash" size={13} />
-            Очистить
-          </button>
+          <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
+            <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>
       </div>
 
@@ -93,7 +92,7 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
               <div className="empty-ico">
                 <Icon name="bolt" size={22} />
               </div>
-              <p style={{ marginBottom: 0 }}>Загрузите .proto, выберите метод и нажмите «Вызвать».</p>
+              <p style={{ marginBottom: 0 }}>{tr('Загрузите .proto, выберите метод и нажмите «Вызвать».')}</p>
             </div>
           </div>
         ) : (
@@ -105,7 +104,7 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
         <div className="rt-composer">
           <textarea
             value={draft}
-            placeholder="Сообщение потока (JSON)… (Ctrl/⌘+Enter — отправить)"
+            placeholder={tr('Сообщение потока (JSON)… (Ctrl/⌘+Enter — отправить)')}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -115,13 +114,9 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
             }}
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignSelf: 'flex-end' }}>
-            <button className="btn primary" onClick={doSend}>
-              Отправить
-              <Icon name="send" size={14} />
+            <button className="btn primary" onClick={doSend}> {tr('Отправить')} <Icon name="send" size={14} />
             </button>
-            <button className="btn" onClick={() => end(tabId)} title="Завершить отправку (half-close)">
-              Завершить
-            </button>
+            <button className="btn" onClick={() => end(tabId)} title={tr('Завершить отправку (half-close)')}> {tr('Завершить')} </button>
           </div>
         </div>
       )}

@@ -3,6 +3,10 @@ import type { SettingsDoc } from '@shared/types'
 import { Toggle } from '@renderer/components/primitives'
 import { useSettings } from '@renderer/store/settings'
 
+import { applyLanguage, LANGUAGE_NAMES, tr } from '@renderer/lib/i18n'
+import { useFeatures } from '@renderer/store/features'
+import { useUi } from '@renderer/store/ui'
+import { CORE_LOCALES } from '@shared/features'
 interface ToggleRowDef {
   key: keyof Pick<
     SettingsDoc,
@@ -34,6 +38,46 @@ const NUMBER_ROWS: NumberRowDef[] = [
   { key: 'maxRedirects', title: 'Макс. редиректов', desc: 'Предел переходов по 3xx за один запрос', min: 0, max: 50 }
 ]
 
+/**
+ * UI language. Russian and English are part of the app; anything else appears
+ * only while the «Дополнительные языки» pack is enabled, and a language that
+ * disappears with its pack falls back to Russian on the next start.
+ */
+function LanguageRow(): JSX.Element {
+  const language = useSettings((s) => s.settings.language)
+  const extra = useFeatures((s) => s.plugins.flatMap((p) => (p.enabled && !p.error ? (p.locales ?? []) : [])))
+  const codes = [...CORE_LOCALES, ...extra.filter((c) => !(CORE_LOCALES as readonly string[]).includes(c))]
+
+  return (
+    <div className="set-row">
+      <div className="label">
+        <div className="t">{tr('Язык интерфейса')}</div>
+        <div className="d">
+          {extra.length
+            ? tr('Русский и английский входят в приложение; остальные языки даёт плагин «Дополнительные языки».')
+            : tr('Другие языки — в плагине «Дополнительные языки».')}
+        </div>
+      </div>
+      <select
+        className="input"
+        style={{ width: 200 }}
+        value={language}
+        onChange={(e) => {
+          const next = e.target.value
+          useSettings.getState().update({ language: next })
+          void applyLanguage(next)
+        }}
+      >
+        {codes.map((code) => (
+          <option key={code} value={code}>
+            {LANGUAGE_NAMES[code] ?? code}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export function GeneralSection(): JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
@@ -49,8 +93,28 @@ export function GeneralSection(): JSX.Element {
 
   return (
     <>
-      <div className="set-h">Основные</div>
-      <div className="set-sub">Поведение запросов и рабочей области.</div>
+      <div className="set-h">{tr('Основные')}</div>
+      <div className="set-sub">{tr('Поведение запросов и рабочей области.')}</div>
+
+      <LanguageRow />
+
+      <div className="set-row">
+        <div className="label">
+          <div className="t">{tr('Экономить видеопамять')}</div>
+          <div className="d">
+            {tr(
+              'Рисовать интерфейс без графического ускорителя. Заметно снижает расход видеопамяти, прокрутка становится чуть менее плавной. Изменение вступает в силу после перезапуска.'
+            )}
+          </div>
+        </div>
+        <Toggle
+          checked={settings.disableHardwareAcceleration}
+          onChange={(v) => {
+            update({ disableHardwareAcceleration: v })
+            useUi.getState().showToast(tr('Настройка применится после перезапуска Relay'))
+          }}
+        />
+      </div>
 
       {TOGGLE_ROWS.map((row) => (
         <div className="set-row" key={row.key}>

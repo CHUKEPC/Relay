@@ -4,7 +4,25 @@ import type { UpdateCheckResult } from '@shared/ipc-contract'
 import { Toggle } from '@renderer/components/primitives'
 import { useSettings } from '@renderer/store/settings'
 
-/** Settings group: opt-out toggle + manual "check now" against GitHub Releases. */
+import { tr } from '@renderer/lib/i18n'
+const ERRORS: Record<string, string> = {
+  'no-releases': 'В репозитории пока нет ни одного релиза или тега версии',
+  'rate-limit': 'GitHub временно ограничил число запросов — попробуйте позже',
+  timeout: 'GitHub не ответил за 10 секунд',
+  network: 'Нет соединения с GitHub',
+  ipc: 'Внутренняя ошибка проверки',
+  'web-mode': 'Проверка доступна только в десктопном приложении'
+}
+
+/** One plain-Russian line describing the outcome of a check. */
+function describe(result: UpdateCheckResult): string {
+  if (!result.ok) return ERRORS[result.error] ?? `GitHub ответил ошибкой (${result.error})`
+  const from = result.source === 'tag' ? ' (по тегам репозитория — релиз ещё не опубликован)' : ''
+  if (result.updateAvailable) return `Доступна версия ${result.latestVersion}${from}`
+  return `У вас актуальная версия ${result.currentVersion}${from}`
+}
+
+/** Settings group: opt-out toggle + manual "check now" against GitHub. */
 export function UpdatesCard(): JSX.Element {
   const settings = useSettings((s) => s.settings)
   const update = useSettings((s) => s.update)
@@ -24,22 +42,18 @@ export function UpdatesCard(): JSX.Element {
     }
   }
 
-  let resultLine = 'Запросить последний релиз со страницы GitHub Releases'
+  let resultLine = 'Запросить последнюю версию с GitHub'
   if (checking) resultLine = 'Проверяем…'
-  else if (result) {
-    if (!result.ok) resultLine = 'Не удалось проверить обновления (нет сети или репозиторий ещё не настроен)'
-    else if (result.updateAvailable) resultLine = `Доступна версия ${result.latestVersion}`
-    else resultLine = `У вас актуальная версия ${result.currentVersion}`
-  }
+  else if (result) resultLine = describe(result)
 
   return (
     <>
-      <div className="set-group-label">Обновления</div>
+      <div className="set-group-label">{tr('Обновления')}</div>
 
       <div className="set-row">
         <div className="label">
-          <div className="t">Сообщать о новых версиях</div>
-          <div className="d">Relay проверяет страницу релизов на GitHub. Никаких своих серверов.</div>
+          <div className="t">{tr('Сообщать о новых версиях')}</div>
+          <div className="d">{tr('Relay проверяет страницу релизов на GitHub. Никаких своих серверов.')}</div>
         </div>
         <Toggle
           checked={settings.updateCheckEnabled}
@@ -49,18 +63,27 @@ export function UpdatesCard(): JSX.Element {
 
       <div className="set-row">
         <div className="label">
-          <div className="t">Проверка обновлений</div>
+          <div className="t">{tr('Проверка обновлений')}</div>
           <div className="d">{resultLine}</div>
         </div>
-        {result?.ok && result.updateAvailable && (
+        {result?.ok && (
           <button className="btn ghost" onClick={() => void window.api.openExternal(result.url)}>
-            Открыть страницу релиза
+            {result.updateAvailable ? 'Открыть страницу релиза' : 'Открыть релизы'}
           </button>
         )}
         <button className="btn" disabled={checking} onClick={() => void check()}>
           {checking ? 'Проверяем…' : 'Проверить сейчас'}
         </button>
       </div>
+
+      {result?.ok && result.updateAvailable && (result.publishedAt || result.notes) && (
+        <div className="upd-notes">
+          {result.publishedAt && (
+            <div className="upd-notes-date">Опубликован {new Date(result.publishedAt).toLocaleDateString('ru-RU')}</div>
+          )}
+          {result.notes && <div className="upd-notes-body">{result.notes}</div>}
+        </div>
+      )}
 
       <div style={{ fontSize: 12, color: 'var(--tx-3)', margin: '8px 0 4px' }}>
         Текущая версия {APP_VERSION} · {UPDATE_REPO}

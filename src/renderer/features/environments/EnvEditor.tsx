@@ -5,6 +5,7 @@ import { Icon } from '@renderer/components/Icon'
 import { Modal } from '@renderer/components/primitives'
 import { useEnvironments } from '@renderer/store/environments'
 
+import { tr } from '@renderer/lib/i18n'
 export type EnvEditorTarget = { kind: 'env'; id: string } | { kind: 'globals' } | null
 
 export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClose: () => void }) {
@@ -41,9 +42,7 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
           />
         )}
         <div style={{ flex: 1 }} />
-        <button className="btn" onClick={onClose}>
-          Готово
-        </button>
+        <button className="btn" onClick={onClose}> {tr('Готово')} </button>
       </div>
       <VarTable vars={vars} onChange={commit} />
     </Modal>
@@ -62,9 +61,9 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
     <div className="kv-table">
       <div className="kv-head" style={{ gridTemplateColumns: '26px 1fr 1.4fr 70px 28px' }}>
         <span />
-        <span>Ключ</span>
-        <span>Значение</span>
-        <span>Секрет</span>
+        <span>{tr('Ключ')}</span>
+        <span>{tr('Значение')}</span>
+        <span>{tr('Секрет')}</span>
         <span />
       </div>
       {vars.map((v, i) => (
@@ -84,7 +83,7 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-            <div className={`ck ${v.secret ? 'on' : ''}`} onClick={() => update(i, { secret: !v.secret })} title="Секретное значение">
+            <div className={`ck ${v.secret ? 'on' : ''}`} onClick={() => update(i, { secret: !v.secret })} title={tr('Секретное значение')}>
               {v.secret && <Icon name="check" size={11} strokeWidth={2.4} />}
             </div>
             {v.secret && (
@@ -101,9 +100,7 @@ function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: Varia
       <div className="kv-row" style={{ cursor: 'pointer', gridTemplateColumns: '26px 1fr 1.4fr 70px 28px' }} onClick={add}>
         <span />
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--tx-2)', fontSize: 12, height: 30, paddingLeft: 9 }}>
-          <Icon name="plus" size={13} />
-          Добавить переменную
-        </div>
+          <Icon name="plus" size={13} /> {tr('Добавить переменную')} </div>
       </div>
     </div>
   )

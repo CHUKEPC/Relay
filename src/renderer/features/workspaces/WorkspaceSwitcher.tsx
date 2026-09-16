@@ -4,6 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { Field, Modal } from '@renderer/components/primitives'
 import { useWorkspaces } from '@renderer/store/workspaces'
 
+import { tr } from '@renderer/lib/i18n'
 /** Titlebar workspace switcher: switch / create / rename / delete local workspaces. */
 export function WorkspaceSwitcher(): JSX.Element {
   const workspaces = useWorkspaces((s) => s.workspaces)
@@ -18,7 +19,7 @@ export function WorkspaceSwitcher(): JSX.Element {
     <>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <div className="env-pill nodrag" title="Рабочее пространство" style={{ background: 'var(--bg-1)' }}>
+          <div className="env-pill nodrag" title={tr('Рабочее пространство')} style={{ background: 'var(--bg-1)' }}>
             <Icon name="grid" size={13} style={{ color: 'var(--tx-3)' }} />
             {active?.name ?? 'Пространство'}
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)' }} />
@@ -26,9 +27,7 @@ export function WorkspaceSwitcher(): JSX.Element {
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="popover" align="start" sideOffset={6} style={{ position: 'relative', minWidth: 220 }}>
-            <div style={{ padding: '4px 10px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--tx-3)' }}>
-              Рабочие пространства
-            </div>
+            <div style={{ padding: '4px 10px 6px', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--tx-3)' }}> {tr('Рабочие пространства')} </div>
             {workspaces.map((w) => (
               <DropdownMenu.Item
                 key={w.id}
@@ -43,11 +42,9 @@ export function WorkspaceSwitcher(): JSX.Element {
             ))}
             <DropdownMenu.Separator className="pop-sep" />
             <DropdownMenu.Item className="pop-item" onSelect={() => setCreateOpen(true)}>
-              <Icon name="plus" size={14} /> Новое пространство…
-            </DropdownMenu.Item>
+              <Icon name="plus" size={14} /> {tr('Новое пространство…')} </DropdownMenu.Item>
             <DropdownMenu.Item className="pop-item" onSelect={() => setManageOpen(true)}>
-              <Icon name="settings" size={14} /> Управление…
-            </DropdownMenu.Item>
+              <Icon name="settings" size={14} /> {tr('Управление…')} </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -68,17 +65,13 @@ function CreateModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     onOpenChange(false)
   }
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Новое рабочее пространство" width={420}>
-      <Field label="Название" hint="Изолированный набор коллекций, сред, истории и вкладок.">
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Новое рабочее пространство')} width={420}>
+      <Field label={tr('Название')} hint="Изолированный набор коллекций, сред, истории и вкладок.">
         <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commit()} placeholder="Personal" />
       </Field>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-        <button className="btn ghost" onClick={() => onOpenChange(false)}>
-          Отмена
-        </button>
-        <button className="btn primary" onClick={commit}>
-          Создать
-        </button>
+        <button className="btn ghost" onClick={() => onOpenChange(false)}> {tr('Отмена')} </button>
+        <button className="btn primary" onClick={commit}> {tr('Создать')} </button>
       </div>
     </Modal>
   )
@@ -100,7 +93,7 @@ function ManageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Управление пространствами" width={460}>
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Управление пространствами')} width={460}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {workspaces.map((w) => (
           <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
@@ -121,10 +114,10 @@ function ManageModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
             ) : (
               <span style={{ flex: 1, fontSize: 12.5 }}>
                 {w.name}
-                {w.id === activeId && <span style={{ color: 'var(--tx-3)', fontSize: 11 }}> · активно</span>}
+                {w.id === activeId && <span style={{ color: 'var(--tx-3)', fontSize: 11 }}> {tr('· активно')}</span>}
               </span>
             )}
-            <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEdit(w.id, w.name)} title="Переименовать">
+            <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEdit(w.id, w.name)} title={tr('Переименовать')}>
               <Icon name="doc" size={14} />
             </button>
             <button

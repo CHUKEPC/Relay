@@ -47,13 +47,6 @@ const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024
 const ANTHROPIC_VERSION = '2023-06-01'
 const ANTHROPIC_API = 'https://api.anthropic.com/v1'
 
-/** Static Claude list (Anthropic's list endpoint differs; keep editable). */
-const ANTHROPIC_MODELS: ModelInfo[] = [
-  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
-]
-
 /* ============================================================
  * Small helpers
  * ============================================================ */
@@ -687,14 +680,49 @@ interface OpenAiModelsResponse {
   data?: Array<{ id: string }>
 }
 
+interface AnthropicModelsResponse {
+  data?: Array<{ id: string; display_name?: string }>
+  has_more?: boolean
+  last_id?: string | null
+}
+
+/** OpenAI's /models also returns embeddings, audio, image and moderation models. */
+const OPENAI_NON_CHAT = /embedding|whisper|tts|dall-e|gpt-image|moderation|transcribe|davinci|babbage|realtime|audio|search|computer-use|sora/i
+
+async function listAnthropicModels(p: ResolvedProvider, fetchImpl: typeof fetch): Promise<ModelInfo[]> {
+  if (!p.apiKey) return []
+  const base = trimTrailingSlash(p.baseUrl || ANTHROPIC_API)
+  const headers: Record<string, string> = {
+    'anthropic-version': ANTHROPIC_VERSION,
+    'x-api-key': p.apiKey,
+    ...(p.extraHeaders ?? {})
+  }
+  const out: ModelInfo[] = []
+  let afterId: string | null = null
+  try {
+    for (let page = 0; page < 10; page++) {
+      const qs = new URLSearchParams({ limit: '1000' })
+      if (afterId) qs.set('after_id', afterId)
+      const res = await fetchImpl(`${base}/models?${qs}`, { method: 'GET', headers })
+      if (!res.ok) return []
+      const json = (await res.json()) as AnthropicModelsResponse
+      for (const m of json.data ?? []) {
+        if (m && typeof m.id === 'string') out.push({ id: m.id, label: m.display_name })
+      }
+      if (!json.has_more || !json.last_id) break
+      afterId = json.last_id
+    }
+  } catch {
+    return []
+  }
+  return out
+}
+
 export async function listModels(
   p: ResolvedProvider,
   fetchImpl: typeof fetch = fetch
 ): Promise<ModelInfo[]> {
-  if (p.kind === 'anthropic') {
-    // Anthropic's model endpoint differs; return a curated static list.
-    return [...ANTHROPIC_MODELS]
-  }
+  if (p.kind === 'anthropic') return listAnthropicModels(p, fetchImpl)
 
   let url: string
   try {
@@ -713,7 +741,9 @@ export async function listModels(
     const data = json.data ?? []
     return data
       .filter((m) => m && typeof m.id === 'string')
+      .filter((m) => p.kind !== 'openai' || !OPENAI_NON_CHAT.test(m.id))
       .map((m) => ({ id: m.id }))
+      .sort((a, b) => a.id.localeCompare(b.id))
   } catch {
     return []
   }

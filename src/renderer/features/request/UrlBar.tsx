@@ -16,6 +16,12 @@ import { joinUrl, mergeQueryFromUrl } from '@renderer/lib/url'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { parseCurl } from '@shared/curl'
 import { useUi } from '@renderer/store/ui'
+import { useFeatures } from '@renderer/store/features'
+import { PROTOCOL_CAPABILITY } from '@shared/features'
+
+import { tr } from '@renderer/lib/i18n'
+/** Protocols offered in the picker, in menu order. */
+const SELECTABLE_MODES: RequestMode[] = ['http', 'graphql', 'websocket', 'sse', 'socketio', 'mqtt', 'grpc']
 
 const MODE_LABEL: Record<RequestMode, string> = {
   http: 'HTTP',
@@ -72,6 +78,14 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
   const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
 
   const mode: RequestMode = req.mode ?? 'http'
+  const caps = useFeatures((s) => s.caps)
+  // HTTP and GraphQL are the base app; every other protocol comes from a pack.
+  // The current mode stays listed even if its pack was just turned off, so a
+  // saved request never looks broken — it simply can't be switched back to.
+  const availableModes = SELECTABLE_MODES.filter(
+    (m) => !PROTOCOL_CAPABILITY[m] || caps.has(PROTOCOL_CAPABILITY[m]) || m === mode
+  )
+  const hiddenModes = SELECTABLE_MODES.filter((m) => !availableModes.includes(m))
   const isGrpc = mode === 'grpc'
   const grpcStatus = useGrpc((s) => s.byTab[tabId]?.status)
   const displayUrl = joinUrl(req.url, req.query)
@@ -116,7 +130,7 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
       return
     }
     if (!grpcAddress.trim()) {
-      useUi.getState().showToast('Укажите адрес (host:port)')
+      useUi.getState().showToast(tr('Укажите адрес (host:port)'))
       return
     }
     const metadata = (g.metadata ?? [])
@@ -146,7 +160,7 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
       e.preventDefault()
       const { request } = parseCurl(pasted)
       patch({ method: request.method, url: request.url, query: request.query, headers: request.headers, body: request.body, auth: request.auth })
-      useUi.getState().showToast('Запрос заполнен из cURL')
+      useUi.getState().showToast(tr('Запрос заполнен из cURL'))
     }
   }
 
@@ -184,19 +198,28 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
     <div className="req-bar">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button className="method-select" style={{ minWidth: 78 }} title="Протокол">
+          <button className="method-select" style={{ minWidth: 78 }} title={tr('Протокол')}>
             <span>{MODE_LABEL[mode]}</span>
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)', marginLeft: 'auto' }} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="popover" align="start" sideOffset={6} style={{ position: 'relative', minWidth: 160 }}>
-            {(['http', 'graphql', 'websocket', 'sse', 'socketio', 'mqtt'] as RequestMode[]).map((m) => (
+            {availableModes.map((m) => (
               <DropdownMenu.Item key={m} className="pop-item" onSelect={() => setMode(m)}>
                 <span style={{ flex: 1 }}>{MODE_FULL[m]}</span>
                 {mode === m && <Icon name="check" size={14} className="tick" />}
               </DropdownMenu.Item>
             ))}
+            {hiddenModes.length > 0 && (
+              <>
+                <DropdownMenu.Separator className="pop-sep" />
+                <DropdownMenu.Item className="pop-item" onSelect={() => useUi.getState().openSettings('plugins')}>
+                  <Icon name="plugin" size={14} />
+                  <span style={{ flex: 1 }}>{tr('Другие протоколы — в плагинах')}</span>
+                </DropdownMenu.Item>
+              </>
+            )}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -250,36 +273,24 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
       {isHttpLike ? (
         sending ? (
           <button className="btn send-btn" onClick={cancelSend} style={{ minWidth: 120, justifyContent: 'center' }}>
-            <Spinner size={15} />
-            Отмена
-          </button>
+            <Spinner size={15} /> {tr('Отмена')} </button>
         ) : (
-          <button className="btn primary send-btn" data-tour="send" onClick={send}>
-            Отправить
-            <Icon name="send" size={14} />
+          <button className="btn primary send-btn" data-tour="send" onClick={send}> {tr('Отправить')} <Icon name="send" size={14} />
           </button>
         )
       ) : isGrpc ? (
         grpcBusy ? (
           <button className="btn send-btn" onClick={() => useGrpc.getState().cancel(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
-            <Icon name="stop" size={13} />
-            Отмена
-          </button>
+            <Icon name="stop" size={13} /> {tr('Отмена')} </button>
         ) : (
-          <button className="btn primary send-btn" onClick={invokeGrpc}>
-            Вызвать
-            <Icon name="send" size={14} />
+          <button className="btn primary send-btn" onClick={invokeGrpc}> {tr('Вызвать')} <Icon name="send" size={14} />
           </button>
         )
       ) : realtimeBusy ? (
         <button className="btn send-btn" onClick={() => useRealtime.getState().disconnect(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
-          <Icon name="stop" size={13} />
-          Отключить
-        </button>
+          <Icon name="stop" size={13} /> {tr('Отключить')} </button>
       ) : (
-        <button className="btn primary send-btn" onClick={connectRealtime}>
-          Подключить
-          <Icon name="bolt" size={14} />
+        <button className="btn primary send-btn" onClick={connectRealtime}> {tr('Подключить')} <Icon name="bolt" size={14} />
         </button>
       )}
     </div>

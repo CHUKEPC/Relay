@@ -2,6 +2,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useHistory } from '@renderer/store/history'
 import { useTabs } from '@renderer/store/tabs'
 
+import { tr } from '@renderer/lib/i18n'
 function statusColor(s: number): string {
   if (s === 0) return 'var(--s-5xx)'
   if (s >= 500) return 'var(--s-5xx)'
@@ -28,15 +29,15 @@ export function HistoryList({ query }: { query: string }) {
   return (
     <>
       <div className="side-section-head">
-        <span>История</span>
+        <span>{tr('История')}</span>
         {entries.length > 0 && (
-          <button className="icon-btn" style={{ width: 22, height: 22 }} title="Очистить историю" onClick={() => clear()}>
+          <button className="icon-btn" style={{ width: 22, height: 22 }} title={tr('Очистить историю')} onClick={() => clear()}>
             <Icon name="trash" size={14} />
           </button>
         )}
       </div>
       <div className="tree">
-        {filtered.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx-3)', fontSize: 12 }}>История пуста</div>}
+        {filtered.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx-3)', fontSize: 12 }}>{tr('История пуста')}</div>}
         {filtered.map((h) => (
           <div key={h.id} className="hist-row" onClick={() => openNew(h.request)} title={h.url}>
             <span className={`method-tag mtag m-${h.method}`}>{h.method === 'DELETE' ? 'DEL' : h.method}</span>

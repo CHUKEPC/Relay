@@ -1,0 +1,9 @@
+{
+  "id": "grpc",
+  "name": "gRPC",
+  "description": "Режим gRPC: загрузка .proto или reflection, вызов unary и потоковых методов.",
+  "version": "1.0.0",
+  "capabilities": [
+    "protocol.grpc"
+  ]
+}

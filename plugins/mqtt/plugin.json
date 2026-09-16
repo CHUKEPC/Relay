@@ -1,0 +1,9 @@
+{
+  "id": "mqtt",
+  "name": "MQTT",
+  "description": "Режим MQTT: подключение к брокеру, публикация и подписка на топики, QoS и Last Will.",
+  "version": "1.0.0",
+  "capabilities": [
+    "protocol.mqtt"
+  ]
+}

@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
+import { leavesOf, usePanes } from '@renderer/store/panes'
 import { MOD } from '@renderer/lib/platform'
+import { TAB_MIME } from '@renderer/lib/dnd'
 import { saveActiveRequest } from '@renderer/lib/save'
 import { exportRequestJson } from '@renderer/lib/export'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-tabs.css'
 
 export function TabStrip() {
@@ -13,6 +16,9 @@ export function TabStrip() {
   const setActive = useTabs((s) => s.setActive)
   const closeTab = useTabs((s) => s.closeTab)
   const openNew = useTabs((s) => s.openNew)
+  const detached = usePanes((s) => s.detached)
+  const paneRoot = usePanes((s) => s.root)
+  const shownInPanes = useMemo(() => (paneRoot.kind === 'leaf' ? null : new Set(leavesOf(paneRoot).map((l) => l.tabId))), [paneRoot])
 
   const scrollerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
@@ -45,11 +51,19 @@ export function TabStrip() {
           <ContextMenu.Root key={t.id}>
             <ContextMenu.Trigger asChild>
               <div
-                className={`rtab ${activeTabId === t.id ? 'on' : ''}`}
+                className={`rtab${activeTabId === t.id ? ' on' : ''}${t.dirty ? ' is-dirty' : ''}${shownInPanes?.has(t.id) && activeTabId !== t.id ? ' in-pane' : ''}`}
+                title={detached.includes(t.id) ? 'Открыт в отдельном окне — нажмите, чтобы перейти к нему' : undefined}
                 ref={(el) => {
                   if (el) tabRefs.current.set(t.id, el)
                   else tabRefs.current.delete(t.id)
                 }}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(TAB_MIME, t.id)
+                  e.dataTransfer.effectAllowed = 'move'
+                  document.body.classList.add('pane-dragging')
+                }}
+                onDragEnd={() => document.body.classList.remove('pane-dragging')}
                 onClick={() => setActive(t.id)}
                 onAuxClick={(e) => {
                   // Middle-click closes the tab, like in browsers.
@@ -61,10 +75,11 @@ export function TabStrip() {
               >
                 <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
                 <span className="label">{t.request.name || 'Без названия'}</span>
+                {detached.includes(t.id) && <Icon name="floatWin" size={12} className="tab-window" />}
                 {/* Dirty dot shows when there are unsaved changes; on hover it is
                     replaced by the close X, so every tab is closable with the mouse. */}
                 <span className="tab-end">
-                  {t.dirty && <span className="dirty" title="Несохранённые изменения" />}
+                  {t.dirty && <span className="dirty" title={tr('Несохранённые изменения')} />}
                   <span
                     className="x"
                     title={`Закрыть (${MOD}W)`}
@@ -80,50 +95,33 @@ export function TabStrip() {
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content className="popover" style={{ position: 'relative', minWidth: 180 }}>
-                <ContextMenu.Item className="pop-item" onSelect={() => closeTab(t.id)}>
-                  Закрыть
-                </ContextMenu.Item>
+                <ContextMenu.Item className="pop-item" onSelect={() => closeTab(t.id)}> {tr('Закрыть')} </ContextMenu.Item>
                 <ContextMenu.Item
                   className="pop-item"
                   disabled={tabs.length === 1}
                   onSelect={() => useTabs.getState().closeOthers(t.id)}
-                >
-                  Закрыть другие
-                </ContextMenu.Item>
+                > {tr('Закрыть другие')} </ContextMenu.Item>
                 <ContextMenu.Item
                   className="pop-item"
                   disabled={i === tabs.length - 1}
                   onSelect={() => useTabs.getState().closeToRight(t.id)}
-                >
-                  Закрыть справа
-                </ContextMenu.Item>
+                > {tr('Закрыть справа')} </ContextMenu.Item>
                 <ContextMenu.Item
                   className="pop-item"
                   disabled={i === 0}
                   onSelect={() => useTabs.getState().closeToLeft(t.id)}
-                >
-                  Закрыть слева
-                </ContextMenu.Item>
-                <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().closeAll()}>
-                  Закрыть все
-                </ContextMenu.Item>
+                > {tr('Закрыть слева')} </ContextMenu.Item>
+                <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().closeAll()}> {tr('Закрыть все')} </ContextMenu.Item>
                 <ContextMenu.Separator className="pop-sep" />
-                <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().duplicateTab(t.id)}>
-                  Дублировать
+                <ContextMenu.Item className="pop-item" onSelect={() => void usePanes.getState().detachTab(t.id)}>
+                  {detached.includes(t.id) ? 'Перейти к окну' : 'Открыть в отдельном окне'}
                 </ContextMenu.Item>
+                <ContextMenu.Item className="pop-item" onSelect={() => useTabs.getState().duplicateTab(t.id)}> {tr('Дублировать')} </ContextMenu.Item>
                 <ContextMenu.Item
                   className="pop-item"
-                  onSelect={() => {
-                    // saveActiveRequest operates on the active tab — switch first.
-                    if (useTabs.getState().doc.activeTabId !== t.id) useTabs.getState().setActive(t.id)
-                    saveActiveRequest()
-                  }}
-                >
-                  Сохранить
-                </ContextMenu.Item>
-                <ContextMenu.Item className="pop-item" onSelect={() => void exportRequestJson(t.request)}>
-                  Экспорт
-                </ContextMenu.Item>
+                  onSelect={() => saveActiveRequest(t.id)}
+                > {tr('Сохранить')} </ContextMenu.Item>
+                <ContextMenu.Item className="pop-item" onSelect={() => void exportRequestJson(t.request)}> {tr('Экспорт')} </ContextMenu.Item>
               </ContextMenu.Content>
             </ContextMenu.Portal>
           </ContextMenu.Root>

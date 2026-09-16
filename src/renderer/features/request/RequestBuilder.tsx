@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import type { KV, RequestMode, RequestModel } from '@shared/types'
 import { COMMON_HEADER_NAMES } from '@shared/constants'
 import { Icon } from '@renderer/components/Icon'
 import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
+import { useRequestUi, type RequestSubTab } from '@renderer/store/request-ui'
 import { useScope, useTab } from '@renderer/lib/hooks'
 import { detectPathVars } from '@renderer/lib/url'
 import { saveActiveRequest, openSaveAsDialog } from '@renderer/lib/save'
@@ -13,16 +14,20 @@ import { AuthTab } from './AuthTab'
 import { ScriptsTab } from './ScriptsTab'
 import { ExamplesTab } from './ExamplesTab'
 import { RequestMeta } from './RequestMeta'
-import { GrpcBuilder } from '@renderer/features/grpc/GrpcBuilder'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
 
-type Tab = 'params' | 'auth' | 'headers' | 'body' | 'scripts' | 'examples'
+import { tr } from '@renderer/lib/i18n'
+
+// gRPC comes from a feature pack; its builder loads only for a gRPC tab.
+const GrpcBuilder = lazy(() => import('@renderer/features/grpc/GrpcBuilder').then((m) => ({ default: m.GrpcBuilder })))
+type Tab = RequestSubTab
 
 /** Builds the request of `tabId` when given, else the active tab (split-screen). */
 export function RequestBuilder({ tabId }: { tabId?: string }) {
   const tab = useTab(tabId)
   const scope = useScope(tabId)
-  const [subTab, setSubTab] = useState<Tab>('params')
+  const subTab = useRequestUi((s) => (tab ? s.subTab[tab.id] : undefined) ?? 'params')
+  const setSubTab = (t: Tab) => tab && useRequestUi.getState().setSubTab(tab.id, t)
   const [codeGenOpen, setCodeGenOpen] = useState(false)
 
   const req = tab?.request ?? null
@@ -36,8 +41,8 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
           <div className="empty-ico">
             <Icon name="send" size={22} />
           </div>
-          <h3>Нет открытого запроса</h3>
-          <p>Создайте новый запрос или откройте его из коллекции слева.</p>
+          <h3>{tr('Нет открытого запроса')}</h3>
+          <p>{tr('Создайте новый запрос или откройте его из коллекции слева.')}</p>
         </div>
       </div>
     )
@@ -57,10 +62,14 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
   // HTTP params/headers/body tabs.
   if (mode === 'grpc') {
     return (
-      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <UrlBar req={req} tabId={tab.id} />
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }} data-undo-tab={tab.id}>
+        <div style={{ display: 'contents' }} data-undo-field="url">
+          <UrlBar req={req} tabId={tab.id} />
+        </div>
         <div style={{ overflowY: 'auto', minHeight: 0 }}>
-          <GrpcBuilder req={req} tabId={tab.id} />
+          <Suspense fallback={null}>
+            <GrpcBuilder req={req} tabId={tab.id} />
+          </Suspense>
         </div>
       </div>
     )
@@ -95,9 +104,13 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
   const activeSubTab: Tab = tabs.some((t) => t.id === subTab) ? subTab : 'params'
 
   return (
-    <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <RequestMeta tab={tab} />
-      <UrlBar req={req} tabId={tab.id} />
+    <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }} data-undo-tab={tab.id}>
+      <div style={{ display: 'contents' }} data-undo-field="meta">
+        <RequestMeta tab={tab} />
+      </div>
+      <div style={{ display: 'contents' }} data-undo-field="url">
+        <UrlBar req={req} tabId={tab.id} />
+      </div>
       <div className="req-tabs">
         {tabs.map((t) => (
           <button key={t.id} className={`tab ${activeSubTab === t.id ? 'on' : ''}`} onClick={() => setSubTab(t.id)}>
@@ -115,11 +128,9 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
             activateThis()
             saveActiveRequest()
           }}
-          title="Сохранить (⌘S / Ctrl+S)"
+          title={tr('Сохранить (⌘S / Ctrl+S)')}
         >
-          <Icon name="save" size={14} />
-          Сохранить
-        </button>
+          <Icon name="save" size={14} /> {tr('Сохранить')} </button>
         <button
           className="btn ghost"
           style={{ height: 28 }}
@@ -127,11 +138,9 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
             activateThis()
             openSaveAsDialog()
           }}
-          title="Сохранить как новый запрос в коллекции"
+          title={tr('Сохранить как новый запрос в коллекции')}
         >
-          <Icon name="copy" size={14} />
-          Сохранить как…
-        </button>
+          <Icon name="copy" size={14} /> {tr('Сохранить как…')} </button>
         {httpLike && (
           <button
             className="btn ghost"
@@ -141,15 +150,13 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
               activateThis()
               setCodeGenOpen(true)
             }}
-            title="Сгенерировать код"
+            title={tr('Сгенерировать код')}
           >
-            <Icon name="code2" size={14} />
-            Код
-          </button>
+            <Icon name="code2" size={14} /> {tr('Код')} </button>
         )}
       </div>
       <CodeGenModal open={codeGenOpen} onOpenChange={setCodeGenOpen} />
-      <div style={{ overflowY: 'auto', minHeight: 0 }}>
+      <div style={{ overflowY: 'auto', minHeight: 0 }} data-undo-field={activeSubTab}>
         {activeSubTab === 'params' && (
           <>
             <KVTable rows={req.query} onChange={(query) => patch({ query })} showDescription scope={scope} keyPlaceholder="param" />
@@ -212,7 +219,7 @@ function PathVarsTable({
               <input value={`:${key}`} readOnly />
             </div>
             <div className="kv-cell">
-              <input value={valueOf(key)} placeholder="значение" onChange={(e) => set(key, e.target.value)} />
+              <input value={valueOf(key)} placeholder={tr('значение')} onChange={(e) => set(key, e.target.value)} />
             </div>
             <span />
             <span />

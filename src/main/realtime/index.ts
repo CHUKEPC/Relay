@@ -13,7 +13,7 @@ import { Agent, request as undiciRequest, WebSocket } from 'undici'
 import type { Dispatcher } from 'undici'
 import { io } from 'socket.io-client'
 import mqtt from 'mqtt'
-import type { BrowserWindow, IpcMain } from 'electron'
+import type { IpcMain, IpcMainInvokeEvent, WebContents } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import { makeId } from '@shared/id'
 import type {
@@ -40,13 +40,16 @@ interface LiveConn {
 
 const conns = new Map<string, LiveConn>()
 
-type GetWindow = () => BrowserWindow | null
+/** Which window (webContents id) opened each connection, so a closing window can release its own. */
+const owners = new Map<string, number>()
 
-function emitter(getWindow: GetWindow, connId: string) {
+/** Events go back to the window that opened the connection (main or a detached pane). */
+function emitter(sender: WebContents, connId: string) {
   const channel = `${IPC.realtime.event}:${connId}`
+  owners.set(connId, sender.id)
   return (event: RealtimeEvent): void => {
     try {
-      getWindow()?.webContents.send(channel, event)
+      if (!sender.isDestroyed()) sender.send(channel, event)
     } catch {
       /* window gone */
     }
@@ -453,6 +456,7 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
  * ============================================================ */
 
 function closeConn(connId: string): void {
+  owners.delete(connId)
   const c = conns.get(connId)
   if (c) {
     c.close()
@@ -460,10 +464,10 @@ function closeConn(connId: string): void {
   }
 }
 
-export function registerRealtimeHandlers(ipcMain: IpcMain, getWindow: GetWindow): void {
-  ipcMain.handle(IPC.realtime.wsConnect, async (_e, spec: WsConnectSpec) => {
+export function registerRealtimeHandlers(ipcMain: IpcMain): void {
+  ipcMain.handle(IPC.realtime.wsConnect, async (e: IpcMainInvokeEvent, spec: WsConnectSpec) => {
     closeConn(spec.connId) // replace any prior connection on this id
-    const emit = emitter(getWindow, spec.connId)
+    const emit = emitter(e.sender, spec.connId)
     conns.set(spec.connId, connectWebSocket(spec, emit))
   })
 
@@ -475,9 +479,9 @@ export function registerRealtimeHandlers(ipcMain: IpcMain, getWindow: GetWindow)
     closeConn(connId)
   })
 
-  ipcMain.handle(IPC.realtime.sseConnect, async (_e, spec: SseConnectSpec) => {
+  ipcMain.handle(IPC.realtime.sseConnect, async (e: IpcMainInvokeEvent, spec: SseConnectSpec) => {
     closeConn(spec.connId)
-    const emit = emitter(getWindow, spec.connId)
+    const emit = emitter(e.sender, spec.connId)
     conns.set(spec.connId, connectSse(spec, emit))
   })
 
@@ -485,9 +489,9 @@ export function registerRealtimeHandlers(ipcMain: IpcMain, getWindow: GetWindow)
     closeConn(connId)
   })
 
-  ipcMain.handle(IPC.realtime.socketioConnect, async (_e, spec: SocketIoConnectSpec) => {
+  ipcMain.handle(IPC.realtime.socketioConnect, async (e: IpcMainInvokeEvent, spec: SocketIoConnectSpec) => {
     closeConn(spec.connId)
-    conns.set(spec.connId, connectSocketIo(spec, emitter(getWindow, spec.connId)))
+    conns.set(spec.connId, connectSocketIo(spec, emitter(e.sender, spec.connId)))
   })
   ipcMain.handle(IPC.realtime.socketioEmit, async (_e, connId: string, event: string, data: string) => {
     conns.get(connId)?.emit?.(event, data)
@@ -496,9 +500,9 @@ export function registerRealtimeHandlers(ipcMain: IpcMain, getWindow: GetWindow)
     closeConn(connId)
   })
 
-  ipcMain.handle(IPC.realtime.mqttConnect, async (_e, spec: MqttConnectSpec) => {
+  ipcMain.handle(IPC.realtime.mqttConnect, async (e: IpcMainInvokeEvent, spec: MqttConnectSpec) => {
     closeConn(spec.connId)
-    conns.set(spec.connId, connectMqtt(spec, emitter(getWindow, spec.connId)))
+    conns.set(spec.connId, connectMqtt(spec, emitter(e.sender, spec.connId)))
   })
   ipcMain.handle(IPC.realtime.mqttPublish, async (_e, connId: string, topic: string, payload: string) => {
     conns.get(connId)?.publish?.(topic, payload)
@@ -521,4 +525,10 @@ export function abortAllRealtime(): void {
     }
   }
   conns.clear()
+  owners.clear()
+}
+
+/** Close the connections opened by one window (a detached pane window closed). */
+export function abortRealtimeFor(webContentsId: number): void {
+  for (const [connId, owner] of [...owners]) if (owner === webContentsId) closeConn(connId)
 }

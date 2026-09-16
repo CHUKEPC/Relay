@@ -8,6 +8,7 @@ import { trackDrag } from '@renderer/lib/drag'
 import { CollectionsTree } from './CollectionsTree'
 import { HistoryList } from './HistoryList'
 import { EnvList } from './EnvList'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-resize.css'
 
 const NAV: { id: SideTab; label: string; icon: string }[] = [
@@ -57,7 +58,7 @@ export function Sidebar() {
                 setSideTab(t.id)
                 setQuery('') // don't carry one tab's search into another
               }}
-              title={t.label}
+              title={tr(t.label)}
             >
               <Icon name={t.icon} size={14} />
             </button>
@@ -99,17 +100,17 @@ export function Sidebar() {
             </button>
           )
         })}
-        <button className="tree-row" data-tour="console" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title="Консоль запросов">
+        <button className="tree-row" data-tour="console" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title={tr('Консоль запросов')}>
           <span className="twirl">
             <Icon name="code2" size={15} />
           </span>
-          <span className="name">Консоль</span>
+          <span className="name">{tr('Консоль')}</span>
         </button>
         <button className="tree-row" data-tour="settings" style={{ width: '100%' }} onClick={() => openSettings()}>
           <span className="twirl">
             <Icon name="settings" size={15} />
           </span>
-          <span className="name">Настройки</span>
+          <span className="name">{tr('Настройки')}</span>
           <span className="kbd">{kbd(',')}</span>
         </button>
       </div>
@@ -119,7 +120,7 @@ export function Sidebar() {
         aria-hidden="true"
         onMouseDown={onHandleDown}
         onDoubleClick={() => setSidebarWidth(270)}
-        title="Перетащите, чтобы изменить ширину · двойной клик — сброс"
+        title={tr('Перетащите, чтобы изменить ширину · двойной клик — сброс')}
       />
     </aside>
   )

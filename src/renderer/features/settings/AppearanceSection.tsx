@@ -3,6 +3,7 @@ import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
 
+import { tr } from '@renderer/lib/i18n'
 type ThemeChoice = SettingsDoc['theme']
 
 interface ThemeSwatchDef {
@@ -193,10 +194,10 @@ export function AppearanceSection(): JSX.Element {
 
   return (
     <>
-      <div className="set-h">Внешний вид</div>
-      <div className="set-sub">Тема и акцентный цвет интерфейса.</div>
+      <div className="set-h">{tr('Внешний вид')}</div>
+      <div className="set-sub">{tr('Тема и акцентный цвет интерфейса.')}</div>
 
-      <div className="set-group-label">Тема</div>
+      <div className="set-group-label">{tr('Тема')}</div>
       <div className="theme-swatch-row">
         {THEME_SWATCHES.map((t) => (
           <div
@@ -212,14 +213,14 @@ export function AppearanceSection(): JSX.Element {
               </div>
             </div>
             <div className="lab">
-              {t.label}
+              {tr(t.label)}
               {theme === t.id && <Icon name="check" size={13} style={{ color: 'var(--accent)', float: 'right' }} />}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="set-group-label">Фирменные темы</div>
+      <div className="set-group-label">{tr('Фирменные темы')}</div>
       <div className="theme-swatch-row brand-theme-row">
         {BRAND_PRESETS.map((p) => (
           <div
@@ -236,7 +237,7 @@ export function AppearanceSection(): JSX.Element {
               </div>
             </div>
             <div className="lab">
-              {p.label}
+              {tr(p.label)}
               {p.dot && <span className="accent-dot" style={{ background: p.accent }} />}
               {themePreset === p.id && <Icon name="check" size={13} style={{ color: 'var(--accent)' }} />}
             </div>
@@ -244,7 +245,7 @@ export function AppearanceSection(): JSX.Element {
         ))}
         <div
           className={`theme-swatch${themePreset === 'custom' ? ' on' : ''}`}
-          title="Создать собственную тему"
+          title={tr('Создать собственную тему')}
           aria-pressed={themePreset === 'custom'}
           {...selectCard(() => setThemePreset('custom'))}
         >
@@ -264,37 +265,29 @@ export function AppearanceSection(): JSX.Element {
             <button
               className={`cte-base-btn${draft.base === 'light' ? ' on' : ''}`}
               onClick={() => setDraft({ ...draft, base: 'light' })}
-            >
-              Светлая
-            </button>
+            > {tr('Светлая')} </button>
             <button
               className={`cte-base-btn${draft.base === 'dark' ? ' on' : ''}`}
               onClick={() => setDraft({ ...draft, base: 'dark' })}
-            >
-              Тёмная
-            </button>
+            > {tr('Тёмная')} </button>
           </div>
           {CUSTOM_VAR_ROWS.map((row) => (
             <ColorRow
               key={row.key}
-              label={row.label}
+              label={tr(row.label)}
               value={draft.vars[row.key] ?? FALLBACK_VARS[draft.base][row.key]}
               onChange={(hex) => setDraft({ ...draft, vars: { ...draft.vars, [row.key]: hex } })}
             />
           ))}
-          <ColorRow label="Акцент" value={accentHex} onChange={(hex) => setAccentColor(hex)} />
+          <ColorRow label={tr('Акцент')} value={accentHex} onChange={(hex) => setAccentColor(hex)} />
           <div className="cte-actions">
-            <button className="btn primary" onClick={() => setCustomTheme({ base: draft.base, vars: { ...draft.vars } })}>
-              Применить
-            </button>
-            <button className="btn" onClick={() => setThemePreset('relay')}>
-              Сбросить
-            </button>
+            <button className="btn primary" onClick={() => setCustomTheme({ base: draft.base, vars: { ...draft.vars } })}> {tr('Применить')} </button>
+            <button className="btn" onClick={() => setThemePreset('relay')}> {tr('Сбросить')} </button>
           </div>
         </div>
       )}
 
-      <div className="set-group-label">Акцентный цвет</div>
+      <div className="set-group-label">{tr('Акцентный цвет')}</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', maxWidth: 460 }}>
         {ACCENT_HUES.map((h) => {
           const selected = accentColor === null && accentHue === h
@@ -320,7 +313,7 @@ export function AppearanceSection(): JSX.Element {
         })}
       </div>
       <div className="accent-custom-row">
-        <ColorRow label="Свой цвет (RGB)" value={accentHex} onChange={(hex) => setAccentColor(hex)} />
+        <ColorRow label={tr('Свой цвет (RGB)')} value={accentHex} onChange={(hex) => setAccentColor(hex)} />
       </div>
     </>
   )

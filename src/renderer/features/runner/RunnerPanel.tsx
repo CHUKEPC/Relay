@@ -4,6 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { statusColor } from '@renderer/lib/status-color'
 import { useRunner, type IterationResult } from '@renderer/store/runner'
 
+import { tr } from '@renderer/lib/i18n'
 /** Aggregate pass/fail/time across all iterations. */
 function summarize(results: IterationResult[]): { reqs: number; passed: number; failed: number; timeMs: number } {
   let reqs = 0
@@ -42,9 +43,7 @@ export function RunnerPanel(): JSX.Element | null {
     <Modal open={open} onOpenChange={(o) => !o && close()} title={`Запуск: ${targetName}`} width={680}>
       {/* config */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12, color: 'var(--tx-2)' }}>
-          Итераций
-          <input
+        <label style={{ fontSize: 12, color: 'var(--tx-2)' }}> {tr('Итераций')} <input
             className="input mono"
             type="number"
             min={1}
@@ -75,27 +74,21 @@ export function RunnerPanel(): JSX.Element | null {
               <span className="mono" style={{ fontSize: 12, color: 'var(--tx-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {dataFileName} · {dataRows.length} строк
               </span>
-              <button className="icon-btn" style={{ width: 26, height: 26 }} disabled={running} onClick={() => useRunner.getState().clearData()} title="Убрать файл">
+              <button className="icon-btn" style={{ width: 26, height: 26 }} disabled={running} onClick={() => useRunner.getState().clearData()} title={tr('Убрать файл')}>
                 <Icon name="close" size={13} />
               </button>
             </div>
           ) : (
             <button className="btn ghost" disabled={running} onClick={() => void useRunner.getState().loadDataFile()}>
-              <Icon name="upload" size={13} />
-              Выбрать файл
-            </button>
+              <Icon name="upload" size={13} /> {tr('Выбрать файл')} </button>
           )}
         </div>
         {running ? (
           <button className="btn" onClick={() => useRunner.getState().cancel()}>
-            <Icon name="stop" size={13} />
-            Остановить
-          </button>
+            <Icon name="stop" size={13} /> {tr('Остановить')} </button>
         ) : (
           <button className="btn primary" onClick={() => void useRunner.getState().run()}>
-            <Icon name="play" size={13} />
-            Запустить
-          </button>
+            <Icon name="play" size={13} /> {tr('Запустить')} </button>
         )}
       </div>
 
@@ -158,9 +151,7 @@ export function RunnerPanel(): JSX.Element | null {
           </div>
         ))}
         {results.length === 0 && !running && (
-          <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}>
-            Настройте параметры и нажмите «Запустить». Будут выполнены все запросы выбранного узла по порядку.
-          </div>
+          <div style={{ padding: '18px 0', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}> {tr('Настройте параметры и нажмите «Запустить». Будут выполнены все запросы выбранного узла по порядку.')} </div>
         )}
       </div>
     </Modal>

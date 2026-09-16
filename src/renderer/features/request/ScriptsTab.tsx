@@ -5,6 +5,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
 import { SNIPPETS } from '@renderer/lib/snippets'
 
+import { tr } from '@renderer/lib/i18n'
 export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string }) {
   const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
   const [which, setWhich] = useState<'pre' | 'test'>('pre')
@@ -40,11 +41,9 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
           className={`btn ghost ${showSnippets ? 'on' : ''}`}
           style={{ height: 26, marginLeft: 'auto' }}
           onClick={() => setShowSnippets((v) => !v)}
-          title="Готовые сниппеты тестов"
+          title={tr('Готовые сниппеты тестов')}
         >
-          <Icon name="code2" size={13} />
-          Сниппеты
-        </button>
+          <Icon name="code2" size={13} /> {tr('Сниппеты')} </button>
       </div>
 
       <div style={{ display: 'flex', gap: 0, minHeight: 0 }}>
@@ -53,9 +52,9 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
         </div>
         {showSnippets && (
           <div className="snippet-panel">
-            <div className="snippet-head">Сниппеты</div>
+            <div className="snippet-head">{tr('Сниппеты')}</div>
             {snippets.map((s) => (
-              <button key={s.id} className="snippet-item" title="Вставить сниппет" onClick={() => insert(s.code)}>
+              <button key={s.id} className="snippet-item" title={tr('Вставить сниппет')} onClick={() => insert(s.code)}>
                 <Icon name="plus" size={12} />
                 <span>{s.label}</span>
               </button>

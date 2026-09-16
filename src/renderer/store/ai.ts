@@ -3,7 +3,7 @@ import type { AiContextSnapshot, ChatMessage, ProviderConfig, ProvidersDoc, Tool
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { emptyProviders } from './defaults'
-import { persist } from './persist'
+import { flushPersistAndWait, persist } from './persist'
 import { useSettings } from './settings'
 import { buildContextBlock, SYSTEM_PROMPT } from '../lib/ai-context'
 import { TOOL_SPECS, executeTool, isMutating, describeToolCall } from '../lib/ai-tools'
@@ -43,6 +43,8 @@ interface AiState {
   removeProvider: (id: string) => void
   setProviderKey: (id: string, key: string) => Promise<void>
   clearProviderKey: (id: string) => Promise<void>
+  /** Fetch the provider's live model list; resolves to the number of models found (0 = unavailable). */
+  refreshModels: (id: string) => Promise<number>
   activeProvider: () => ProviderConfig | null
   isConnected: () => boolean
   clearThread: () => void
@@ -109,28 +111,60 @@ export const useAi = create<AiState>((set, get) => ({
   },
 
   removeProvider: (id) => {
+    const removed = get().providers.providers.find((p) => p.id === id)
+    if (!removed) return
     const list = get().providers.providers.filter((p) => p.id !== id)
-    const activeProviderId = get().providers.activeProviderId === id ? (list[0]?.id ?? null) : get().providers.activeProviderId
+    const activeProviderId =
+      get().providers.activeProviderId === id ? (list.find((p) => p.hasKey)?.id ?? null) : get().providers.activeProviderId
     const providers = { ...get().providers, providers: list, activeProviderId }
     set({ providers })
     commitProviders(providers)
+    if (removed.apiKeyRef) void window.api.secretsDelete(removed.apiKeyRef).catch(() => {})
   },
 
   setProviderKey: async (id, key) => {
     const ref = `provider:${id}`
     await window.api.secretsSet(ref, key)
-    get().updateProvider(id, { apiKeyRef: ref, hasKey: true })
+    get().updateProvider(id, { apiKeyRef: ref, hasKey: true, keyless: key === '' })
+    // The first connected provider becomes the active one automatically.
+    const doc = get().providers
+    const active = doc.providers.find((p) => p.id === doc.activeProviderId)
+    if (!active?.hasKey) get().setActiveProvider(id)
   },
 
   clearProviderKey: async (id) => {
     const ref = `provider:${id}`
     await window.api.secretsDelete(ref)
-    get().updateProvider(id, { hasKey: false, apiKeyRef: undefined })
+    get().updateProvider(id, { hasKey: false, apiKeyRef: undefined, keyless: false })
+    const doc = get().providers
+    if (doc.activeProviderId === id) {
+      const next = doc.providers.find((p) => p.hasKey)
+      const providers = { ...doc, activeProviderId: next?.id ?? null }
+      set({ providers })
+      commitProviders(providers)
+    }
+  },
+
+  refreshModels: async (id) => {
+    // Main resolves the provider (key ref, base URL) from its own copy of the
+    // doc, so pending debounced edits must land there first.
+    await flushPersistAndWait()
+    const models = await window.api.aiListModels(id)
+    if (models.length === 0) return 0
+    const p = get().providers.providers.find((x) => x.id === id)
+    if (!p) return 0
+    const ids = models.map((m) => m.id)
+    // A template default the key cannot use would fail every chat — fall back to a live model.
+    const defaultModel = ids.includes(p.defaultModel) ? p.defaultModel : ids[0]
+    get().updateProvider(id, { models: ids, defaultModel })
+    return ids.length
   },
 
   activeProvider: () => {
     const { providers } = get()
-    return providers.providers.find((p) => p.id === providers.activeProviderId) ?? providers.providers[0] ?? null
+    return (
+      providers.providers.find((p) => p.id === providers.activeProviderId) ?? providers.providers.find((p) => p.hasKey) ?? null
+    )
   },
 
   isConnected: () => !!get().activeProvider()?.hasKey,

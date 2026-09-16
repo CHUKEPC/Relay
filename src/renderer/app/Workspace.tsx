@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type DragEvent } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
 import { useUi } from '@renderer/store/ui'
@@ -6,47 +6,59 @@ import { useTabs } from '@renderer/store/tabs'
 import { useEnvironments } from '@renderer/store/environments'
 import { useResponse } from '@renderer/store/response'
 import { useAi } from '@renderer/store/ai'
+import { useSettings } from '@renderer/store/settings'
+import { freeTabs, leavesOf, usePanes, type Direction, type DropZone, type PaneLeaf, type PaneNode, type PaneSplit } from '@renderer/store/panes'
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
+import { useCollections } from '@renderer/store/collections'
 import { trackDrag } from '@renderer/lib/drag'
+import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
+import { kbdCombo } from '@renderer/lib/keymap'
 import { interpolate } from '@shared/interpolate'
 import { RequestBuilder } from '@renderer/features/request/RequestBuilder'
 import { ResponsePanel } from '@renderer/features/response/ResponsePanel'
-import { RealtimePanel } from '@renderer/features/realtime/RealtimePanel'
-import { GrpcResponse } from '@renderer/features/grpc/GrpcResponse'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-panes.css'
 
+// Protocol panels ship as feature packs: load their chunks only when a tab is
+// actually in that mode, so an HTTP-only session never downloads them.
+const RealtimePanel = lazy(() => import('@renderer/features/realtime/RealtimePanel').then((m) => ({ default: m.RealtimePanel })))
+const GrpcResponse = lazy(() => import('@renderer/features/grpc/GrpcResponse').then((m) => ({ default: m.GrpcResponse })))
+
 /**
- * One builder + divider + response column for a single tab.
- * Pane 0 passes the global active tab; extra panes pass their pinned tab.
- * respPct/layout are shared across panes via the ui store (by design).
+ * Turn whatever was dropped into a tab id, opening the request if needed.
+ * Returns null when the payload no longer resolves (e.g. the request was
+ * deleted mid-drag).
  */
-function PaneView({ tabId, hintWhenEmpty }: { tabId: string | null; hintWhenEmpty?: boolean }) {
-  const layout = useUi((s) => s.layout)
-  const respPct = useUi((s) => s.respPct)
-  const setRespPct = useUi((s) => s.setRespPct)
-  const toggleLayout = useUi((s) => s.toggleLayout)
+function tabIdFromDrop(kind: DragKind, id: string): string | null {
+  if (!id) return null
+  if (kind === 'tab') return useTabs.getState().doc.tabs.some((t) => t.id === id) ? id : null
+  const found = useCollections.getState().locate(id)
+  if (!found || found.node.type !== 'request') return null
+  return useTabs.getState().openSaved(found.node.request, found.node.id)
+}
+
+/** Builder + draggable divider + response for one pane; sizes are per pane. */
+export function PaneView({ leaf }: { leaf: PaneLeaf }) {
+  const setRespPct = usePanes((s) => s.setRespPct)
+  const toggleLeafLayout = usePanes((s) => s.toggleLeafLayout)
+  const tabId = leaf.tabId
   const mode = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request.mode ?? 'http')
   const wsRef = useRef<HTMLDivElement>(null)
+  const horizontal = leaf.layout === 'split-h'
+
+  if (!tabId) return <EmptyPane paneId={leaf.id} />
 
   const onDividerDown = () => {
     trackDrag(
       (ev) => {
         if (!wsRef.current) return
         const r = wsRef.current.getBoundingClientRect()
-        const pct = layout === 'split-v' ? (1 - (ev.clientY - r.top) / r.height) * 100 : (1 - (ev.clientX - r.left) / r.width) * 100
-        setRespPct(pct)
+        const pct = horizontal ? (1 - (ev.clientX - r.left) / r.width) * 100 : (1 - (ev.clientY - r.top) / r.height) * 100
+        setRespPct(leaf.id, pct)
       },
-      { cursor: layout === 'split-v' ? 'row-resize' : 'col-resize' }
+      { cursor: horizontal ? 'col-resize' : 'row-resize' }
     )
-  }
-
-  const horizontal = layout === 'split-h'
-
-  // Extra panes without a pinned tab show a hint; pane 0 keeps the classic
-  // RequestBuilder empty card (exactly the single-pane behavior).
-  if (!tabId && hintWhenEmpty) {
-    return <div className="pane-blank">Выберите вкладку для этой панели</div>
   }
 
   return (
@@ -54,19 +66,19 @@ function PaneView({ tabId, hintWhenEmpty }: { tabId: string | null; hintWhenEmpt
       <div
         style={
           horizontal
-            ? { width: `${100 - respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: '1px solid var(--line)', overflow: 'auto' }
+            ? { width: `${100 - leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: '1px solid var(--line)', overflow: 'auto' }
             : { flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }
         }
       >
-        <RequestBuilder tabId={tabId ?? undefined} />
+        <RequestBuilder tabId={tabId} />
       </div>
 
       <div
         className="divider"
         style={horizontal ? { width: 8, height: 'auto', cursor: 'col-resize' } : undefined}
         onMouseDown={onDividerDown}
-        onDoubleClick={toggleLayout}
-        title="Перетащите, чтобы изменить размер · двойной клик меняет ориентацию"
+        onDoubleClick={() => toggleLeafLayout(leaf.id)}
+        title={tr('Перетащите, чтобы изменить размер · двойной клик меняет ориентацию')}
       >
         <div className="grip" />
       </div>
@@ -74,120 +86,376 @@ function PaneView({ tabId, hintWhenEmpty }: { tabId: string | null; hintWhenEmpt
       <div
         style={
           horizontal
-            ? { width: `${respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }
-            : { height: `${respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
+            ? { width: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }
+            : { height: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
         }
       >
-        {tabId &&
-          (mode === 'websocket' || mode === 'sse' || mode === 'socketio' || mode === 'mqtt' ? (
+        {mode === 'websocket' || mode === 'sse' || mode === 'socketio' || mode === 'mqtt' ? (
+          <Suspense fallback={null}>
             <RealtimePanel key={tabId} tabId={tabId} kind={mode} />
-          ) : mode === 'grpc' ? (
+          </Suspense>
+        ) : mode === 'grpc' ? (
+          <Suspense fallback={null}>
             <GrpcResponse key={tabId} tabId={tabId} />
-          ) : (
-            <ResponsePanel key={tabId} tabId={tabId} onAskAI={() => askAiAboutResponse(tabId)} />
-          ))}
+          </Suspense>
+        ) : (
+          <ResponsePanel key={tabId} tabId={tabId} onAskAI={() => askAiAboutResponse(tabId)} />
+        )}
       </div>
     </div>
   )
 }
 
-/** Removes pane `paneIndex` (>=1): shift later slots left, then shrink the count. */
-function closePane(paneIndex: number) {
-  const { panes, setPaneTab, setPaneCount } = useUi.getState()
-  if (panes.count <= 1) return
-  const extra = panes.extraTabIds.slice()
-  extra.splice(paneIndex - 1, 1)
-  extra.forEach((id, i) => setPaneTab(i, id ?? null))
-  // setPaneCount truncates extraTabIds to count-1, dropping the now-stale tail slot.
-  setPaneCount((panes.count - 1) as 1 | 2 | 3)
+function EmptyPane({ paneId }: { paneId: string }) {
+  useTabs((s) => s.doc.tabs.length)
+  const hasFree = usePanes((s) => freeTabs(s, paneId).length > 0)
+  return (
+    <div className="pane-blank">
+      <div className="pane-blank-title">{tr('Пустая панель')}</div>
+      <div className="pane-blank-sub">
+        {hasFree ? 'Выберите вкладку в заголовке панели или создайте новый запрос.' : 'Создайте новый запрос.'}
+      </div>
+      <button
+        className="btn"
+        onClick={() => {
+          usePanes.getState().focusPane(paneId)
+          useTabs.getState().openNew()
+        }}
+      >
+        <Icon name="plus" size={14} /> {tr('Новый запрос')} </button>
+    </div>
+  )
 }
 
-export function Workspace() {
-  const activeTabId = useTabs((s) => s.doc.activeTabId)
+/** Tab picker: a tab can be shown by only one pane (or one separate window). */
+function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
   const tabs = useTabs((s) => s.doc.tabs)
-  const panes = useUi((s) => s.panes)
-  const setPaneTab = useUi((s) => s.setPaneTab)
+  const root = usePanes((s) => s.root)
+  const detached = usePanes((s) => s.detached)
+  const current = tabs.find((t) => t.id === leaf.tabId) ?? null
+  const paneNumber = new Map(leavesOf(root).map((l, i) => [l.tabId, i + 1]))
 
-  // Single pane: exactly the pre-split-screen layout, no pane header.
-  if (panes.count === 1) {
-    return (
-      <div className="main">
-        <PaneView tabId={activeTabId} />
-      </div>
-    )
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button className="pane-tab-pick" title={tr('Какой запрос показывать в этой панели')}>
+          {current ? (
+            <>
+              <span className={`method-tag m-${current.request.method}`}>
+                {current.request.method === 'DELETE' ? 'DEL' : current.request.method}
+              </span>
+              <span className="label">{current.request.name || 'Без названия'}</span>
+              {current.dirty && <span className="pane-dirty" title={tr('Несохранённые изменения')} />}
+            </>
+          ) : (
+            <span className="ph">{tr('Выберите вкладку…')}</span>
+          )}
+          <Icon name="chevDsm" size={12} style={{ color: 'var(--tx-3)', flex: 'none' }} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="popover" align="start" sideOffset={4} style={{ position: 'relative', minWidth: 260 }}>
+          {tabs.map((t) => {
+            const inOther = t.id !== leaf.tabId && paneNumber.has(t.id)
+            const inWindow = detached.includes(t.id)
+            const busy = inOther || inWindow
+            return (
+              <DropdownMenu.Item
+                key={t.id}
+                className={`pop-item ${leaf.tabId === t.id ? 'on' : ''}`}
+                disabled={busy}
+                onSelect={() => usePanes.getState().setLeafTab(leaf.id, t.id)}
+              >
+                <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
+                <span className="pane-pick-name">{t.request.name || 'Без названия'}</span>
+                {inOther && <span className="pane-pick-note">панель {paneNumber.get(t.id)}</span>}
+                {inWindow && <span className="pane-pick-note">{tr('в окне')}</span>}
+                {leaf.tabId === t.id && <Icon name="check" size={14} className="tick" />}
+              </DropdownMenu.Item>
+            )
+          })}
+          {tabs.length > 0 && <DropdownMenu.Separator className="pop-sep" />}
+          <DropdownMenu.Item
+            className="pop-item"
+            onSelect={() => {
+              usePanes.getState().focusPane(leaf.id)
+              useTabs.getState().openNew()
+            }}
+          >
+            <Icon name="plus" size={14} />
+            <span className="pane-pick-name">{tr('Новый запрос в этой панели')}</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index: number; active: boolean; maximized: boolean }) {
+  const keybindings = useSettings((s) => s.settings.keybindings)
+  const panes = usePanes.getState
+  return (
+    <div
+      className="pane-head"
+      draggable
+      onDragStart={(e) => {
+        if ((e.target as HTMLElement).closest('button')) {
+          e.preventDefault()
+          return
+        }
+        e.dataTransfer.setData(PANE_MIME, leaf.id)
+        e.dataTransfer.effectAllowed = 'move'
+        document.body.classList.add('pane-dragging')
+      }}
+      onDragEnd={() => document.body.classList.remove('pane-dragging')}
+      title={tr('Перетащите заголовок на другую панель, чтобы переместить или поменять местами')}
+    >
+      <span className="pane-grip">
+        <Icon name="grip" size={14} strokeWidth={2.6} />
+      </span>
+      <span className={`pane-num${active ? ' on' : ''}`}>{index + 1}</span>
+      <PaneTabPicker leaf={leaf} />
+      <div className="grow" />
+      <button
+        className="icon-btn pane-act"
+        title={`${maximized ? 'Вернуть раскладку' : 'Развернуть панель'} (${kbdCombo('paneMaximize', keybindings)})`}
+        onClick={() => panes().toggleMaximize(leaf.id)}
+      >
+        <Icon name={maximized ? 'restore' : 'maximize'} size={13} />
+      </button>
+      {leaf.tabId && (
+        <button
+          className="icon-btn pane-act"
+          title={`Открыть в отдельном окне (${kbdCombo('paneDetach', keybindings)})`}
+          onClick={() => void panes().detachTab(leaf.tabId!)}
+        >
+          <Icon name="floatWin" size={13} />
+        </button>
+      )}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button className="icon-btn pane-act" title={tr('Действия с панелью')}>
+            <Icon name="dots" size={13} />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="popover" align="end" sideOffset={4} style={{ position: 'relative', minWidth: 250 }}>
+            <PaneMenuItem icon="splitRight" label={tr('Добавить панель справа')} combo={kbdCombo('paneSplitRight', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('row') }} />
+            <PaneMenuItem icon="splitDown" label={tr('Добавить панель снизу')} combo={kbdCombo('paneSplitDown', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('col') }} />
+            <PaneMenuItem icon="swap" label={tr('Поменять местами с соседней группой')} combo={kbdCombo('paneFlip', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().flipActiveGroup() }} />
+            <DropdownMenu.Separator className="pop-sep" />
+            <PaneMenuItem icon="close" label={tr('Закрыть панель')} combo={kbdCombo('paneClose', keybindings)} onSelect={() => panes().closePane(leaf.id)} />
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <button className="icon-btn pane-act" title={`Закрыть панель (${kbdCombo('paneClose', keybindings)})`} onClick={() => panes().closePane(leaf.id)}>
+        <Icon name="close" size={13} />
+      </button>
+    </div>
+  )
+}
+
+function PaneMenuItem({ icon, label, combo, onSelect }: { icon: string; label: string; combo: string; onSelect: () => void }) {
+  return (
+    <DropdownMenu.Item className="pop-item" onSelect={onSelect}>
+      <Icon name={icon} size={14} />
+      <span style={{ flex: 1 }}>{label}</span>
+      {combo && <span className="pane-menu-kbd">{combo}</span>}
+    </DropdownMenu.Item>
+  )
+}
+
+function zoneFor(e: DragEvent, el: HTMLElement): DropZone {
+  const r = el.getBoundingClientRect()
+  const x = (e.clientX - r.left) / r.width
+  const y = (e.clientY - r.top) / r.height
+  if (x > 0.3 && x < 0.7 && y > 0.3 && y < 0.7) return 'center'
+  const d = { left: x, right: 1 - x, up: y, down: 1 - y }
+  return (Object.keys(d) as (keyof typeof d)[]).reduce((a, b) => (d[a] <= d[b] ? a : b))
+}
+
+function PaneBox({ leaf, index, showHeader }: { leaf: PaneLeaf; index: number; showHeader: boolean }) {
+  const active = usePanes((s) => s.activeId === leaf.id)
+  const maximized = usePanes((s) => s.maximizedId === leaf.id)
+  const [zone, setZone] = useState<DropZone | null>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  const focus = () => {
+    if (usePanes.getState().activeId !== leaf.id) usePanes.getState().focusPane(leaf.id)
   }
 
-  // A pinned tab that has been closed degrades to an empty slot.
-  const slotTabId = (slot: number): string | null => {
-    const id = panes.extraTabIds[slot] ?? null
-    return id && tabs.some((t) => t.id === id) ? id : null
-  }
+  return (
+    <div
+      ref={boxRef}
+      className={`pane${active && showHeader ? ' active' : ''}`}
+      data-pane-id={leaf.id}
+      onMouseDownCapture={focus}
+      onFocusCapture={focus}
+      onDragOver={(e) => {
+        if (!isPaneDrop(e.dataTransfer) || !boxRef.current) return
+        e.preventDefault()
+        e.stopPropagation()
+        e.dataTransfer.dropEffect = 'move'
+        const z = zoneFor(e, boxRef.current)
+        if (z !== zone) setZone(z)
+      }}
+      onDragLeave={(e) => {
+        if (!boxRef.current?.contains(e.relatedTarget as Node | null)) setZone(null)
+      }}
+      onDrop={(e) => {
+        const kind = dragKind(e.dataTransfer)
+        const z = zone
+        setZone(null)
+        document.body.classList.remove('pane-dragging')
+        if (!kind || !z || !boxRef.current) return
+        e.preventDefault()
+        e.stopPropagation()
+        const id = dragId(e.dataTransfer, kind)
+        if (!id) return
+        if (kind === 'pane') {
+          usePanes.getState().movePaneTo(id, leaf.id, z)
+          return
+        }
+        const tabId = tabIdFromDrop(kind, id)
+        if (tabId) usePanes.getState().dropTabInto(tabId, leaf.id, z)
+      }}
+    >
+      {showHeader && <PaneHeader leaf={leaf} index={index} active={active} maximized={maximized} />}
+      <PaneView leaf={leaf} />
+      {zone && <div className={`pane-drop pane-drop-${zone}`} />}
+    </div>
+  )
+}
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null
+function SplitView({ node, indexOf }: { node: PaneSplit; indexOf: Map<string, number> }) {
+  const setRatio = usePanes((s) => s.setRatio)
+  const ref = useRef<HTMLDivElement>(null)
+  const row = node.dir === 'row'
 
-  const renderPane = (paneIndex: number) => {
-    const tabId = paneIndex === 0 ? activeTabId : slotTabId(paneIndex - 1)
-    const pinned = paneIndex === 0 ? null : tabs.find((t) => t.id === tabId)
-    return (
-      <div className="pane" key={paneIndex}>
-        {paneIndex === 0 ? (
-          <div className="pane-head">
-            <span className="pane-head-label">Активная вкладка</span>
-            <span className="pane-head-name">{activeTab ? activeTab.request.name || 'Без названия' : '—'}</span>
-          </div>
-        ) : (
-          <div className="pane-head">
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <button className="pane-tab-pick" title="Привязать вкладку к панели">
-                  {pinned ? (
-                    <>
-                      <span className={`method-tag m-${pinned.request.method}`}>
-                        {pinned.request.method === 'DELETE' ? 'DEL' : pinned.request.method}
-                      </span>
-                      <span className="label">{pinned.request.name || 'Без названия'}</span>
-                    </>
-                  ) : (
-                    <span className="ph">Выберите вкладку…</span>
-                  )}
-                  <Icon name="chevDsm" size={12} style={{ color: 'var(--tx-3)', flex: 'none' }} />
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content className="popover" align="start" sideOffset={4} style={{ position: 'relative', minWidth: 220 }}>
-                  {tabs.length === 0 && (
-                    <div className="pop-item" style={{ color: 'var(--tx-3)', pointerEvents: 'none' }}>
-                      Нет открытых вкладок
-                    </div>
-                  )}
-                  {tabs.map((t) => (
-                    <DropdownMenu.Item
-                      key={t.id}
-                      className={`pop-item ${tabId === t.id ? 'on' : ''}`}
-                      onSelect={() => setPaneTab(paneIndex - 1, t.id)}
-                    >
-                      <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
-                      <span className="pane-pick-name">{t.request.name || 'Без названия'}</span>
-                      {tabId === t.id && <Icon name="check" size={14} className="tick" />}
-                    </DropdownMenu.Item>
-                  ))}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-            <div className="grow" />
-            <button className="icon-btn pane-close" title="Закрыть панель" onClick={() => closePane(paneIndex)}>
-              <Icon name="close" size={13} />
-            </button>
-          </div>
-        )}
-        <PaneView tabId={tabId} hintWhenEmpty={paneIndex > 0} />
-      </div>
+  const onDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    trackDrag(
+      (ev) => {
+        const r = ref.current?.getBoundingClientRect()
+        if (!r) return
+        setRatio(node.id, row ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height)
+      },
+      { cursor: row ? 'col-resize' : 'row-resize' }
     )
   }
 
   return (
+    <div ref={ref} className={`pane-split ${node.dir}`}>
+      <div className="pane-slot" style={{ flexBasis: `${node.ratio * 100}%` }}>
+        <Tree node={node.a} indexOf={indexOf} />
+      </div>
+      <div
+        className={`pane-divider ${node.dir}`}
+        onMouseDown={onDown}
+        onDoubleClick={() => setRatio(node.id, 0.5)}
+        title={tr('Перетащите, чтобы изменить размер · двойной клик — поровну')}
+      />
+      <div className="pane-slot" style={{ flexBasis: `${(1 - node.ratio) * 100}%` }}>
+        <Tree node={node.b} indexOf={indexOf} />
+      </div>
+    </div>
+  )
+}
+
+function Tree({ node, indexOf }: { node: PaneNode; indexOf: Map<string, number> }) {
+  if (node.kind === 'leaf') return <PaneBox leaf={node} index={indexOf.get(node.id) ?? 0} showHeader />
+  return <SplitView node={node} indexOf={indexOf} />
+}
+
+const EDGES: Direction[] = ['left', 'right', 'up', 'down']
+
+/**
+ * Outer drop strips along the four sides of the grid, VS Code style: dropping a
+ * tab or a saved request here splits the *whole* layout, not just the pane
+ * underneath. Only rendered while a drop is in flight so they never eat clicks.
+ */
+function EdgeDropZones() {
+  const [over, setOver] = useState<Direction | null>(null)
+  const [armed, setArmed] = useState(false)
+
+  useEffect(() => {
+    const on = (e: globalThis.DragEvent) => setArmed(!!e.dataTransfer && isPaneDrop(e.dataTransfer))
+    const off = () => {
+      setArmed(false)
+      setOver(null)
+    }
+    // dragenter/leave on window is noisy; dragover keeps the flag alive and
+    // dragend/drop clears it exactly once.
+    window.addEventListener('dragover', on)
+    window.addEventListener('dragend', off)
+    window.addEventListener('drop', off)
+    return () => {
+      window.removeEventListener('dragover', on)
+      window.removeEventListener('dragend', off)
+      window.removeEventListener('drop', off)
+    }
+  }, [])
+
+  if (!armed) return null
+
+  return (
+    <>
+      {EDGES.map((side) => (
+        <div
+          key={side}
+          className={`pane-edge pane-edge-${side}${over === side ? ' on' : ''}`}
+          onDragOver={(e) => {
+            if (!isPaneDrop(e.dataTransfer)) return
+            e.preventDefault()
+            e.stopPropagation()
+            e.dataTransfer.dropEffect = 'move'
+            if (over !== side) setOver(side)
+          }}
+          onDragLeave={() => setOver((cur) => (cur === side ? null : cur))}
+          onDrop={(e) => {
+            const kind = dragKind(e.dataTransfer)
+            setOver(null)
+            setArmed(false)
+            document.body.classList.remove('pane-dragging')
+            if (!kind) return
+            e.preventDefault()
+            e.stopPropagation()
+            const id = dragId(e.dataTransfer, kind)
+            if (!id) return
+            if (kind === 'pane') {
+              const target = leavesOf(usePanes.getState().root).find((l) => l.id !== id)
+              if (target) usePanes.getState().movePaneTo(id, target.id, side)
+              return
+            }
+            const tabId = tabIdFromDrop(kind, id)
+            if (tabId) usePanes.getState().dropTabAtEdge(tabId, side)
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
+export function Workspace() {
+  const root = usePanes((s) => s.root)
+  const maximizedId = usePanes((s) => s.maximizedId)
+  const leaves = leavesOf(root)
+  const indexOf = new Map(leaves.map((l, i) => [l.id, i]))
+  const maximized = maximizedId ? leaves.find((l) => l.id === maximizedId) : null
+
+  return (
     <div className="main">
-      <div className={`panes panes-${panes.count}`}>{Array.from({ length: panes.count }, (_, i) => renderPane(i))}</div>
+      <div className="panes">
+        {/* A single pane keeps the classic header-less layout. */}
+        {root.kind === 'leaf' ? (
+          <PaneBox leaf={root} index={0} showHeader={false} />
+        ) : maximized ? (
+          <PaneBox leaf={maximized} index={indexOf.get(maximized.id) ?? 0} showHeader />
+        ) : (
+          <Tree node={root} indexOf={indexOf} />
+        )}
+        <EdgeDropZones />
+      </div>
     </div>
   )
 }

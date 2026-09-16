@@ -3,6 +3,7 @@ import type { CollectionNode } from '@shared/types'
 import { Modal } from '@renderer/components/primitives'
 import { useCollections } from '@renderer/store/collections'
 
+import { tr } from '@renderer/lib/i18n'
 interface Target {
   id: string
   label: string
@@ -58,13 +59,13 @@ export function SaveDialog({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Сохранить запрос" width={460}>
+    <Modal open={open} onOpenChange={onOpenChange} title={tr('Сохранить запрос')} width={460}>
       <div className="field">
-        <label>Название</label>
+        <label>{tr('Название')}</label>
         <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirm()} />
       </div>
       <div className="field">
-        <label>Куда сохранить</label>
+        <label>{tr('Куда сохранить')}</label>
         {targets.length ? (
           <select className="input" value={parentId} onChange={(e) => setParentId(e.target.value)} style={{ fontFamily: 'var(--font-ui)' }}>
             {targets.map((t) => (
@@ -74,16 +75,12 @@ export function SaveDialog({
             ))}
           </select>
         ) : (
-          <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>Коллекций нет — будет создана новая «Моя коллекция».</div>
+          <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>{tr('Коллекций нет — будет создана новая «Моя коллекция».')}</div>
         )}
       </div>
       <div className="modal-foot">
-        <button className="btn" onClick={() => onOpenChange(false)}>
-          Отмена
-        </button>
-        <button className="btn primary" onClick={confirm}>
-          Сохранить
-        </button>
+        <button className="btn" onClick={() => onOpenChange(false)}> {tr('Отмена')} </button>
+        <button className="btn primary" onClick={confirm}> {tr('Сохранить')} </button>
       </div>
     </Modal>
   )

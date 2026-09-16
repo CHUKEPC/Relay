@@ -5,7 +5,9 @@ import { Toggle } from '@renderer/components/primitives'
 import { usePlugins } from '@renderer/store/plugins'
 import { useSettings } from '@renderer/store/settings'
 import { useUi } from '@renderer/store/ui'
+import { FeaturePacks } from './FeaturePacks'
 
+import { tr } from '@renderer/lib/i18n'
 /** Human consequence line per permission token (consent must be readable). */
 function permissionLabel(p: PluginPermission): string {
   if (p === 'net') return 'Доступ в интернет — любой хост'
@@ -116,7 +118,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       customTheme: snap?.customTheme ?? null,
       appearanceSnapshot: null
     })
-    useUi.getState().showToast('Прежняя тема восстановлена')
+    useUi.getState().showToast(tr('Прежняя тема восстановлена'))
   }
 
   // Applied = provenance matches AND the custom preset is still active — after
@@ -146,7 +148,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
           )}
         </div>
         {!broken && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title="Включение выдаёт перечисленные разрешения">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={tr('Включение выдаёт перечисленные разрешения')}>
             <span style={{ fontSize: 11.5, color: 'var(--tx-2)' }}>
               {info.enabled ? 'Включён' : m.permissions.length ? 'Включить и разрешить' : 'Включить'}
             </span>
@@ -167,9 +169,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       </div>
 
       {confirmDelete && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-5xx)' }}>
-          Папка плагина будет удалена с диска. Нажмите корзину ещё раз для подтверждения.
-        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-5xx)' }}> {tr('Папка плагина будет удалена с диска. Нажмите корзину ещё раз для подтверждения.')} </div>
       )}
 
       {broken && (
@@ -182,9 +182,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       {info.needsRegrant && !broken && (
         <div style={{ marginTop: 8, fontSize: 12, color: 'var(--s-4xx, #d97706)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="warn" size={14} />
-            Обновление плагина запрашивает новые разрешения — включите его заново, чтобы выдать их:
-          </div>
+            <Icon name="warn" size={14} /> {tr('Обновление плагина запрашивает новые разрешения — включите его заново, чтобы выдать их:')} </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
             {missingPerms.map((p) => (
               <span key={p} style={warnChipStyle}>
@@ -196,8 +194,8 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-        <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>Разрешения:</span>
-        {m.permissions.length === 0 && <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>не требуются</span>}
+        <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{tr('Разрешения:')}</span>
+        {m.permissions.length === 0 && <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>{tr('не требуются')}</span>}
         {m.permissions.map((p) => (
           <span key={p} style={chipStyle} title={p}>
             {permissionLabel(p)}
@@ -223,16 +221,16 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
             </span>
           ))}
           {events.includes('response') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>Хук: после каждого ответа</span>
+            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: после каждого ответа')}</span>
           )}
           {events.includes('request') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>Хук: перед каждым запросом</span>
+            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: перед каждым запросом')}</span>
           )}
           {events.includes('workspace') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>Хук: смена пространства</span>
+            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: смена пространства')}</span>
           )}
           {events.includes('collection') && (
-            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>Хук: изменение коллекций</span>
+            <span style={{ ...chipStyle, color: 'var(--tx-2)' }}>{tr('Хук: изменение коллекций')}</span>
           )}
         </div>
       )}
@@ -240,9 +238,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
       {/* Per-host grant editor — narrow a broad `net` grant to specific hosts. */}
       {hasBroadNet && info.enabled && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12.5, marginBottom: 4 }}>
-            Сеть: разрешённые хосты
-            <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
+          <div style={{ fontSize: 12.5, marginBottom: 4 }}> {tr('Сеть: разрешённые хосты')} <span style={{ fontSize: 11.5, color: 'var(--tx-3)' }}>
               {' '}
               {info.netAllowlist.length ? '(плагин ограничен этим списком)' : '(пусто = любой хост)'}
             </span>
@@ -254,7 +250,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
                 <button
                   className="icon-btn"
                   style={{ width: 16, height: 16 }}
-                  title="Убрать"
+                  title={tr('Убрать')}
                   onClick={() => void setNetAllowlist(m.id, info.netAllowlist.filter((x) => x !== h))}
                 >
                   <Icon name="close" size={11} />
@@ -263,7 +259,7 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
             ))}
             <input
               className="input mono"
-              placeholder="example.com или *.example.com"
+              placeholder={tr('example.com или *.example.com')}
               value={newHost}
               onChange={(e) => setNewHost(e.target.value)}
               onKeyDown={(e) => {
@@ -271,11 +267,11 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
                 const host = newHost.trim().toLowerCase()
                 if (!host) return
                 if (!/^(\*\.)?[a-z0-9]([a-z0-9.-]{0,253})(:\d{1,5})?$/.test(host)) {
-                  useUi.getState().showToast('Некорректный хост (пример: example.com или *.example.com)', 'error')
+                  useUi.getState().showToast(tr('Некорректный хост (пример: example.com или *.example.com)'), 'error')
                   return
                 }
                 if (info.netAllowlist.includes(host)) {
-                  useUi.getState().showToast('Этот хост уже в списке', 'error')
+                  useUi.getState().showToast(tr('Этот хост уже в списке'), 'error')
                   return
                 }
                 void setNetAllowlist(m.id, [...info.netAllowlist, host])
@@ -352,14 +348,12 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
                     style={{ height: 30 }}
                     disabled={!editing}
                     onClick={() => saveSecret(f.key)}
-                    title="Сохранить секрет"
-                  >
-                    Сохранить
-                  </button>
+                    title={tr('Сохранить секрет')}
+                  > {tr('Сохранить')} </button>
                   {isSet && (
                     <button
                       className="icon-btn"
-                      title="Очистить секрет"
+                      title={tr('Очистить секрет')}
                       onClick={() => {
                         // Drop any in-progress draft so the field doesn't keep
                         // showing (and re-saving) text that no longer applies.
@@ -409,13 +403,9 @@ function PluginCard({ info }: { info: PluginInfo }): JSX.Element {
                 </span>
               </div>
               {isApplied(t) ? (
-                <button className="btn ghost" style={{ height: 28 }} onClick={revertTheme}>
-                  Вернуть прежнюю
-                </button>
+                <button className="btn ghost" style={{ height: 28 }} onClick={revertTheme}> {tr('Вернуть прежнюю')} </button>
               ) : (
-                <button className="btn ghost" style={{ height: 28 }} onClick={() => applyTheme(t)}>
-                  Применить
-                </button>
+                <button className="btn ghost" style={{ height: 28 }} onClick={() => applyTheme(t)}> {tr('Применить')} </button>
               )}
             </div>
           ))}
@@ -456,7 +446,11 @@ export function PluginsSection(): JSX.Element {
 
   return (
     <>
-      <div className="set-h">Плагины</div>
+      <div className="set-h">{tr('Плагины')}</div>
+
+      <FeaturePacks />
+
+      <div className="set-group-label">{tr('Пользовательские плагины')}</div>
       <div className="set-sub">
         Плагины — папки в каталоге данных приложения; они подхватываются автоматически (hot-reload). Код плагина
         выполняется в изолированной песочнице и получает только те разрешения, которые вы выдали при включении.
@@ -465,21 +459,15 @@ export function PluginsSection(): JSX.Element {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
         <button className="btn ghost" onClick={() => void window.api.pluginsOpenFolder()}>
-          <Icon name="folder" size={14} />
-          Открыть папку плагинов
-        </button>
+          <Icon name="folder" size={14} /> {tr('Открыть папку плагинов')} </button>
         <button className="btn ghost" onClick={() => void onInstallSample()}>
           <Icon name="download" size={14} />
           {confirmReinstall ? 'Перезаписать пример?' : 'Установить пример'}
         </button>
         <button className="btn ghost" onClick={() => void installFromZip()}>
-          <Icon name="upload" size={14} />
-          Установить из .zip
-        </button>
+          <Icon name="upload" size={14} /> {tr('Установить из .zip')} </button>
         <button className="btn ghost" onClick={() => void refresh()}>
-          <Icon name="refresh" size={14} />
-          Обновить
-        </button>
+          <Icon name="refresh" size={14} /> {tr('Обновить')} </button>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--tx-3)', marginBottom: 18 }}>
         {confirmReinstall
@@ -496,10 +484,7 @@ export function PluginsSection(): JSX.Element {
             fontSize: 12.5,
             color: 'var(--tx-2)'
           }}
-        >
-          Плагинов пока нет. Нажмите «Установить пример» — он добавит кнопку «В webhook» на панель ответа и тему
-          Forge Green, а заодно послужит шаблоном для собственных плагинов.
-        </div>
+        > {tr('Плагинов пока нет. Нажмите «Установить пример» — он добавит кнопку «В webhook» на панель ответа и тему Forge Green, а заодно послужит шаблоном для собственных плагинов.')} </div>
       )}
 
       {plugins.map((p) => (

@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { CollectionNode } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
@@ -8,14 +8,22 @@ import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useRunner } from '@renderer/store/runner'
 import { ImportDialog } from '@renderer/features/data/ImportDialog'
+import { REQUEST_MIME } from '@renderer/lib/dnd'
 import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
 
+import { tr } from '@renderer/lib/i18n'
 function MethodTag({ m }: { m: string }) {
   return <span className={`method-tag mtag m-${m}`}>{m === 'DELETE' ? 'DEL' : m}</span>
 }
 
 /** Where a dragged node will land relative to the row it is hovering. */
 type DropIntent = 'before' | 'after' | 'into'
+
+/** Node whose name is being edited; `isNew` nodes are deleted when the edit is cancelled. */
+interface RenameState {
+  id: string
+  isNew: boolean
+}
 
 /**
  * Id of the node currently being dragged. A module-level ref is the most
@@ -28,7 +36,7 @@ export function CollectionsTree({ query }: { query: string }) {
   const collections = useCollections((s) => s.doc.collections)
   const addCollection = useCollections((s) => s.addCollection)
   const setAll = useCollections((s) => s.setAll)
-  const [renameId, setRenameId] = useState<string | null>(null)
+  const [rename, setRename] = useState<RenameState | null>(null)
   // Global so the command palette can open the dialog too.
   const importOpen = useUi((s) => s.importOpen)
   const setImportOpen = useUi((s) => s.setImportOpen)
@@ -42,28 +50,28 @@ export function CollectionsTree({ query }: { query: string }) {
   return (
     <>
       <div className="side-section-head">
-        <span>Коллекции</span>
+        <span>{tr('Коллекции')}</span>
         <div style={{ display: 'flex', gap: 2 }}>
           {collections.length > 0 && (
             <button
               className="icon-btn"
               style={{ width: 22, height: 22 }}
-              title="Удалить все коллекции"
+              title={tr('Удалить все коллекции')}
               onClick={deleteAll}
             >
               <Icon name="trash" size={14} />
             </button>
           )}
-          <button className="icon-btn" style={{ width: 22, height: 22 }} title="Импорт" onClick={() => setImportOpen(true)}>
+          <button className="icon-btn" style={{ width: 22, height: 22 }} title={tr('Импорт')} onClick={() => setImportOpen(true)}>
             <Icon name="download" size={14} />
           </button>
           <button
             className="icon-btn"
             style={{ width: 22, height: 22 }}
-            title="Новая коллекция"
+            title={tr('Новая коллекция')}
             onClick={() => {
               const id = addCollection('Новая коллекция')
-              setRenameId(id)
+              setRename({ id, isNew: true })
             }}
           >
             <Icon name="plus" size={14} />
@@ -73,10 +81,10 @@ export function CollectionsTree({ query }: { query: string }) {
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
       <div className="tree">
         {collections.map((n) => (
-          <TreeNode key={n.id} node={n} depth={0} query={query} renameId={renameId} setRenameId={setRenameId} />
+          <TreeNode key={n.id} node={n} depth={0} query={query} rename={rename} setRename={setRename} />
         ))}
         {collections.length === 0 && (
-          <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx-3)', fontSize: 12 }}>Нет коллекций</div>
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx-3)', fontSize: 12 }}>{tr('Нет коллекций')}</div>
         )}
       </div>
     </>
@@ -141,14 +149,14 @@ function TreeNode({
   node,
   depth,
   query,
-  renameId,
-  setRenameId
+  rename,
+  setRename
 }: {
   node: CollectionNode
   depth: number
   query: string
-  renameId: string | null
-  setRenameId: (id: string | null) => void
+  rename: RenameState | null
+  setRename: (r: RenameState | null) => void
 }) {
   const [open, setOpen] = useState(depth < 2)
   // Where a dragged node would land relative to this row (drives the indicator).
@@ -160,13 +168,18 @@ function TreeNode({
   if (!nodeMatches(node, query)) return null
   const expanded = query ? true : open
 
-  const renaming = renameId === node.id
+  const renaming = rename?.id === node.id
   const name = node.type === 'request' ? node.request.name : node.name
   const isContainer = node.type !== 'request'
 
   const commitRename = (value: string) => {
     if (value.trim()) store.renameNode(node.id, value.trim())
-    setRenameId(null)
+    setRename(null)
+  }
+
+  const cancelRename = () => {
+    if (rename?.isNew) store.removeNode(node.id)
+    setRename(null)
   }
 
   // --- Drag & drop ---------------------------------------------------------
@@ -179,6 +192,11 @@ function TreeNode({
     e.stopPropagation()
     dragState.id = node.id
     e.dataTransfer.setData('text/plain', node.id)
+    // A saved request can also be dropped onto the pane grid to open it there.
+    if (node.type === 'request') {
+      e.dataTransfer.setData(REQUEST_MIME, node.id)
+      document.body.classList.add('pane-dragging')
+    }
     e.dataTransfer.effectAllowed = 'move'
   }
 
@@ -245,6 +263,7 @@ function TreeNode({
   const handleDragEnd = () => {
     dragState.id = null
     setDropIntent(null)
+    document.body.classList.remove('pane-dragging')
   }
 
   const dndProps = {
@@ -263,21 +282,16 @@ function TreeNode({
     node.type === 'request' ? (
       <>
         <ContextMenu.Item className="pop-item" onSelect={() => openSaved(node.request, node.request.id)}>
-          <Icon name="arrowR" size={14} /> Открыть
-        </ContextMenu.Item>
+          <Icon name="arrowR" size={14} /> {tr('Открыть')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
-          <Icon name="copy" size={14} /> Дублировать
-        </ContextMenu.Item>
+          <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => void exportRequestJson(node.request)}>
-          <Icon name="download" size={14} /> Экспорт
-        </ContextMenu.Item>
-        <ContextMenu.Item className="pop-item" onSelect={() => setRenameId(node.id)}>
-          <Icon name="doc" size={14} /> Переименовать
-        </ContextMenu.Item>
+          <Icon name="download" size={14} /> {tr('Экспорт')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => setRename({ id: node.id, isNew: false })}>
+          <Icon name="doc" size={14} /> {tr('Переименовать')} </ContextMenu.Item>
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item className="pop-item" style={{ color: 'var(--s-5xx)' }} onSelect={() => store.removeNode(node.id)}>
-          <Icon name="trash" size={14} /> Удалить
-        </ContextMenu.Item>
+          <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
       </>
     ) : (
       <>
@@ -289,29 +303,25 @@ function TreeNode({
             openSaved(r, r.id)
           }}
         >
-          <Icon name="plus" size={14} /> Новый запрос
-        </ContextMenu.Item>
+          <Icon name="plus" size={14} /> {tr('Новый запрос')} </ContextMenu.Item>
         <ContextMenu.Item
           className="pop-item"
           onSelect={() => {
             const id = store.addFolder(node.id, 'Новая папка')
-            setRenameId(id)
+            setOpen(true)
+            setRename({ id, isNew: true })
           }}
         >
-          <Icon name="folder" size={14} /> Новая папка
-        </ContextMenu.Item>
-        <ContextMenu.Item className="pop-item" onSelect={() => setRenameId(node.id)}>
-          <Icon name="doc" size={14} /> Переименовать
-        </ContextMenu.Item>
+          <Icon name="folder" size={14} /> {tr('Новая папка')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => setRename({ id: node.id, isNew: false })}>
+          <Icon name="doc" size={14} /> {tr('Переименовать')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
-          <Icon name="copy" size={14} /> Дублировать
-        </ContextMenu.Item>
+          <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => void exportFolderJson(node)}>
           <Icon name="download" size={14} /> {node.type === 'collection' ? 'Экспорт (Postman v2.1)' : 'Экспорт'}
         </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => useRunner.getState().openFor(node)}>
-          <Icon name="play" size={14} /> Запустить
-        </ContextMenu.Item>
+          <Icon name="play" size={14} /> {tr('Запустить')} </ContextMenu.Item>
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item
           className="pop-item"
@@ -320,8 +330,7 @@ function TreeNode({
             if (window.confirm(`Удалить «${node.name}» и всё содержимое?`)) store.removeNode(node.id)
           }}
         >
-          <Icon name="trash" size={14} /> Удалить
-        </ContextMenu.Item>
+          <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
       </>
     )
 
@@ -337,7 +346,7 @@ function TreeNode({
           <Icon name="doc" size={14} style={{ opacity: 0.55 }} />
         </span>
         {renaming ? (
-          <RenameInput initial={name} onCommit={commitRename} />
+          <RenameInput initial={name} onCommit={commitRename} onCancel={cancelRename} />
         ) : (
           <span className="name">{node.request.name}</span>
         )}
@@ -357,7 +366,7 @@ function TreeNode({
           <Icon name="folder" size={15} />
         </span>
         {renaming ? (
-          <RenameInput initial={name} onCommit={commitRename} />
+          <RenameInput initial={name} onCommit={commitRename} onCancel={cancelRename} />
         ) : (
           <span className="name" style={{ fontWeight: depth === 0 ? 600 : 500 }}>
             {node.name}
@@ -366,7 +375,7 @@ function TreeNode({
         {node.type === 'collection' && !renaming && (
           <button
             className="row-action"
-            title="Экспорт коллекции (Postman v2.1)"
+            title={tr('Экспорт коллекции (Postman v2.1)')}
             onClick={(e) => {
               e.stopPropagation()
               void exportFolderJson(node)
@@ -383,7 +392,12 @@ function TreeNode({
       <ContextMenu.Root>
         <ContextMenu.Trigger asChild>{row}</ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenu.Content className="popover" style={{ position: 'relative', minWidth: 180 }}>
+          <ContextMenu.Content
+            className="popover"
+            style={{ position: 'relative', minWidth: 180 }}
+            // Returning focus to the row would steal it from a just-opened name editor.
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
             {menuItems}
           </ContextMenu.Content>
         </ContextMenu.Portal>
@@ -391,7 +405,7 @@ function TreeNode({
       {node.type !== 'request' && expanded && (
         <div className="tree-children">
           {node.children.map((c) => (
-            <TreeNode key={c.id} node={c} depth={depth + 1} query={query} renameId={renameId} setRenameId={setRenameId} />
+            <TreeNode key={c.id} node={c} depth={depth + 1} query={query} rename={rename} setRename={setRename} />
           ))}
         </div>
       )}
@@ -399,35 +413,70 @@ function TreeNode({
   )
 }
 
-function RenameInput({ initial, onCommit }: { initial: string; onCommit: (v: string) => void }) {
+/**
+ * Inline name editor: Enter or ✓ saves, Esc / ✕ / Backspace on an empty field
+ * cancels, and a click anywhere outside saves. Outside clicks are detected with
+ * a document listener rather than blur — blur never fires when the input did
+ * not hold focus, e.g. after a context menu restored focus to its trigger.
+ */
+function RenameInput({ initial, onCommit, onCancel }: { initial: string; onCommit: (v: string) => void; onCancel: () => void }) {
   const [value, setValue] = useState(initial)
-  // Commit exactly once — Enter/Escape commit then blur, and onBlur must not
-  // re-commit (which would override an Escape-cancel with the typed value).
+  const valueRef = useRef(initial)
+  valueRef.current = value
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const done = useRef(false)
-  const commit = (v: string) => {
+  const finish = (save: boolean) => {
     if (done.current) return
     done.current = true
-    onCommit(v)
+    if (save) onCommit(valueRef.current)
+    else onCancel()
   }
+  const finishRef = useRef(finish)
+  finishRef.current = finish
+
+  useEffect(() => {
+    const focus = () => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+    focus()
+    const raf = requestAnimationFrame(focus)
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current?.contains(e.target as Node)) return
+      finishRef.current(true)
+    }
+    document.addEventListener('mousedown', onDown, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('mousedown', onDown, true)
+    }
+  }, [])
+
   return (
-    <input
-      className="inline-edit"
-      autoFocus
-      value={value}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => commit(value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          commit(value)
-          ;(e.target as HTMLInputElement).blur()
-        } else if (e.key === 'Escape') {
-          e.preventDefault()
-          commit(initial)
-          ;(e.target as HTMLInputElement).blur()
-        }
-      }}
-    />
+    <span className="inline-edit-wrap" ref={wrapRef} onClick={(e) => e.stopPropagation()}>
+      <input
+        ref={inputRef}
+        className="inline-edit"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            finish(true)
+          } else if (e.key === 'Escape' || (e.key === 'Backspace' && value === '')) {
+            e.preventDefault()
+            finish(false)
+          }
+        }}
+      />
+      <button type="button" className="inline-edit-btn ok" title={tr('Сохранить (Enter)')} onMouseDown={(e) => e.preventDefault()} onClick={() => finish(true)}>
+        <Icon name="check" size={13} />
+      </button>
+      <button type="button" className="inline-edit-btn cancel" title={tr('Отменить (Esc)')} onMouseDown={(e) => e.preventDefault()} onClick={() => finish(false)}>
+        <Icon name="close" size={13} />
+      </button>
+    </span>
   )
 }

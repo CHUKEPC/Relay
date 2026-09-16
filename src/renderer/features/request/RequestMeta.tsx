@@ -3,6 +3,7 @@ import type { RequestModel, TabModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useTabs } from '@renderer/store/tabs'
 import { debounce } from '@renderer/lib/debounce'
+import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-reqmeta.css'
 
 /** Max textarea height (~8 rows at 18px line-height + vertical padding). */
@@ -40,9 +41,16 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.id])
 
-  // Adopt external description changes (AI patch, save-as) while not typing.
+  // Last value this textarea sent; any other stored value is an external change.
+  const sentRef = useRef(req.description ?? '')
+
+  // Adopt external description changes (AI patch, undo, save-as) — also while focused.
   useEffect(() => {
-    if (document.activeElement !== taRef.current) setDesc(req.description ?? '')
+    const stored = req.description ?? ''
+    if (document.activeElement !== taRef.current || stored !== sentRef.current) {
+      sentRef.current = stored
+      setDesc(stored)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [req.description])
 
@@ -75,6 +83,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
 
   const onDescChange = (value: string) => {
     setDesc(value)
+    sentRef.current = value
     commitDescription(tab.id, value)
   }
 
@@ -86,7 +95,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
             className="reqmeta-input"
             autoFocus
             value={draft}
-            placeholder="Без названия"
+            placeholder={tr('Без названия')}
             spellCheck={false}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitName}
@@ -99,24 +108,22 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
           <>
             <span
               className={`reqmeta-name ${req.name.trim() ? '' : 'placeholder'}`}
-              title="Нажмите, чтобы переименовать"
+              title={tr('Нажмите, чтобы переименовать')}
               onClick={startEdit}
             >
               {req.name.trim() || 'Без названия'}
             </span>
-            <button className="icon-btn reqmeta-edit" title="Переименовать" onClick={startEdit}>
+            <button className="icon-btn reqmeta-edit" title={tr('Переименовать')} onClick={startEdit}>
               <Icon name="pencil" size={13} />
             </button>
           </>
         )}
-        {tab.dirty && <span className="reqmeta-dirty" title="Есть несохранённые изменения" />}
+        {tab.dirty && <span className="reqmeta-dirty" title={tr('Есть несохранённые изменения')} />}
         <button
           className={`btn ghost reqmeta-desc-btn ${descOpen ? 'on' : ''}`}
           onClick={() => setDescOpen((v) => !v)}
-          title="Описание запроса"
-        >
-          Описание
-          <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} />
+          title={tr('Описание запроса')}
+        > {tr('Описание')} <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} />
         </button>
       </div>
       {descOpen && (
@@ -126,7 +133,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
             rows={3}
             value={desc}
             spellCheck={false}
-            placeholder="Описание запроса — попадает в экспорт и видно команде…"
+            placeholder={tr('Описание запроса — попадает в экспорт и видно команде…')}
             onChange={(e) => onDescChange(e.target.value)}
           />
         </div>

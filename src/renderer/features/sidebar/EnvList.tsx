@@ -4,6 +4,7 @@ import { Icon } from '@renderer/components/Icon'
 import { useEnvironments } from '@renderer/store/environments'
 import { EnvEditor, type EnvEditorTarget } from '@renderer/features/environments/EnvEditor'
 
+import { tr } from '@renderer/lib/i18n'
 export function EnvList() {
   const env = useEnvironments((s) => s.env)
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
@@ -15,11 +16,11 @@ export function EnvList() {
   return (
     <>
       <div className="side-section-head">
-        <span>Среды</span>
+        <span>{tr('Среды')}</span>
         <button
           className="icon-btn"
           style={{ width: 22, height: 22 }}
-          title="Новая среда"
+          title={tr('Новая среда')}
           onClick={() => {
             const id = createEnv('Новая среда')
             setEditor({ kind: 'env', id })
@@ -34,7 +35,7 @@ export function EnvList() {
           onClick={() => setActiveEnv(null)}
         >
           <Icon name="env" size={15} style={{ color: 'var(--tx-3)', opacity: 0.9 }} />
-          <span className="ename">Без окружения</span>
+          <span className="ename">{tr('Без окружения')}</span>
           {env.activeEnvironmentId === null && <Icon name="check" size={14} style={{ color: 'var(--accent)' }} />}
         </div>
 
@@ -51,7 +52,7 @@ export function EnvList() {
                     ev.stopPropagation()
                     setEditor({ kind: 'env', id: e.id })
                   }}
-                  title="Редактировать переменные"
+                  title={tr('Редактировать переменные')}
                 >
                   <Icon name="settings" size={13} />
                 </button>
@@ -61,11 +62,9 @@ export function EnvList() {
             <ContextMenu.Portal>
               <ContextMenu.Content className="popover" style={{ position: 'relative', minWidth: 170 }}>
                 <ContextMenu.Item className="pop-item" onSelect={() => setEditor({ kind: 'env', id: e.id })}>
-                  <Icon name="settings" size={14} /> Переменные
-                </ContextMenu.Item>
+                  <Icon name="settings" size={14} /> {tr('Переменные')} </ContextMenu.Item>
                 <ContextMenu.Item className="pop-item" onSelect={() => duplicateEnv(e.id)}>
-                  <Icon name="copy" size={14} /> Дублировать
-                </ContextMenu.Item>
+                  <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
                 <ContextMenu.Separator className="pop-sep" />
                 <ContextMenu.Item
                   className="pop-item"
@@ -74,8 +73,7 @@ export function EnvList() {
                     if (window.confirm(`Удалить среду «${e.name}»?`)) deleteEnv(e.id)
                   }}
                 >
-                  <Icon name="trash" size={14} /> Удалить
-                </ContextMenu.Item>
+                  <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
               </ContextMenu.Content>
             </ContextMenu.Portal>
           </ContextMenu.Root>
@@ -83,7 +81,7 @@ export function EnvList() {
 
         <div className="env-row" onClick={() => setEditor({ kind: 'globals' })} style={{ marginTop: 6, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
           <Icon name="grid" size={15} style={{ color: 'var(--tx-2)' }} />
-          <span className="ename">Глобальные переменные</span>
+          <span className="ename">{tr('Глобальные переменные')}</span>
           <Icon name="arrowR" size={13} style={{ color: 'var(--tx-3)' }} />
         </div>
       </div>
