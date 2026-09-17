@@ -24,15 +24,24 @@ import { fork, type ChildProcess } from 'node:child_process'
 import type { IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import type { ScriptRunRequest, ScriptRunResult } from '@shared/types'
-import { runSandbox } from './sandbox'
+import { recordAsyncScriptError, runSandbox } from './sandbox'
 
 /**
- * Outer wall-clock bound. The sandbox has its own 3s sync vm timeout + 3s
- * async-test bound, so a well-behaved script finishes well within this. This only
- * fires when a script blocks the child's event loop (CPU-bound after an `await`),
- * which the in-sandbox timers can't interrupt — then we kill the child.
+ * Outer wall-clock bound: only fires when a script blocks the child's event loop
+ * (CPU-bound after an `await`), which the in-sandbox timers cannot interrupt —
+ * then we kill the child.
+ *
+ * It has to stay clear of the sandbox's own budget, which follows the request
+ * timeout when the script has a pm.sendRequest in flight; otherwise a slow token
+ * endpoint gets the child killed instead of reporting a result.
  */
-const HARD_TIMEOUT_MS = 8000
+const MIN_HARD_TIMEOUT_MS = 8000
+const MAX_HARD_TIMEOUT_MS = 30000
+
+function hardTimeoutFor(payload: ScriptRunRequest): number {
+  const requestBudget = (payload.settings?.timeoutMs ?? 30000) + 6000
+  return Math.min(Math.max(MIN_HARD_TIMEOUT_MS, requestBudget), MAX_HARD_TIMEOUT_MS)
+}
 
 function errorResult(error: string): ScriptRunResult {
   return { logs: [], tests: [], environmentUpdates: {}, globalUpdates: {}, error }
@@ -58,6 +67,20 @@ export function startSandboxHost(): void {
   } catch {
     codegenBlocked = true
   }
+
+  // Node exits the process on an unhandled rejection or an uncaught exception.
+  // In a one-run-per-child sandbox that means a script which ignores a rejected
+  // pm.sendRequest promise loses its whole run («Script sandbox stopped») —
+  // including the requests that did succeed. Route both into the run's result
+  // and keep the child alive; a failure that arrives after the run is over has
+  // nowhere to go but stderr.
+  process.on('unhandledRejection', (reason: unknown) => {
+    const message = reason instanceof Error ? reason.message : String(reason)
+    if (!recordAsyncScriptError(message)) console.error('[scripting] unhandled rejection after the run:', message)
+  })
+  process.on('uncaughtException', (err: Error) => {
+    if (!recordAsyncScriptError(err.message)) console.error('[scripting] uncaught exception after the run:', err.message)
+  })
   process.on('message', async (msg: { payload: ScriptRunRequest }) => {
     let result: ScriptRunResult
     if (!codegenBlocked) {
@@ -145,7 +168,7 @@ function runOne(payload: ScriptRunRequest): Promise<ScriptRunResult> {
       }
       resolve(r)
     }
-    const timer = setTimeout(() => finish(errorResult('Script execution timed out')), HARD_TIMEOUT_MS)
+    const timer = setTimeout(() => finish(errorResult('Script execution timed out')), hardTimeoutFor(payload))
 
     proc.once('message', (msg: { result?: ScriptRunResult; codegenBlocked?: boolean }) => {
       if (msg?.codegenBlocked === false && !warnedNoFlag) {

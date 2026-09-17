@@ -232,3 +232,42 @@ describe('variable interpolation', () => {
     expect(flat).toEqual({ on: '1' })
   })
 })
+
+describe('dynamic variables', () => {
+  it('resolves every name in DYNAMIC_VAR_NAMES to a non-empty string', () => {
+    // The list drives autocomplete and the Help topic, so a name without a
+    // generator would advertise a variable that silently stays literal.
+    const dead = DYNAMIC_VAR_NAMES.filter((name) => {
+      const value = resolveDynamic(name)
+      return value === null || value === ''
+    })
+    expect(dead).toEqual([])
+  })
+
+  it('matches names case-insensitively, like Postman', () => {
+    expect(resolveDynamic('$GUID')).toMatch(/^[0-9a-f-]{36}$/)
+    expect(resolveDynamic('$randomfirstname')).toBeTruthy()
+  })
+
+  it('gives $guid a v4 shape, $timestamp seconds and $counter a rising number', () => {
+    expect(resolveDynamic('$guid')).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    const ts = Number(resolveDynamic('$timestamp'))
+    expect(Math.abs(ts - Math.floor(Date.now() / 1000))).toBeLessThan(5)
+    const first = Number(resolveDynamic('$counter'))
+    expect(Number(resolveDynamic('$counter'))).toBe(first + 1)
+  })
+
+  it('leaves an unknown $name alone so it is reported as unresolved', () => {
+    expect(resolveDynamic('$notAThing')).toBeNull()
+    const res = resolveString('{{$notAThing}}', {})
+    expect(res.value).toBe('{{$notAThing}}')
+    expect(res.unresolved).toEqual(['$notAThing'])
+  })
+
+  it('is overridden by a user variable of the same name', () => {
+    // Postman lets a real variable shadow nothing here: dynamic names win, so a
+    // collection cannot accidentally break {{$guid}} — assert that on purpose.
+    const res = resolveString('{{$timestamp}}', { environment: { $timestamp: 'mine' } })
+    expect(res.value).not.toBe('mine')
+  })
+})

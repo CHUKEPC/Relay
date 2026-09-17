@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { runSandbox } from './sandbox'
-import type { RequestModel, ResponseResult, ScriptRunRequest, StoredCookie } from '@shared/types'
+import { buildSendRequestSpec, runSandbox } from './sandbox'
+import type { RequestModel, RequestSettings, ResponseResult, ScriptRunRequest, StoredCookie } from '@shared/types'
 
 /**
  * Tests for the expanded pm.* sandbox: extra chai-style assertions, the local
@@ -273,5 +273,56 @@ describe('pm.sendRequest', () => {
       })
     )
     expect(res.tests[0].passed).toBe(true)
+  })
+})
+
+describe('buildSendRequestSpec', () => {
+  it('carries the run settings into the spec', () => {
+    // Regression: pm.sendRequest used a bare fetch, so «Проверять SSL» and the
+    // CA bundle / proxy / client certs from Settings never applied and a script
+    // fetching a token failed with SELF_SIGNED_CERT_IN_CHAIN.
+    const settings: RequestSettings = {
+      timeoutMs: 5000,
+      followRedirects: false,
+      maxRedirects: 0,
+      rejectUnauthorized: false,
+      caPath: 'C:/certs/corp.pem',
+      proxy: { enabled: true, url: 'http://127.0.0.1:8888', bypass: [] }
+    }
+    const spec = buildSendRequestSpec('https://auth.internal/token', settings)
+    expect(spec.settings).toEqual(settings)
+    expect(spec.method).toBe('GET')
+    expect(spec.url).toBe('https://auth.internal/token')
+    expect(spec.body).toEqual({ type: 'none' })
+  })
+
+  it('defaults to strict TLS when a payload carries no settings', () => {
+    expect(buildSendRequestSpec('https://example.com').settings.rejectUnauthorized).toBe(true)
+  })
+
+  it('maps method, headers and a raw body, in both argument shapes', () => {
+    const fromObject = buildSendRequestSpec({
+      url: 'https://auth.internal/token',
+      method: 'post',
+      header: { 'Content-Type': 'application/json' },
+      body: { mode: 'raw', raw: '{"grant_type":"client_credentials"}' }
+    })
+    expect(fromObject.method).toBe('POST')
+    expect(fromObject.headers).toEqual([{ key: 'Content-Type', value: 'application/json', enabled: true }])
+    expect(fromObject.body).toEqual({ type: 'raw', language: 'text', text: '{"grant_type":"client_credentials"}' })
+
+    const headerList = buildSendRequestSpec({
+      url: 'https://x/y',
+      method: 'PUT',
+      header: [{ key: 'X-Api-Key', value: 'k' }],
+      body: 'plain'
+    })
+    expect(headerList.headers).toEqual([{ key: 'X-Api-Key', value: 'k', enabled: true }])
+    expect(headerList.body).toEqual({ type: 'raw', language: 'text', text: 'plain' })
+  })
+
+  it('drops a body a GET or HEAD cannot carry, and rejects a missing url', () => {
+    expect(buildSendRequestSpec({ url: 'https://x/y', method: 'GET', body: 'nope' }).body).toEqual({ type: 'none' })
+    expect(() => buildSendRequestSpec({ method: 'POST' })).toThrow(/URL is required/)
   })
 })

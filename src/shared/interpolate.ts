@@ -89,6 +89,16 @@ const PRODUCT_ADJ = ['Ergonomic', 'Rustic', 'Sleek', 'Refined', 'Handcrafted', '
 const PRODUCT_MATERIAL = ['Steel', 'Wooden', 'Concrete', 'Plastic', 'Cotton', 'Granite', 'Rubber', 'Metal', 'Soft', 'Fresh']
 const PRODUCT_NOUN = ['Chair', 'Keyboard', 'Table', 'Shoes', 'Hat', 'Gloves', 'Computer', 'Bike', 'Lamp', 'Mouse', 'Towels', 'Salad']
 const COLORS = ['red', 'green', 'blue', 'amber', 'violet', 'teal', 'cyan', 'magenta', 'maroon', 'olive', 'navy', 'lime', 'fuchsia', 'silver']
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+]
+const FILE_EXTS = ['json', 'xml', 'csv', 'txt', 'pdf', 'png', 'jpg', 'zip', 'yaml', 'html', 'log']
+const MIME_TYPES = [
+  'application/json', 'application/xml', 'text/plain', 'text/csv', 'text/html',
+  'image/png', 'image/jpeg', 'application/pdf', 'application/zip', 'application/octet-stream'
+]
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
@@ -236,7 +246,20 @@ const GENERATORS: Record<string, Generator> = {
   $randomuuid: uuidv4,
   $timestamp: () => String(Math.floor(Date.now() / 1000)),
   $isotimestamp: () => new Date().toISOString(),
-  $counter: () => String(guidCounter++)
+  $counter: () => String(guidCounter++),
+
+  // --- More of Postman's set, for collections written against it ---
+  $randomalphanumeric: () => pick([...'abcdefghijklmnopqrstuvwxyz0123456789']),
+  $randomweekday: () => pick(WEEKDAYS),
+  $randommonth: () => pick(MONTHS),
+  $randomprotocol: () => pick(['http', 'https']),
+  $randomsemver: () => `${randomInt(0, 9)}.${randomInt(0, 20)}.${randomInt(0, 20)}`,
+  $randomabbreviation: () => pick(['API', 'SQL', 'HTTP', 'JSON', 'XML', 'TCP', 'UDP', 'DNS', 'SSL', 'CSS', 'RAM', 'SDK']),
+  $randomfileext: () => pick(FILE_EXTS),
+  $randomfilename: () => `${pick(WORDS)}_${hex(4)}.${pick(FILE_EXTS)}`,
+  $randommimetype: () => pick(MIME_TYPES),
+  $randomjobarea: () => pick(['Accounts', 'Marketing', 'Operations', 'Research', 'Support', 'Quality', 'Security', 'Data']),
+  $randomjobdescriptor: () => pick(['Lead', 'Senior', 'Principal', 'Regional', 'Global', 'Chief', 'Dynamic', 'Internal'])
 }
 
 /** Canonical (camelCase) names of every supported `{{$...}}` dynamic variable,
@@ -261,7 +284,11 @@ export const DYNAMIC_VAR_NAMES: string[] = [
   '$randomCompanyName', '$randomProduct',
   // Datetime / misc
   '$randomInt', '$randomDatetime', '$randomDateRecent', '$randomDatePast', '$randomDateFuture',
-  '$randomBoolean', '$guid', '$randomUUID', '$timestamp', '$isoTimestamp', '$counter'
+  '$randomBoolean', '$guid', '$randomUUID', '$timestamp', '$isoTimestamp', '$counter',
+  // Files / tech
+  '$randomAlphaNumeric', '$randomWeekday', '$randomMonth', '$randomProtocol', '$randomSemver',
+  '$randomAbbreviation', '$randomFileExt', '$randomFileName', '$randomMimeType', '$randomJobArea',
+  '$randomJobDescriptor'
 ]
 
 /** Resolve a single dynamic `$` variable, or return null if it is not one we know.

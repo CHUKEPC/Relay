@@ -1,0 +1,54 @@
+/* Variable peek popover (features/environments/VariablePeek.tsx) */
+
+.varpeek {
+  position: relative;
+  width: 460px; max-width: 92vw;
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.varpeek-head { display: flex; align-items: center; gap: 8px; }
+.varpeek-title {
+  flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--tx-0);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.varpeek-edit { height: 24px; padding: 0 8px; font-size: 11.5px; flex: none; }
+
+.varpeek-search { margin: 0; height: 28px; }
+.varpeek-search input { font-size: 12px; }
+
+.varpeek-list {
+  max-height: 320px; overflow: auto;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-0);
+}
+
+.varpeek-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-bottom: 1px solid var(--line);
+}
+.varpeek-row:last-child { border-bottom: none; }
+.varpeek-row:hover { background: var(--bg-hover); }
+.varpeek-row.overridden .varpeek-key,
+.varpeek-row.overridden .varpeek-val { text-decoration: line-through; opacity: 0.55; }
+
+.varpeek-key {
+  flex: 0 0 34%; min-width: 0; font-size: 11.5px; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.varpeek-val {
+  flex: 1; min-width: 0; font-size: 11.5px; color: var(--tx-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.varpeek-empty { color: var(--tx-3); font-style: italic; }
+
+.varpeek-src {
+  flex: none; font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 1px 6px; border-radius: 100px; border: 1px solid var(--line); color: var(--tx-3);
+}
+.varpeek-src.s-collection { color: var(--m-post); }
+.varpeek-src.s-environment { color: var(--m-get); }
+
+.varpeek-act { width: 22px; height: 22px; flex: none; }
+
+.varpeek-none { padding: 18px 12px; text-align: center; font-size: 12px; color: var(--tx-3); }
+.varpeek-foot { font-size: 11px; color: var(--tx-3); }

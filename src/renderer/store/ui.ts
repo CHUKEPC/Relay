@@ -39,6 +39,7 @@ interface UiState {
   importOpen: boolean
   setSideTab: (t: SideTab) => void
   toggleSidebar: () => void
+  setSidebarCollapsed: (v: boolean) => void
   setAiOpen: (v: boolean) => void
   toggleAi: () => void
   openSettings: (section?: SettingsSection) => void
@@ -150,6 +151,7 @@ export const useUi = create<UiState>((set, get) => {
     importOpen: false,
     setSideTab: (t) => set({ sideTab: t }),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+    setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
     setAiOpen: (v) => set({ aiOpen: v }),
     toggleAi: () => set((s) => ({ aiOpen: !s.aiOpen })),
     openSettings: (section) => set((s) => ({ settingsOpen: true, settingsSection: section ?? s.settingsSection })),

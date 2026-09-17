@@ -85,8 +85,18 @@ function applyVarUpdates(existing: VariableDef[], updates: Record<string, string
 export function persistVarUpdates(envUpdates: Record<string, string | null>, globalUpdates: Record<string, string | null>): void {
   const envStore = useEnvironments.getState()
   const active = envStore.activeEnv()
-  if (active && Object.keys(envUpdates).length) {
-    envStore.setEnvVars(active.id, applyVarUpdates(active.variables, envUpdates))
+  if (Object.keys(envUpdates).length) {
+    if (active) envStore.setEnvVars(active.id, applyVarUpdates(active.variables, envUpdates))
+    // Postman drops these too, but it says so: without the warning a script
+    // "works", the variable never appears, and the request goes out unresolved.
+    else {
+      useUi
+        .getState()
+        .showToast(
+          trf('pm.environment.set проигнорирован: окружение не выбрано ({names})', { names: Object.keys(envUpdates).join(', ') }),
+          'error'
+        )
+    }
   }
   if (Object.keys(globalUpdates).length) {
     envStore.setGlobalVars(applyVarUpdates(envStore.globals.variables, globalUpdates))
@@ -197,7 +207,10 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
         globals: envStore.globalScope(),
         collection: collections.collectionScopeFor(tab.savedRequestId),
         cookies: await cookieSnapshotFor(workingReq.url),
-        url: workingReq.url
+        url: workingReq.url,
+        // pm.sendRequest goes through the same engine, so it needs the same
+        // TLS / CA / proxy / client-cert choices as the request itself.
+        settings
       })
       persistVarUpdates(result.environmentUpdates, result.globalUpdates)
       applyScriptSideEffects(tab.savedRequestId, result)
@@ -224,7 +237,19 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
 
   let spec: RequestSpec
   try {
-    spec = buildRequestSpec(workingReq, scope, settings, inheritedAuth).spec
+    const built = buildRequestSpec(workingReq, scope, settings, inheritedAuth)
+    spec = built.spec
+    // A request is still sent with the tokens literal (as Postman does), but
+    // silence here is what turns a failed pre-request script into a mysterious
+    // 400 echoing `%7B%7Btoken%7D%7D` back at the user.
+    if (built.unresolved.length) {
+      useUi
+        .getState()
+        .showToast(
+          trf('Не удалось подставить переменные: {names}', { names: built.unresolved.map((n) => `{{${n}}}`).join(', ') }),
+          'error'
+        )
+    }
   } catch (err) {
     // Never leave the tab stuck on "loading" — surface a structured build error.
     const message = err instanceof Error ? err.message : String(err)
@@ -248,7 +273,9 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
   // Log every completed send to the Console (Postman-style request log).
   useConsole.getState().add({
     method: spec.method,
-    url: spec.url,
+    // finalUrl is what actually went out: params from the table merged in, and
+    // any redirect followed. spec.url alone hid the whole query string.
+    url: result.finalUrl || spec.url,
     status: result.status,
     ok: result.ok,
     timeMs: result.timings.totalMs,
@@ -301,7 +328,8 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
           globals: useEnvironments.getState().globalScope(),
           collection: collections.collectionScopeFor(tab.savedRequestId),
           cookies,
-          url: workingReq.url
+          url: workingReq.url,
+          settings
         })
         persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
         applyScriptSideEffects(tab.savedRequestId, scriptRes)

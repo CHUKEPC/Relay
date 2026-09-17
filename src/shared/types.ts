@@ -626,6 +626,12 @@ export interface ScriptRunRequest {
   cookies?: StoredCookie[]
   /** the request URL (for pm.cookies.jar() defaults) */
   url?: string
+  /**
+   * Network settings for pm.sendRequest: TLS strictness, CA bundle, proxy,
+   * client certs and the timeout. Without them a script would ignore every
+   * «Настройки → Сеть» choice the same request honours when sent normally.
+   */
+  settings?: RequestSettings
 }
 
 /** Payload captured from `pm.visualizer.set(template, data)` in a test script. */

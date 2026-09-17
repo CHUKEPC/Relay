@@ -8,6 +8,9 @@
  */
 import { createContext, runInContext } from 'node:vm'
 import type {
+  HttpMethod,
+  RequestSettings,
+  RequestSpec,
   ScriptConsoleLine,
   ScriptRunRequest,
   ScriptRunResult,
@@ -15,8 +18,37 @@ import type {
   StoredCookie,
   VisualizerPayload
 } from '@shared/types'
+import { runRequest } from '../http/engine'
 
 class AssertionError extends Error {}
+
+/**
+ * The run currently executing in this child, so an async failure that surfaces
+ * outside the script's own call stack still lands in its result.
+ *
+ * Node kills the process on an unhandled rejection, and a script that fires a
+ * pm.sendRequest without handling its promise used to take the whole sandbox
+ * down with it — «Script sandbox stopped», with the work of every other request
+ * in the script lost. The host installs process-level handlers that route here
+ * instead (see startSandboxHost).
+ */
+let activeRun: { logs: ScriptConsoleLine[]; errors: string[] } | null = null
+
+/**
+ * Record an async failure against the running script. Returns false when no run
+ * is in flight (a late rejection from an already-finished script), so the caller
+ * can decide what to do with it.
+ */
+export function recordAsyncScriptError(message: string, fatal = true): boolean {
+  if (!activeRun) return false
+  // One failure reaches here twice: once from the promise we track, once from
+  // the process handler for the chain the script built on top of it.
+  if (!activeRun.logs.some((l) => l.level === 'error' && l.message === message)) {
+    activeRun.logs.push({ level: 'error', message })
+  }
+  if (fatal && !activeRun.errors.includes(message)) activeRun.errors.push(message)
+  return true
+}
 
 function typeOf(v: unknown): string {
   if (v === null) return 'null'
@@ -377,11 +409,21 @@ interface SendRequestResponse {
 }
 
 /**
- * Perform a real HTTP request from inside the sandbox using the global `fetch`
- * (Node 20+). This deliberately does NOT use the app's cookie jar, proxy, or
- * client-cert config — it is a bare fetch, so cookies/proxy are NOT applied.
+ * Settings for a script that arrived without any — the unit tests call the
+ * sandbox directly, and a payload built by an older renderer has no `settings`.
  */
-async function performSendRequest(input: SendRequestInput): Promise<SendRequestResponse> {
+const SEND_REQUEST_DEFAULTS: RequestSettings = {
+  timeoutMs: 30000,
+  followRedirects: true,
+  maxRedirects: 10,
+  rejectUnauthorized: true
+}
+
+/**
+ * Turn a pm.sendRequest argument into a spec for the app's own engine.
+ * Exported for the tests: this mapping is where a dropped setting would hide.
+ */
+export function buildSendRequestSpec(input: SendRequestInput, settings?: RequestSettings): RequestSpec {
   let url: string
   let method = 'GET'
   const headers: Record<string, string> = {}
@@ -403,19 +445,42 @@ async function performSendRequest(input: SendRequestInput): Promise<SendRequestR
 
   if (!url) throw new Error('pm.sendRequest: a URL is required')
 
-  const startedAt = Date.now()
-  // `fetch` rejects HEAD/GET with a body, so only attach one for other methods.
-  const init: RequestInit = { method, headers }
-  if (body != null && method !== 'GET' && method !== 'HEAD') init.body = body
-  const res = await fetch(url, init)
-  const responseTime = Date.now() - startedAt
-  const textBody = await res.text()
+  // GET/HEAD carry no body — the engine would refuse one anyway.
+  const carriesBody = body != null && method !== 'GET' && method !== 'HEAD'
+  return {
+    method: method as HttpMethod,
+    url,
+    query: [],
+    headers: Object.entries(headers).map(([key, value]) => ({ key, value, enabled: true })),
+    // 'text' only decides the default Content-Type, and only when the script
+    // did not set one itself.
+    body: carriesBody ? { type: 'raw', language: 'text', text: body as string } : { type: 'none' },
+    auth: { type: 'none' },
+    settings: settings ?? SEND_REQUEST_DEFAULTS
+  }
+}
+
+/**
+ * Perform a real HTTP request from inside the sandbox through the app's own
+ * engine, so a script honours the same TLS strictness, CA bundle, proxy, client
+ * certificates and timeout as a request sent from the UI. The cookie jar is
+ * still not applied: pm.sendRequest sends no stored cookies.
+ */
+async function performSendRequest(input: SendRequestInput, settings?: RequestSettings): Promise<SendRequestResponse> {
+  const result = await runRequest(buildSendRequestSpec(input, settings), { requestId: `pm-send-${Date.now()}` })
+  // A transport failure (TLS, DNS, timeout) is an error for the script rather
+  // than a response with status 0 — Postman rejects here too.
+  if (result.error) throw new Error(result.error.message)
+  const textBody =
+    result.body.text ?? (result.body.base64 ? Buffer.from(result.body.base64, 'base64').toString('utf8') : '')
 
   return {
-    code: res.status,
-    status: res.statusText,
-    responseTime,
-    headers: { get: (name: string) => res.headers.get(name) ?? undefined },
+    code: result.status,
+    status: result.statusText,
+    responseTime: result.timings.totalMs,
+    headers: {
+      get: (name: string) => result.headers.find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1]
+    },
     text: () => textBody,
     json: () => JSON.parse(textBody)
   }
@@ -488,6 +553,8 @@ function buildCookies(
 export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunResult> {
   const logs: ScriptConsoleLine[] = []
   const tests: ScriptTestResult[] = []
+  const asyncErrors: string[] = []
+  activeRun = { logs, errors: asyncErrors }
   const pendingTests: Promise<void>[] = []
   const pendingRequests: Promise<unknown>[] = []
   const envUpdates: Record<string, string | null> = {}
@@ -678,24 +745,32 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       }
     },
     expect: (actual: unknown) => new Assertion(actual),
-    // pm.sendRequest(urlOrReq, callback?) — performs a real HTTP request via the
-    // child's global fetch. Calls back (err, res) Postman-style and also returns a
-    // promise. NOTE: no cookie jar / proxy / client certs are applied (bare fetch).
+    // pm.sendRequest(urlOrReq, callback?) — a real HTTP request through the app's
+    // engine, with this run's network settings. Calls back (err, res)
+    // Postman-style and also returns a promise. The cookie jar is not applied.
     sendRequest: (
       input: SendRequestInput,
       cb?: (err: Error | null, res?: SendRequestResponse) => void
     ): Promise<SendRequestResponse> => {
-      const p = performSendRequest(input)
+      const p = performSendRequest(input, payload.settings)
       // Track the callback chain (not just the raw request) so the async-settle
       // window also waits for work the callback does (e.g. setting a variable).
-      const settled =
-        typeof cb === 'function'
-          ? p.then(
-              (res) => cb(null, res),
-              (err) => cb(err instanceof Error ? err : new Error(String(err)))
-            )
-          : p
-      pendingRequests.push(settled.catch(() => undefined))
+      if (typeof cb === 'function') {
+        pendingRequests.push(
+          p.then(
+            (res) => cb(null, res),
+            (err) => cb(err instanceof Error ? err : new Error(String(err)))
+            // The callback itself threw: report it rather than swallow it.
+          ).catch((err) => void recordAsyncScriptError(err instanceof Error ? err.message : String(err)))
+        )
+      } else {
+        // The script owns this promise, so a rejection it handles is its own
+        // business; log it, and let the process-level handler mark it fatal if
+        // nothing handled it at all.
+        pendingRequests.push(
+          p.catch((err) => void recordAsyncScriptError(err instanceof Error ? err.message : String(err), false))
+        )
+      }
       return p
     }
   }
@@ -709,6 +784,7 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   // Surface collection-variable / cookie mutations (only when non-empty so the
   // result stays compact and the renderer can skip a no-op write).
   const finalize = (error?: string): ScriptRunResult => {
+    activeRun = null
     const requestPatch =
       payload.phase === 'pre-request'
         ? { url: reqState.url, method: reqState.method, headers: reqState.headers }
@@ -723,7 +799,11 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
     }
     if (Object.keys(collectionUpdates).length) result.collectionUpdates = collectionUpdates
     if (cookieUpdates.set?.length || cookieUpdates.remove?.length) result.cookieUpdates = cookieUpdates
-    if (error != null) result.error = error
+    // The script's own throw wins; otherwise the first async failure is what the
+    // user needs to see (an unhandled rejection, a throwing callback, a request
+    // that never came back).
+    const reported = error ?? asyncErrors[0]
+    if (reported != null) result.error = reported
     return result
   }
 
@@ -734,17 +814,28 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   }
 
   // Settle any async pm.test(...) bodies and in-flight pm.sendRequest() calls,
-  // bounded so a non-resolving promise can't hang the run.
+  // bounded so a non-resolving promise can't hang the run. A script that fetches
+  // a token gets the request timeout it would have had in the UI: 3 seconds is
+  // plenty for assertions, but it cuts off a real auth round-trip.
   const pending = [...pendingTests, ...pendingRequests]
   if (pending.length) {
+    const budget = pendingRequests.length
+      ? Math.min((payload.settings?.timeoutMs ?? SEND_REQUEST_DEFAULTS.timeoutMs) + 2000, 20000)
+      : 3000
+    let done = false
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([
-      Promise.allSettled(pending),
+      Promise.allSettled(pending).then(() => {
+        done = true
+      }),
       new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, 3000)
+        timer = setTimeout(resolve, budget)
       })
     ])
     if (timer) clearTimeout(timer)
+    // Giving up quietly here is how a missing token turns into a puzzling 401
+    // two steps later.
+    if (!done) recordAsyncScriptError(`Script did not finish within ${budget} ms — a pm.sendRequest never came back`)
   }
 
   return finalize()

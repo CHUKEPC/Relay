@@ -158,6 +158,25 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       stream; custom handshake headers; WS send + binary frames as base64; SSE `event/data/id/retry`
       parsing with auto-reconnect + `Last-Event-ID`). Mode switch in the URL bar; messages/events
       panel + composer.
+- [x] **Default request headers**: `User-Agent: Relay/<version>`, `Accept: */*` and
+      `Accept-Encoding: gzip, deflate, br` are sent unless the user set one of them (an empty value
+      drops it). undici sends none of these on its own, so a request used to arrive carrying nothing
+      but `Host` — which WAFs, API gateways and several frameworks answer with 400 or 403 while the
+      identical request from Postman goes through.
+- [x] **Literal braces survive the URL**: the WHATWG parser escapes `{`/`}` to `%7B`/`%7D`, so an
+      API taking a literal `{id}` — or a URL still holding an unresolved `{{var}}` — used to reach
+      the server mangled. They are sent raw now, as Postman and browsers do, and a send whose
+      variables did not resolve says so instead of leaving a 400 to explain it.
+- [x] **Variable peek** (the eye in the titlebar): what the next request will actually use —
+      collection, environment and global variables in precedence order, with shadowed names struck
+      through, secrets masked behind a reveal, filter and copy. A token written by a pre-request
+      script is visible without opening the environment editor.
+- [x] **pm.sendRequest runs on the app's own engine**, not a bare `fetch`: a script that fetches a
+      token honours the same TLS strictness, CA bundle, proxy, client certificates and timeout as a
+      request sent from the UI, and the async-settle window follows the request timeout instead of a
+      flat 3 s. Cookies are still not applied (as in Postman). The `ca` option carries Node's
+      default roots along with the user's bundle — setting it replaces the trust store outright,
+      which used to break every public host the moment a corporate CA was trusted.
 - [x] Response **visualizer**: `pm.visualizer.set(template, data)` rendered with a safe, pure
       template engine inside a locked-down `<iframe sandbox>` (no scripts, no network, strict CSP);
       plus a zero-config auto-table for JSON arrays.

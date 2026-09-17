@@ -10,6 +10,7 @@ import { kbd, MOD } from '@renderer/lib/platform'
 import { kbdCombo, type KeyActionId } from '@renderer/lib/keymap'
 import { leavesOf, PANE_COUNT_LABEL, PANE_PRESETS, usePanes } from '@renderer/store/panes'
 import { WorkspaceSwitcher } from '@renderer/features/workspaces/WorkspaceSwitcher'
+import { VariablePeek } from '@renderer/features/environments/VariablePeek'
 
 import { tr, trf } from '@renderer/lib/i18n'
 export function Titlebar() {
@@ -107,6 +108,9 @@ export function Titlebar() {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+
+      {/* Quick look at the variables the next request will actually use. */}
+      <VariablePeek />
 
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

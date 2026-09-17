@@ -1005,5 +1005,22 @@
   "Показать/скрыть боковую панель ({key})": "Seitenleiste ein-/ausblenden ({key})",
   "Пока нет сохранённых запросов — сохраните запрос в коллекцию, и его можно будет прогнать здесь.": "Noch keine gespeicherten Anfragen — speichern Sie eine in einer Sammlung, dann lässt sie sich hier ausführen.",
   "Свернуть в окно": "Verkleinern",
-  "AI-ассистент выключен — включите его комплект в «Настройки → Плагины»": "Der KI-Assistent ist aus — aktivieren Sie sein Paket unter «Einstellungen → Plugins»"
+  "AI-ассистент выключен — включите его комплект в «Настройки → Плагины»": "Der KI-Assistent ist aus — aktivieren Sie sein Paket unter «Einstellungen → Plugins»",
+  "Ошибка «self signed certificate in certificate chain» — что делать?": "Der Fehler «self signed certificate in certificate chain» — was tun?",
+  "Сертификат сервера подписан корнем, которого нет в списке доверенных. Причин две: это ваш собственный или внутренний сертификат, либо HTTPS перехватывает антивирус или корпоративный прокси — они подписывают трафик своим корнем, который установлен в системе, а движок запросов доверяет своему списку. Правильное решение — «Настройки → Сеть» → указать этот корневой сертификат (.pem): публичные сайты при этом продолжат проверяться. Для своего dev-сервера можно проще: «Настройки → Основные» → выключить «Проверять SSL-сертификаты». Обе настройки действуют и на pm.sendRequest в скриптах.": "Das Zertifikat des Servers ist von einer Wurzel signiert, die nicht als vertrauenswürdig gilt. Dafür gibt es zwei Gründe: es ist Ihr eigenes oder ein internes Zertifikat, oder HTTPS wird von einem Antivirus oder einem Unternehmens-Proxy abgefangen — sie signieren den Verkehr mit ihrer eigenen Wurzel aus dem Systemspeicher, während die Anfrage-Engine ihrer eigenen Liste vertraut. Die richtige Lösung ist «Einstellungen → Netzwerk» → dieses Wurzelzertifikat (.pem) angeben: öffentliche Seiten werden weiterhin geprüft. Für den eigenen Entwicklungsserver gibt es eine Abkürzung: «Einstellungen → Allgemein» → «SSL-Zertifikate prüfen» ausschalten. Beide Einstellungen gelten auch für pm.sendRequest in Skripten.",
+  "Как получить токен в pre-request скрипте?": "Wie hole ich in einem Pre-request-Skript ein Token?",
+  "Через pm.sendRequest с колбэком — песочница выполняет обычный скрипт, поэтому await на верхнем уровне в ней не работает: pm.sendRequest({ url, method: \"POST\", body }, function (err, r) { pm.environment.set(\"token\", r.json().access_token) }). Запрос уходит через тот же движок, что и обычная отправка, то есть с вашими настройками TLS, CA, прокси и клиентских сертификатов, и ждёт ответа в пределах таймаута запроса.": "Mit pm.sendRequest und einem Callback — die Sandbox führt ein klassisches Skript aus, dort funktioniert await auf oberster Ebene nicht: pm.sendRequest({ url, method: \"POST\", body }, function (err, r) { pm.environment.set(\"token\", r.json().access_token) }). Die Anfrage läuft über dieselbe Engine wie ein normaler Versand, mit Ihren Einstellungen für TLS, CA, Proxy und Client-Zertifikate, und wird innerhalb des Anfrage-Timeouts abgewartet.",
+  "Значение {name} скопировано": "Wert von {name} kopiert",
+  "Коллекция": "Sammlung",
+  "Копировать значение": "Wert kopieren",
+  "Не удалось подставить переменные: {names}": "Variablen konnten nicht aufgelöst werden: {names}",
+  "Окружение не выбрано": "Keine Umgebung ausgewählt",
+  "Перекрыто областью выше": "Von einem höheren Bereich überdeckt",
+  "Переменных пока нет. Создайте окружение в боковой панели или задайте их в коллекции.": "Noch keine Variablen. Erstellen Sie eine Umgebung in der Seitenleiste oder legen Sie sie an der Sammlung fest.",
+  "Показать переменные текущего окружения": "Variablen der aktuellen Umgebung anzeigen",
+  "Приоритет: коллекция → окружение → глобальные. Всего: {n}": "Vorrang: Sammlung → Umgebung → global. Gesamt: {n}",
+  "пусто": "leer",
+  "Секрет — нажмите глаз, чтобы показать": "Geheim — zum Anzeigen auf das Auge klicken",
+  "Фильтр по имени или значению": "Nach Name oder Wert filtern",
+  "pm.environment.set проигнорирован: окружение не выбрано ({names})": "pm.environment.set wurde ignoriert: keine Umgebung ausgewählt ({names})"
 }

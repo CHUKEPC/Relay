@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import type { Auth, RequestBody, RequestSpec, ResponseResult, RunOptions } from '@shared/types'
 
-import { buildUrl, buildAuthHeaders, encodeBody, runRequest } from './engine'
+import { applyDefaultHeaders, buildUrl, buildAuthHeaders, encodeBody, runRequest } from './engine'
 
 /* ============================================================
  * Test helpers
@@ -34,7 +34,61 @@ const OPTS: RunOptions = { requestId: 'test-1' }
  * buildUrl — query merge
  * ============================================================ */
 
+describe('applyDefaultHeaders', () => {
+  it('adds the headers every client sends, which undici does not', () => {
+    // A request that arrives with nothing but Host is what WAFs, gateways and
+    // several frameworks answer with 400 — while Postman's identical request
+    // goes through, because it always sends these three.
+    const headers: Record<string, string> = {}
+    applyDefaultHeaders(headers)
+    expect(headers['User-Agent']).toMatch(/^Relay[/]/)
+    expect(headers['Accept']).toBe('*/*')
+    expect(headers['Accept-Encoding']).toBe('gzip, deflate, br')
+  })
+
+  it('never overrides a user header, whatever its case', () => {
+    const headers: Record<string, string> = { 'user-agent': 'mine/1.0', ACCEPT: 'application/json' }
+    applyDefaultHeaders(headers)
+    expect(headers['user-agent']).toBe('mine/1.0')
+    expect(headers['ACCEPT']).toBe('application/json')
+    expect(headers['User-Agent']).toBeUndefined()
+    expect(headers['Accept']).toBeUndefined()
+  })
+
+  it('treats a present-but-empty header as a deliberate removal', () => {
+    const headers: Record<string, string> = { 'User-Agent': '' }
+    applyDefaultHeaders(headers)
+    expect(headers['User-Agent']).toBe('')
+  })
+})
+
 describe('buildUrl', () => {
+  it('sends literal braces raw, the way Postman and a browser do', () => {
+    // The WHATWG parser escapes them to %7B/%7D, which reaches an API as a
+    // different path — and makes an unresolved {{var}} unrecognisable in the
+    // 400 that comes back.
+    expect(buildUrl('https://api.test/v1/items/{id}', [])).toBe('https://api.test/v1/items/{id}')
+    expect(buildUrl('https://api.test/v1/{{token}}/me', [])).toBe('https://api.test/v1/{{token}}/me')
+    // With a param appended, the whole URL is re-serialised — braces still survive.
+    expect(buildUrl('https://api.test/v1/{id}', [{ key: 'a', value: '1', enabled: true }])).toBe(
+      'https://api.test/v1/{id}?a=1'
+    )
+  })
+
+  it('leaves an explicitly encoded path alone', () => {
+    expect(buildUrl('https://api.test/a%2Fb/c', [])).toBe('https://api.test/a%2Fb/c')
+    expect(buildUrl('https://api.test/100%25', [])).toBe('https://api.test/100%25')
+    // No literal brace in the input, so nothing is decoded.
+    expect(buildUrl('https://api.test/v1/%7Bid%7D', [])).toBe('https://api.test/v1/%7Bid%7D')
+  })
+
+  it('keeps a percent-encoded query value intact', () => {
+    // %2B must not come back as '+', which the server would read as a space.
+    const url = buildUrl('https://api.test/s?q=a%2Bb', [{ key: 'x', value: '1', enabled: true }])
+    expect(url).toContain('q=a%2Bb')
+    expect(new URL(url).searchParams.get('q')).toBe('a+b')
+  })
+
   it('appends enabled query params', () => {
     const url = buildUrl('https://api.test/v1/users', [
       { key: 'page', value: '2', enabled: true },

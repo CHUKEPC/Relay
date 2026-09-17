@@ -12,12 +12,13 @@
 import { basename } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { STATUS_CODES } from 'node:http'
+import { rootCertificates } from 'node:tls'
 import { gunzipSync, brotliDecompressSync, inflateSync, inflateRawSync } from 'node:zlib'
 import { request as undiciRequest, Agent, ProxyAgent } from 'undici'
 import type { Dispatcher } from 'undici'
 import { Cookie } from 'tough-cookie'
 
-import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
+import { APP_VERSION, RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { buildDigestAuthHeader, parseDigestChallenge } from '../auth/digest'
 import type { DigestChallenge } from '../auth/digest'
 import { fetchOAuthToken } from '../auth/oauth'
@@ -86,6 +87,21 @@ export interface CookieJarBridge {
  * Returns the absolute URL string. Throws only for an unparseable URL — callers
  * inside runRequest translate that into a `protocol` error.
  */
+/**
+ * Braces are percent-encoded by the WHATWG URL parser but sent raw by Postman
+ * and every browser address bar. Restoring the ones the user actually typed
+ * keeps parity: an API that takes a literal `{id}` — or a URL that still holds
+ * an unresolved `{{var}}` because a pre-request script failed — reaches the
+ * server looking like what was typed instead of `%7B%7Bvar%7D%7D`, which reads
+ * as a puzzling 400 with a mangled path.
+ */
+function restoreLiteralBraces(built: string, source: string): string {
+  let out = built
+  if (source.includes('{')) out = out.replace(/%7B/gi, '{')
+  if (source.includes('}')) out = out.replace(/%7D/gi, '}')
+  return out
+}
+
 export function buildUrl(url: string, query: KV[]): string {
   const u = new URL(url)
   for (const kv of query) {
@@ -93,7 +109,7 @@ export function buildUrl(url: string, query: KV[]): string {
     if (!kv.key) continue
     u.searchParams.append(kv.key, kv.value ?? '')
   }
-  return u.toString()
+  return restoreLiteralBraces(u.toString(), url)
 }
 
 /**
@@ -324,16 +340,20 @@ interface ConnectTls {
   cert?: Buffer
   key?: Buffer
   pfx?: Buffer
-  /** one bundle, or several when a global CA and a per-host CA both apply */
-  ca?: Buffer | Buffer[]
+  /** the default roots plus every bundle that applies to this request */
+  ca?: (Buffer | string)[]
   passphrase?: string
 }
 
-/** Add a CA bundle, keeping any already loaded for this request. */
+/**
+ * Add a CA bundle, keeping any already loaded for this request.
+ *
+ * Node REPLACES its trust store the moment `ca` is set, so the default roots
+ * have to be carried along explicitly: without them, trusting one corporate CA
+ * would make every public HTTPS host fail with UNABLE_TO_GET_ISSUER_CERT_LOCALLY.
+ */
 function addCa(tls: ConnectTls, bundle: Buffer): void {
-  if (!tls.ca) tls.ca = bundle
-  else if (Array.isArray(tls.ca)) tls.ca.push(bundle)
-  else tls.ca = [tls.ca, bundle]
+  tls.ca = [...(tls.ca ?? rootCertificates), bundle]
 }
 
 /** Load the cert material (bytes) from disk into the TLS options. */
@@ -565,6 +585,35 @@ function collectUserHeaders(headers: KV[]): Record<string, string> {
   return out
 }
 
+/**
+ * Headers every HTTP client sends and undici does not. Without them a request
+ * arrives with nothing but `Host`, which WAFs, API gateways and a fair number of
+ * frameworks answer with 400 or 403 — the same request from Postman or a browser
+ * goes through, because they always send these.
+ *
+ * A user header of the same name always wins (matched case-insensitively), and
+ * an empty value is how a header is deliberately dropped.
+ */
+const DEFAULT_HEADERS: Record<string, string> = {
+  'User-Agent': `Relay/${APP_VERSION}`,
+  Accept: '*/*',
+  // Only what the engine can actually decode again (gzip / deflate / br).
+  'Accept-Encoding': 'gzip, deflate, br'
+}
+
+/** Is the header present at all, whatever its value? */
+function hasHeader(headers: Record<string, string>, name: string): boolean {
+  const lower = name.toLowerCase()
+  return Object.keys(headers).some((k) => k.toLowerCase() === lower)
+}
+
+export function applyDefaultHeaders(headers: Record<string, string>): void {
+  for (const [name, value] of Object.entries(DEFAULT_HEADERS)) {
+    // Present-but-empty is how a user drops one of these on purpose.
+    if (!hasHeader(headers, name)) headers[name] = value
+  }
+}
+
 /** Normalize undici's IncomingHttpHeaders into a [name, value][] array. */
 function normalizeResponseHeaders(raw: Record<string, string | string[] | undefined>): [string, string][] {
   const out: [string, string][] = []
@@ -728,6 +777,7 @@ export async function runRequest(
 
   // --- 2. Headers (enabled user headers, then auth applied last). ---
   const headers = collectUserHeaders(spec.headers ?? [])
+  applyDefaultHeaders(headers)
   const auth = buildAuthHeaders(spec.auth)
   for (const [k, v] of Object.entries(auth.headers)) headers[k] = v
 

@@ -367,7 +367,8 @@ async function runOneRequest(
         collection: collectionScope,
         iterationData: dataRow,
         cookies: await cookieSnapshotFor(workingReq.url),
-        url: workingReq.url
+        url: workingReq.url,
+        settings
       })
       persistVarUpdates(pre.environmentUpdates, pre.globalUpdates)
       applyScriptSideEffects(savedRequestId, pre)
@@ -428,7 +429,8 @@ async function runOneRequest(
           collection: collectionScope,
           iterationData: dataRow,
           cookies,
-          url: workingReq.url
+          url: workingReq.url,
+          settings
         })
         persistVarUpdates(testRes.environmentUpdates, testRes.globalUpdates)
         applyScriptSideEffects(savedRequestId, testRes)

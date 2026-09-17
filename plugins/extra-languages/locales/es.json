@@ -1005,5 +1005,22 @@
   "Показать/скрыть боковую панель ({key})": "Mostrar u ocultar la barra lateral ({key})",
   "Пока нет сохранённых запросов — сохраните запрос в коллекцию, и его можно будет прогнать здесь.": "Aún no hay peticiones guardadas: guarda una en una colección y podrás ejecutarla desde aquí.",
   "Свернуть в окно": "Restaurar",
-  "AI-ассистент выключен — включите его комплект в «Настройки → Плагины»": "El asistente de IA está desactivado: actívalo en «Ajustes → Plugins»"
+  "AI-ассистент выключен — включите его комплект в «Настройки → Плагины»": "El asistente de IA está desactivado: actívalo en «Ajustes → Plugins»",
+  "Ошибка «self signed certificate in certificate chain» — что делать?": "El error «self signed certificate in certificate chain»: ¿qué hago?",
+  "Сертификат сервера подписан корнем, которого нет в списке доверенных. Причин две: это ваш собственный или внутренний сертификат, либо HTTPS перехватывает антивирус или корпоративный прокси — они подписывают трафик своим корнем, который установлен в системе, а движок запросов доверяет своему списку. Правильное решение — «Настройки → Сеть» → указать этот корневой сертификат (.pem): публичные сайты при этом продолжат проверяться. Для своего dev-сервера можно проще: «Настройки → Основные» → выключить «Проверять SSL-сертификаты». Обе настройки действуют и на pm.sendRequest в скриптах.": "El certificado del servidor está firmado por una raíz que no es de confianza. Hay dos motivos: es tu propio certificado o uno interno, o bien un antivirus o un proxy corporativo intercepta el HTTPS — firman el tráfico con su propia raíz, instalada en el almacén del sistema, mientras el motor de peticiones confía en su propia lista. La solución correcta es «Ajustes → Red» → indicar ese certificado raíz (.pem): los sitios públicos se siguen verificando. Para tu servidor de desarrollo hay un atajo: «Ajustes → General» → desactivar «Verificar certificados SSL». Ambos ajustes se aplican también a pm.sendRequest en los scripts.",
+  "Как получить токен в pre-request скрипте?": "¿Cómo obtengo un token en un script pre-request?",
+  "Через pm.sendRequest с колбэком — песочница выполняет обычный скрипт, поэтому await на верхнем уровне в ней не работает: pm.sendRequest({ url, method: \"POST\", body }, function (err, r) { pm.environment.set(\"token\", r.json().access_token) }). Запрос уходит через тот же движок, что и обычная отправка, то есть с вашими настройками TLS, CA, прокси и клиентских сертификатов, и ждёт ответа в пределах таймаута запроса.": "Con pm.sendRequest y un callback: la zona aislada ejecuta un script clásico, así que allí no funciona await en el nivel superior: pm.sendRequest({ url, method: \"POST\", body }, function (err, r) { pm.environment.set(\"token\", r.json().access_token) }). La petición sale por el mismo motor que un envío normal, con tus ajustes de TLS, CA, proxy y certificados de cliente, y se espera dentro del tiempo límite de la petición.",
+  "Значение {name} скопировано": "Valor de {name} copiado",
+  "Коллекция": "Colección",
+  "Копировать значение": "Copiar el valor",
+  "Не удалось подставить переменные: {names}": "No se pudieron resolver las variables: {names}",
+  "Окружение не выбрано": "Ningún entorno seleccionado",
+  "Перекрыто областью выше": "Sombreado por un ámbito superior",
+  "Переменных пока нет. Создайте окружение в боковой панели или задайте их в коллекции.": "Aún no hay variables. Crea un entorno en la barra lateral o defínelas en la colección.",
+  "Показать переменные текущего окружения": "Mostrar las variables del entorno actual",
+  "Приоритет: коллекция → окружение → глобальные. Всего: {n}": "Precedencia: colección → entorno → globales. Total: {n}",
+  "пусто": "vacío",
+  "Секрет — нажмите глаз, чтобы показать": "Secreto: pulsa el ojo para mostrarlo",
+  "Фильтр по имени или значению": "Filtrar por nombre o valor",
+  "pm.environment.set проигнорирован: окружение не выбрано ({names})": "pm.environment.set se ignoró: no hay ningún entorno seleccionado ({names})"
 }
