@@ -1,5 +1,6 @@
 import '../lib/monaco'
 import Editor, { type OnMount } from '@monaco-editor/react'
+import { ensureVarCompletion } from '../lib/var-completion'
 import { useEffect, useRef, useState } from 'react'
 import { makeId } from '@shared/id'
 
@@ -44,6 +45,8 @@ export function CodeEditorMonaco({ value, language = 'json', onChange, readOnly 
         onChange={(v) => onChange?.(v ?? '')}
         onMount={(editor) => {
           editorRef.current = editor
+          // `{{` completion, same variable list the request fields offer.
+          ensureVarCompletion()
         }}
         options={{
           readOnly,

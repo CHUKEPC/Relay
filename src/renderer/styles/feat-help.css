@@ -72,6 +72,23 @@
   border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-1);
 }
 .help-card h4 { font-size: 12.5px; font-weight: 600; margin: 0 0 7px; color: var(--tx-0); }
+
+/* "this ships as a separate pack" callout */
+.help-pack {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--tx-1);
+  background: color-mix(in oklch, var(--accent) 9%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 28%, transparent);
+  border-radius: var(--radius);
+}
+.help-pack svg { color: var(--accent); flex: none; margin-top: 2px; }
+.help-pack b { color: var(--tx-0); }
 .help-card p { font-size: 12.5px; color: var(--tx-1); line-height: 1.55; margin: 0 0 8px; }
 .help-card p:last-child { margin-bottom: 0; }
 .help-card ul { margin: 0; padding-left: 0; list-style: none; }

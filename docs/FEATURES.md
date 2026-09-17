@@ -171,6 +171,29 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       collection, environment and global variables in precedence order, with shadowed names struck
       through, secrets masked behind a reveal, filter and copy. A token written by a pre-request
       script is visible without opening the environment editor.
+- [x] **`{{` autocomplete**, as in Postman: typing two braces in any request field (URL, params,
+      headers, auth) or in an editor (body, scripts) opens the list of variables that are actually
+      in scope — collection, environment, globals with their current values (secrets masked), then
+      the built-in dynamic ones. It narrows as the name is typed, ↑↓ pick, Enter/Tab insert the
+      whole `{{name}}`, Esc hides it; accepting inside an existing reference replaces it rather
+      than nesting. One name defined in several scopes appears once, attributed to the scope that
+      wins. The matching/ranking logic is pure and unit-tested (`src/renderer/lib/var-suggest.ts`),
+      and the Monaco provider (`var-completion.ts`) feeds from the same function.
+- [x] **Scripts and plugins actually run in a packaged build**: the sandbox children are the
+      Electron binary in `ELECTRON_RUN_AS_NODE` mode, where the built-in `electron` module does not
+      exist — and they used to be handed the app's main bundle, whose top-level `require('electron')`
+      throws there. It resolves in development (the npm package is on disk), so the failure was
+      invisible until the installer: every pre-request/test script and every user plugin died with
+      «Script sandbox stopped». The children now run their own electron-free bundle
+      (`src/main/sandbox-entry.ts` → `out/main/sandbox.js`).
+- [x] **Warm script sandboxes**: forking the Electron binary as Node and loading the bundle costs
+      ~500 ms of CPU, and a collection run paid it twice per request (pre-request + test) — which
+      pinned a core near 100 % and added half a second per request. A child that finishes a run
+      with nothing left in flight is now kept warm (up to two, dropped after two idle minutes) and
+      handed to the next script, which starts in single-digit milliseconds. Isolation is unchanged:
+      a brand-new `vm` context per run inside a process launched with
+      `--disallow-code-generation-from-strings`, and a child whose run timed out, crashed or left a
+      `pm.sendRequest` unsettled is killed instead of reused.
 - [x] **pm.sendRequest runs on the app's own engine**, not a bare `fetch`: a script that fetches a
       token honours the same TLS strictness, CA bundle, proxy, client certificates and timeout as a
       request sent from the UI, and the async-settle window follows the request timeout instead of a

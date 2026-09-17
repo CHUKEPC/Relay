@@ -45,7 +45,7 @@ function TargetPicker(): JSX.Element {
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className="popover" align="start" sideOffset={4} style={{ position: 'relative', minWidth: 280, maxHeight: 320, overflow: 'auto' }}>
+        <DropdownMenu.Content className="popover run-target-pop" align="start" sideOffset={4} style={{ position: 'relative' }}>
           {targets.map((t) => (
             <DropdownMenu.Item
               key={t.id}

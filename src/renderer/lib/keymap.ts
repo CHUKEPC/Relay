@@ -74,13 +74,20 @@ export const KEY_ACTIONS: KeyActionDef[] = [
   { id: 'console', label: 'Консоль запросов', defaultCombo: 'mod+alt+c', group: 'general' },
   { id: 'toggleSidebar', label: 'Показать/скрыть боковую панель', defaultCombo: 'mod+b', group: 'general' },
 
-  { id: 'panePreset1', label: 'Одна панель', defaultCombo: 'mod+alt+1', group: 'panes' },
-  { id: 'panePreset2', label: 'Разбить на 2 панели', defaultCombo: 'mod+alt+2', group: 'panes' },
-  { id: 'panePreset3', label: 'Разбить на 3 панели', defaultCombo: 'mod+alt+3', group: 'panes' },
-  { id: 'panePreset4', label: 'Разбить на 4 панели', defaultCombo: 'mod+alt+4', group: 'panes' },
-  { id: 'panePreset8', label: 'Разбить на 8 панелей', defaultCombo: 'mod+alt+8', group: 'panes' },
-  { id: 'paneSplitRight', label: 'Добавить панель справа', defaultCombo: 'mod+shift+e', group: 'panes' },
-  { id: 'paneSplitDown', label: 'Добавить панель снизу', defaultCombo: 'mod+shift+o', group: 'panes' },
+  // Ctrl+Alt+<digit> is a trap on Windows: the OS hands Ctrl+Alt to the
+  // keyboard layout as AltGr (on a Russian layout Ctrl+Alt+8 types ₽), and
+  // other resident software commonly registers Ctrl+Alt+1..3 system-wide — the
+  // keystroke then never reaches the app at all. Measured on Windows 11:
+  // Ctrl+Alt+1/2/3 never arrived, while Ctrl+Shift+<digit> and Ctrl+\ always do.
+  { id: 'panePreset1', label: 'Одна панель', defaultCombo: 'mod+shift+1', group: 'panes' },
+  { id: 'panePreset2', label: 'Разбить на 2 панели', defaultCombo: 'mod+shift+2', group: 'panes' },
+  { id: 'panePreset3', label: 'Разбить на 3 панели', defaultCombo: 'mod+shift+3', group: 'panes' },
+  { id: 'panePreset4', label: 'Разбить на 4 панели', defaultCombo: 'mod+shift+4', group: 'panes' },
+  { id: 'panePreset8', label: 'Разбить на 8 панелей', defaultCombo: 'mod+shift+8', group: 'panes' },
+  // The editor convention (VS Code splits with Ctrl+\), and one key away from
+  // the digits above.
+  { id: 'paneSplitRight', label: 'Добавить панель справа', defaultCombo: 'mod+\\', group: 'panes' },
+  { id: 'paneSplitDown', label: 'Добавить панель снизу', defaultCombo: 'mod+shift+\\', group: 'panes' },
   { id: 'paneClose', label: 'Закрыть активную панель', defaultCombo: 'mod+shift+w', group: 'panes' },
   { id: 'paneFocusLeft', label: 'Перейти в панель слева', defaultCombo: 'alt+arrowleft', group: 'panes' },
   { id: 'paneFocusRight', label: 'Перейти в панель справа', defaultCombo: 'alt+arrowright', group: 'panes' },
@@ -127,7 +134,8 @@ const CODE_TOKENS: Record<string, string> = {
   BracketRight: ']',
   Backquote: '`',
   Minus: '-',
-  Equal: '='
+  Equal: '=',
+  Backslash: '\\'
 }
 
 /**

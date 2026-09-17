@@ -216,9 +216,10 @@ No permission is required for: `relay.toast`, `relay.log/info/warn/error`,
 
 ### 5.1 Sandbox
 
-Each event dispatch forks the app bundle with:
+Each event dispatch forks `out/main/sandbox.js` — the sandbox bundle (`src/main/sandbox-entry.ts`),
+not the app bundle, which would `require('electron')` and die in a packaged build — with:
 
-- `RELAY_PLUGIN_SANDBOX=1` → the fork runs `startPluginSandboxHost()` instead of Electron;
+- `RELAY_PLUGIN_SANDBOX=1` → the fork runs `startPluginSandboxHost()` instead of the script host;
 - `ELECTRON_RUN_AS_NODE=1` → plain Node, no Chromium;
 - `--disallow-code-generation-from-strings` → `eval`/`new Function` are dead, which is
   the only known `node:vm` escape vector. The child self-tests this flag and **fails

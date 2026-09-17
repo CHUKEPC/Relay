@@ -1,0 +1,63 @@
+/* `{{` variable suggestions (components/HighlightedInput.tsx).
+   Rendered in a portal with fixed positioning so a table cell or a dialog
+   cannot clip it; above the modal layer (121) and popovers (130), below
+   tooltips and the tour (200). */
+
+.var-suggest {
+  position: fixed;
+  z-index: 140;
+  max-height: 240px;
+  overflow: auto;
+  padding: 4px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  animation: scaleIn 0.12s var(--ease-out);
+}
+
+.var-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+}
+.var-suggest-row.on {
+  background: var(--bg-hover);
+}
+
+.var-suggest-name {
+  color: var(--accent);
+  white-space: nowrap;
+}
+.var-suggest-val {
+  flex: 1;
+  min-width: 0;
+  color: var(--tx-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.var-suggest-src {
+  margin-left: auto;
+  flex: none;
+  font-size: 10.5px;
+  color: var(--tx-3);
+  text-transform: lowercase;
+}
+
+/* Sticky, or the hint is only visible after scrolling forty variables. */
+.var-suggest-foot {
+  position: sticky;
+  bottom: -4px;
+  padding: 5px 8px 6px;
+  margin: 4px -4px -4px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-1);
+  font-size: 10.5px;
+  color: var(--tx-3);
+}

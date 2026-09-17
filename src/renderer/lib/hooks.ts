@@ -20,6 +20,21 @@ export function useTab(tabId?: string): TabModel | null {
   })
 }
 
+/** Names of secret-flagged variables (active environment + globals), so the UI
+ *  can mask their values wherever it lists variables. */
+export function useSecretNames(): ReadonlySet<string> {
+  const env = useEnvironments((s) => s.env)
+  const globals = useEnvironments((s) => s.globals)
+  return useMemo(() => {
+    const out = new Set<string>()
+    const active = env.environments.find((e) => e.id === env.activeEnvironmentId)
+    for (const v of [...(active?.variables ?? []), ...globals.variables]) {
+      if (v.secret && v.key) out.add(v.key)
+    }
+    return out
+  }, [env, globals])
+}
+
 /** Reactive variable scope for a request (collection → env → global).
  *  Defaults to the active tab; pass a tabId to scope a specific tab. */
 export function useScope(tabId?: string): VariableScope {

@@ -162,8 +162,13 @@
 .pal-foot .grow { flex: 1; }
 .pal-foot span { display: inline-flex; align-items: center; gap: 5px; }
 
-/* generic menu/popover */
-.popover { position: absolute; z-index: 60; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius-md); box-shadow: var(--shadow-2); padding: 5px; min-width: 180px; animation: scaleIn .14s var(--ease-out); }
+/* generic menu/popover.
+   z-index sits ABOVE the modal layer (scrim 120 / dialog 121) and the docked
+   console (95). A dropdown opened inside a dialog used to land behind the dim
+   scrim: visible as a ghost, impossible to click — that is what made the
+   runner's collection picker look broken. Tooltips and the tour (200) stay
+   above it. */
+.popover { position: absolute; z-index: 130; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius-md); box-shadow: var(--shadow-2); padding: 5px; min-width: 180px; animation: scaleIn .14s var(--ease-out); }
 .pop-item { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 12.5px; color: var(--tx-1); cursor: pointer; transition: background .12s; }
 .pop-item:hover { background: var(--bg-hover); color: var(--tx-0); }
 .pop-item.on { color: var(--tx-0); }

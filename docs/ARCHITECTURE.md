@@ -123,6 +123,13 @@ keeping in mind:
   very shortcut being rebound.
 - AltGr (reported as Ctrl+Alt on the layouts that have it) is ignored only for a target that takes
   typed text, so `Ctrl+Alt+<key>` stays available as a shortcut everywhere else.
+- **`Ctrl+Alt+<digit>` is not a usable default.** Measured with real key injection on Windows 11:
+  `Ctrl+Alt+1/2/3` never reach the window at all (resident software registers them system-wide),
+  while `Ctrl+Alt+4/8/9` do — and on a Russian layout `Ctrl+Alt+8` also types `₽`, because Windows
+  hands Ctrl+Alt to the layout as AltGr. The pane presets therefore sit on `Ctrl+Shift+<digit>` and
+  the splits on `Ctrl+\` / `Ctrl+Shift+\`, all of which were verified to arrive with `e.code`
+  intact on a Cyrillic layout. A shortcut swallowed by another program cannot be recovered from
+  inside the app; every pane action is also reachable from the pane menu, and the FAQ says so.
 
 The default Electron menu is removed in main (`Menu.setApplicationMenu(null)`): it is invisible in a
 frameless window, but its accelerators ran first — Ctrl+W closed the window instead of the tab.
@@ -136,10 +143,26 @@ global, with `{{var}}` syntax and a few built-ins like `{{$guid}}`, `{{$timestam
 
 ## Scripting sandbox (P1)
 
-Pre-request/test scripts run in main in an **isolated** context (Node `vm` with a frozen,
-allow-listed `pm` object — no `require`, no `process`, no fs). Expose `pm.environment`, `pm.globals`,
+Pre-request/test scripts run in an **isolated child process** in a Node `vm` context with a frozen,
+allow-listed `pm` object — no `require`, no `process`, no fs. Expose `pm.environment`, `pm.globals`,
 `pm.variables`, `pm.request`, `pm.response`, `pm.test`, `pm.expect`. Capture `console.log` and test
 results and return them to the renderer.
+
+The children (both the script sandbox and the plugin sandbox) run **their own bundle**,
+`out/main/sandbox.js` from `src/main/sandbox-entry.ts`, resolved at runtime by
+`src/main/sandbox-path.ts`. They must not run the app's main bundle: a child is the Electron binary
+with `ELECTRON_RUN_AS_NODE=1`, where the built-in `electron` module does not exist, so the main
+bundle's top-level `require('electron')` throws. In development that require resolves anyway —
+the `electron` npm package is on disk — which is why forking the main bundle appeared to work while
+EVERY script and EVERY plugin in a packaged build died instantly with «Script sandbox stopped».
+The sandbox entry pulls in the two hosts and nothing that touches Electron (the `electron` imports
+in that module graph are all `import type`); a build that regresses this shows up as
+`require("electron")` inside `out/main/chunks/*`.
+
+A child that finishes a run cleanly is kept **warm** for the next script (`keepWarm`), because
+forking Electron-as-Node costs a few hundred milliseconds of CPU and a collection run pays it twice
+per request. A child is retired instead of reused when its run timed out, crashed, or left async
+work in flight.
 
 ## Theming
 

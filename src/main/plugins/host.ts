@@ -15,6 +15,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { createContext, runInContext } from 'node:vm'
 import type { PluginRunRequest, PluginRunResult } from '@shared/types'
+import { sandboxEntryPath } from '../sandbox-path'
 import { runPluginEvent } from './sandbox'
 
 /**
@@ -122,7 +123,8 @@ function runOne(payload: PluginRunRequest, timeoutMs: number): Promise<PluginRun
   return new Promise<PluginRunResult>((resolve) => {
     let proc: ChildProcess
     try {
-      proc = fork(__filename, [], {
+      // Same electron-free entry the script sandbox uses (see ../sandbox-entry.ts).
+      proc = fork(sandboxEntryPath(), [], {
         env: { ...process.env, RELAY_PLUGIN_SANDBOX: '1', ELECTRON_RUN_AS_NODE: '1' },
         execArgv: ['--disallow-code-generation-from-strings']
       })

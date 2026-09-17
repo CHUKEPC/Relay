@@ -14,6 +14,13 @@
 .run-stop { align-items: flex-start; }
 
 .run-target { max-width: 260px; height: 32px; }
+/* The picker can be taller than the space under the trigger inside the dialog;
+   Radix reports how much room it actually has. */
+.run-target-pop {
+  min-width: 280px;
+  max-height: min(320px, var(--radix-dropdown-menu-content-available-height, 320px));
+  overflow: auto;
+}
 .run-target-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-target-count { font-size: 11px; color: var(--tx-3); font-family: var(--font-mono); }
 

@@ -70,15 +70,28 @@ describe('matchAction', () => {
   })
 
   it('runs a Ctrl+Alt shortcut that the layout reports as AltGr', () => {
-    // Regression: AltGr was rejected outright, which silently killed every
-    // pane preset on keyboards that have an AltGr level.
-    const event = keydown({ key: '2', code: 'Digit2', ctrlKey: true, altKey: true, altGraph: true })
-    expect(matchAction(event, {})).toBe('panePreset2')
+    // Regression: AltGr was rejected outright, which silently killed the
+    // Ctrl+Alt shortcuts on keyboards that have an AltGr level.
+    const event = keydown({ key: 'с', code: 'KeyC', ctrlKey: true, altKey: true, altGraph: true })
+    expect(matchAction(event, {})).toBe('console')
   })
 
   it('leaves AltGr alone while text is being typed', () => {
-    const inInput = keydown({ key: '@', code: 'Digit2', ctrlKey: true, altKey: true, altGraph: true, tagName: 'INPUT' })
+    const inInput = keydown({ key: '©', code: 'KeyC', ctrlKey: true, altKey: true, altGraph: true, tagName: 'INPUT' })
     expect(matchAction(inInput, {})).toBeNull()
+  })
+
+  it('keeps the pane presets off Ctrl+Alt, which Windows and other apps eat', () => {
+    // Measured: a real Ctrl+Alt+1/2/3 never reaches the window on Windows 11.
+    const onAltDigit = KEY_ACTIONS.filter((a) => /^mod\+alt\+\d$/.test(a.defaultCombo))
+    expect(onAltDigit.map((a) => a.id)).toEqual([])
+    expect(matchAction(keydown({ key: '2', code: 'Digit2', ctrlKey: true, shiftKey: true }), {})).toBe('panePreset2')
+  })
+
+  it('resolves the split shortcut from the physical backslash key', () => {
+    // RU layout: Ctrl+Shift+\ reports key '/', so only e.code identifies it.
+    expect(matchAction(keydown({ key: '\\', code: 'Backslash', ctrlKey: true }), {})).toBe('paneSplitRight')
+    expect(matchAction(keydown({ key: '/', code: 'Backslash', ctrlKey: true, shiftKey: true }), {})).toBe('paneSplitDown')
   })
 
   it('stands down while the Shortcuts screen records a new combo', () => {

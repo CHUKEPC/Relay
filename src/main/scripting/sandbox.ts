@@ -35,6 +35,19 @@ class AssertionError extends Error {}
 let activeRun: { logs: ScriptConsoleLine[]; errors: string[] } | null = null
 
 /**
+ * Did the last run end with async work still in flight? The host keeps finished
+ * children warm for the next script (see `keepWarm` in ./index.ts), and a
+ * pm.sendRequest that never came back could still deliver its callback — or an
+ * unhandled rejection — into the NEXT script's result. Such a child is retired
+ * instead of reused.
+ */
+let pendingWork = false
+
+export function sandboxLeftPendingWork(): boolean {
+  return pendingWork
+}
+
+/**
  * Record an async failure against the running script. Returns false when no run
  * is in flight (a late rejection from an already-finished script), so the caller
  * can decide what to do with it.
@@ -555,6 +568,7 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   const tests: ScriptTestResult[] = []
   const asyncErrors: string[] = []
   activeRun = { logs, errors: asyncErrors }
+  pendingWork = false
   const pendingTests: Promise<void>[] = []
   const pendingRequests: Promise<unknown>[] = []
   const envUpdates: Record<string, string | null> = {}
@@ -810,6 +824,8 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   try {
     runInContext(payload.code, context, { timeout: 3000, displayErrors: true })
   } catch (err) {
+    // A script that fired a request and then threw leaves that request running.
+    pendingWork = pendingRequests.length > 0 || pendingTests.length > 0
     return finalize(err instanceof Error ? err.message : String(err))
   }
 
@@ -835,7 +851,10 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
     if (timer) clearTimeout(timer)
     // Giving up quietly here is how a missing token turns into a puzzling 401
     // two steps later.
-    if (!done) recordAsyncScriptError(`Script did not finish within ${budget} ms — a pm.sendRequest never came back`)
+    if (!done) {
+      pendingWork = true
+      recordAsyncScriptError(`Script did not finish within ${budget} ms — a pm.sendRequest never came back`)
+    }
   }
 
   return finalize()

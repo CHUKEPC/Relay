@@ -14,7 +14,14 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve('src/main/index.ts') }
+        // Two entries: the app, and the bundle the isolated sandbox children run.
+        // The children are the Electron binary in ELECTRON_RUN_AS_NODE mode, where
+        // the `electron` module does not exist — so they must NOT load the main
+        // bundle, whose top-level `require('electron')` throws in a packaged app.
+        input: {
+          index: resolve('src/main/index.ts'),
+          sandbox: resolve('src/main/sandbox-entry.ts')
+        }
       }
     }
   },
