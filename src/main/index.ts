@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, nativeTheme, session } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, session } from 'electron'
 import { APP_NAME } from '@shared/constants'
 import { IPC } from '@shared/ipc-contract'
 import { StorageManager } from './storage'
@@ -84,6 +84,12 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
 } else {
   applyGpuPreference()
   app.whenReady().then(async () => {
+  // Relay drives everything from its own titlebar and in-app shortcuts. The
+  // default Electron menu is invisible with a frameless window, yet its
+  // accelerators still fire first and never reach the renderer: Ctrl+W closed
+  // the window instead of the tab, Ctrl+R reloaded the app out from under the
+  // user and Ctrl+Shift+I opened DevTools in a release build.
+  Menu.setApplicationMenu(null)
   // Content Security Policy for all sessions.
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
     cb({

@@ -76,10 +76,12 @@ export function DetachedApp({ tabId }: { tabId: string }) {
       else if (!runPaneAction(action)) return
       e.preventDefault()
     }
-    window.addEventListener('keydown', onKey)
+    // Capture phase, like the main window: Monaco and the request fields must
+    // not be able to swallow a shortcut.
+    window.addEventListener('keydown', onKey, true)
     window.addEventListener('keydown', handleUndoKey, true)
     return () => {
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keydown', handleUndoKey, true)
     }
   }, [tabId])

@@ -57,6 +57,7 @@ export function defaultSettings(): SettingsDoc {
     language: 'ru',
     disableHardwareAcceleration: false,
     onboardingDone: false,
+    onboardingVersion: '',
     requestTimeoutMs: 30000,
     followRedirects: true,
     maxRedirects: 10,

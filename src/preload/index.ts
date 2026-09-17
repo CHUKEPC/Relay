@@ -208,6 +208,11 @@ const api: RelayApi = {
     const handler = (_e: unknown, theme: 'light' | 'dark') => cb(theme)
     ipcRenderer.on(IPC.app.themeChanged, handler)
     return () => ipcRenderer.removeListener(IPC.app.themeChanged, handler)
+  },
+  onWindowMaximized: (cb: (maximized: boolean) => void) => {
+    const handler = (_e: unknown, maximized: boolean) => cb(maximized)
+    ipcRenderer.on(IPC.app.windowMaximized, handler)
+    return () => ipcRenderer.removeListener(IPC.app.windowMaximized, handler)
   }
 }
 

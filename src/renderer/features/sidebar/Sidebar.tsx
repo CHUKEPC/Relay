@@ -2,6 +2,8 @@ import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'r
 import { Icon } from '@renderer/components/Icon'
 import { useUi, type SideTab } from '@renderer/store/ui'
 import { useConsole } from '@renderer/store/console'
+import { useRunner } from '@renderer/store/runner'
+import { useFindReplace } from '@renderer/store/find-replace'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
 import { trackDrag } from '@renderer/lib/drag'
@@ -18,6 +20,7 @@ const NAV: { id: SideTab; label: string; icon: string }[] = [
 ]
 
 export function Sidebar() {
+  const collapsed = useUi((s) => s.sidebarCollapsed)
   const sideTab = useUi((s) => s.sideTab)
   const setSideTab = useUi((s) => s.setSideTab)
   const openSettings = useUi((s) => s.openSettings)
@@ -45,6 +48,10 @@ export function Sidebar() {
       }
     })
   }
+
+  // Collapsed (Ctrl+B): the whole rail goes away and the workspace takes the
+  // width — the state is kept, so re-opening restores the tab and the width.
+  if (collapsed) return null
 
   return (
     <aside className="sidebar" ref={asideRef} style={{ width: sidebarWidth }}>
@@ -100,6 +107,32 @@ export function Sidebar() {
             </button>
           )
         })}
+        <button
+          className="tree-row"
+          data-tour="runner"
+          style={{ width: '100%' }}
+          onClick={() => useRunner.getState().openPicker()}
+          title={tr('Запустить коллекцию, папку или набор запросов')}
+        >
+          <span className="twirl">
+            <Icon name="play" size={15} />
+          </span>
+          <span className="name">{tr('Раннер')}</span>
+          <span className="kbd">{kbd('Shift+R')}</span>
+        </button>
+        <button
+          className="tree-row"
+          data-tour="find"
+          style={{ width: '100%' }}
+          onClick={() => useFindReplace.getState().openDialog()}
+          title={tr('Поиск и замена по всем коллекциям и переменным')}
+        >
+          <span className="twirl">
+            <Icon name="search" size={15} />
+          </span>
+          <span className="name">{tr('Найти и заменить')}</span>
+          <span className="kbd">{kbd('Shift+F')}</span>
+        </button>
         <button className="tree-row" data-tour="console" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title={tr('Консоль запросов')}>
           <span className="twirl">
             <Icon name="code2" size={15} />

@@ -20,6 +20,12 @@ export type KeyActionId =
   | 'settings'
   | 'save'
   | 'closeTab'
+  | 'nextTab'
+  | 'prevTab'
+  | 'findReplace'
+  | 'runner'
+  | 'console'
+  | 'toggleSidebar'
   | 'panePreset1'
   | 'panePreset2'
   | 'panePreset3'
@@ -61,6 +67,12 @@ export const KEY_ACTIONS: KeyActionDef[] = [
   { id: 'settings', label: 'Настройки', defaultCombo: 'mod+,', group: 'general' },
   { id: 'save', label: 'Сохранить', defaultCombo: 'mod+s', group: 'general' },
   { id: 'closeTab', label: 'Закрыть вкладку', defaultCombo: 'mod+w', group: 'general' },
+  { id: 'nextTab', label: 'Следующая вкладка', defaultCombo: 'mod+tab', group: 'general' },
+  { id: 'prevTab', label: 'Предыдущая вкладка', defaultCombo: 'mod+shift+tab', group: 'general' },
+  { id: 'findReplace', label: 'Найти и заменить', defaultCombo: 'mod+shift+f', group: 'general' },
+  { id: 'runner', label: 'Раннер коллекций', defaultCombo: 'mod+shift+r', group: 'general' },
+  { id: 'console', label: 'Консоль запросов', defaultCombo: 'mod+alt+c', group: 'general' },
+  { id: 'toggleSidebar', label: 'Показать/скрыть боковую панель', defaultCombo: 'mod+b', group: 'general' },
 
   { id: 'panePreset1', label: 'Одна панель', defaultCombo: 'mod+alt+1', group: 'panes' },
   { id: 'panePreset2', label: 'Разбить на 2 панели', defaultCombo: 'mod+alt+2', group: 'panes' },
@@ -84,7 +96,7 @@ export const KEY_ACTIONS: KeyActionDef[] = [
   { id: 'paneResizeDown', label: 'Сдвинуть границу панели вниз', defaultCombo: 'mod+shift+alt+arrowdown', group: 'panes' },
   { id: 'paneMaximize', label: 'Развернуть / вернуть активную панель', defaultCombo: 'mod+shift+x', group: 'panes' },
   { id: 'paneDetach', label: 'Открыть панель в отдельном окне / вернуть', defaultCombo: 'mod+shift+d', group: 'panes' },
-  { id: 'paneFlip', label: 'Поменять местами с соседней группой', defaultCombo: 'mod+shift+f', group: 'panes' }
+  { id: 'paneFlip', label: 'Поменять местами с соседней группой', defaultCombo: 'mod+shift+y', group: 'panes' }
 ]
 
 const MODIFIER_KEYS = new Set([
@@ -180,10 +192,33 @@ export function resolveBindings(custom: Record<string, string>): Map<string, Key
 let bindingsFor: Record<string, string> | null = null
 let bindingsCache: Map<string, KeyActionId> | null = null
 
+/**
+ * While the Shortcuts screen records a new combo, nothing else may act on key
+ * presses — the app listens in the capture phase, so without this flag it would
+ * run the shortcut the user is trying to rebind.
+ */
+let recording = false
+
+export function setRecordingShortcut(value: boolean): void {
+  recording = value
+}
+
+/** Does the event target take typed text? */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || typeof el.tagName !== 'string') return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true
+}
+
 /** Match a keydown event against the effective bindings. */
 export function matchAction(e: KeyboardEvent, custom: Record<string, string>): KeyActionId | null {
-  // AltGr arrives as Ctrl+Alt on Windows; those presses type characters ({, [, @…).
-  if (e.getModifierState?.('AltGraph')) return null
+  if (recording) return null
+  // AltGr arrives as Ctrl+Alt and types characters ({, [, @…) on the layouts that
+  // have it, so it must not steal a keystroke from a field being typed into.
+  // Outside such a field Ctrl+Alt+<key> is a shortcut: Chromium reports AltGraph
+  // for plain Ctrl+Alt presses on those layouts, which used to silently kill
+  // every pane shortcut for the users who have one.
+  if (e.getModifierState?.('AltGraph') && isTypingTarget(e.target)) return null
   const combo = comboFromEvent(e)
   if (!combo) return null
   if (custom !== bindingsFor || !bindingsCache) {

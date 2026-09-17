@@ -16,9 +16,12 @@ import { TabStrip } from './app/TabStrip'
 import { Workspace } from './app/Workspace'
 import { Sidebar } from './features/sidebar/Sidebar'
 import { SaveDialog } from './features/collections/SaveDialog'
-import { Tour, startTour } from './features/onboarding/Tour'
+import { Tour, shouldShowTour, startTour } from './features/onboarding/Tour'
 import { useWorkspaces } from './store/workspaces'
 import { useCap, useFeatures } from './store/features'
+import { useConsole } from './store/console'
+import { useRunner } from './store/runner'
+import { useFindReplace } from './store/find-replace'
 
 import { tr } from '@renderer/lib/i18n'
 // The AI assistant ships as a feature pack: keep its bundle out of the startup
@@ -32,6 +35,7 @@ const CommandPalette = lazy(() => import('./features/palette/CommandPalette').th
 const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })))
 const RunnerPanel = lazy(() => import('./features/runner/RunnerPanel').then((m) => ({ default: m.RunnerPanel })))
 const ConsolePanel = lazy(() => import('./features/console/ConsolePanel').then((m) => ({ default: m.ConsolePanel })))
+const FindReplaceDialog = lazy(() => import('./features/search/FindReplaceDialog').then((m) => ({ default: m.FindReplaceDialog })))
 
 /**
  * Bootstrapping is per window, not per mount: changing the UI language remounts
@@ -58,8 +62,9 @@ export function App() {
       .then(() => initPanes())
       .then(() => useWorkspaces.getState().load())
       .then(() => {
-        // First run only: give the UI a beat to paint before spotlighting it.
-        if (!useSettings.getState().settings.onboardingDone) setTimeout(startTour, 800)
+        // First run (and once after a major upgrade): give the UI a beat to
+        // paint before spotlighting it.
+        if (shouldShowTour(useSettings.getState().settings)) setTimeout(startTour, 800)
       })
       .catch((err) => console.error('bootstrap failed', err))
       .finally(() => setReady(true))
@@ -81,8 +86,10 @@ export function App() {
           return
         case 'toggleAi':
           e.preventDefault()
-          // Without the AI pack there is no panel to toggle.
+          // Without the AI pack there is no panel to toggle — say so instead of
+          // letting the key do nothing at all.
           if (useFeatures.getState().caps.has('ai')) useUi.getState().toggleAi()
+          else useUi.getState().showToast(tr('AI-ассистент выключен — включите его комплект в «Настройки → Плагины»'))
           return
         case 'settings':
           e.preventDefault()
@@ -104,6 +111,33 @@ export function App() {
           }
           return
         }
+        case 'nextTab':
+        case 'prevTab': {
+          const tabs = useTabs.getState()
+          const list = tabs.doc.tabs
+          if (list.length < 2) return
+          e.preventDefault()
+          const at = list.findIndex((t) => t.id === tabs.doc.activeTabId)
+          const step = action === 'nextTab' ? 1 : -1
+          tabs.setActive(list[(at + step + list.length) % list.length].id)
+          return
+        }
+        case 'findReplace':
+          e.preventDefault()
+          useFindReplace.getState().openDialog()
+          return
+        case 'runner':
+          e.preventDefault()
+          useRunner.getState().openPicker()
+          return
+        case 'console':
+          e.preventDefault()
+          useConsole.getState().toggle()
+          return
+        case 'toggleSidebar':
+          e.preventDefault()
+          useUi.getState().toggleSidebar()
+          return
         default:
           if (action && !useUi.getState().settingsOpen && runPaneAction(action)) {
             e.preventDefault()
@@ -121,11 +155,13 @@ export function App() {
         }
       }
     }
-    window.addEventListener('keydown', onKey)
-    // Capture phase so request-field undo runs before Monaco's own handler.
+    // Capture phase: Monaco, Radix dialogs and plain inputs all stop keys from
+    // reaching the window in the bubble phase, which used to make the shortcuts
+    // work only while focus happened to sit on the page background.
+    window.addEventListener('keydown', onKey, true)
     window.addEventListener('keydown', handleUndoKey, true)
     return () => {
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keydown', handleUndoKey, true)
     }
   }, [])
@@ -165,6 +201,7 @@ export function App() {
       <Suspense fallback={null}>
         <RunnerPanel />
         <ConsolePanel />
+        <FindReplaceDialog />
       </Suspense>
       <SaveDialog
         open={saveOpen}

@@ -8,6 +8,9 @@ import { useUi } from '@renderer/store/ui'
 import { hasCap } from '@renderer/store/features'
 import { useSettings } from '@renderer/store/settings'
 import { collectCommands, usePlugins } from '@renderer/store/plugins'
+import { useRunner } from '@renderer/store/runner'
+import { useFindReplace } from '@renderer/store/find-replace'
+import { useConsole } from '@renderer/store/console'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { exportRequestJson } from '@renderer/lib/export'
 import { MOD } from '@renderer/lib/platform'
@@ -62,6 +65,9 @@ export function CommandPalette() {
       // filters on them, so an English UI must match English words.
       { id: 'new', title: tr('Новый запрос'), icon: 'plus', kbd: [MOD, 'N'], run: () => openNew() },
       { id: 'send', title: tr('Отправить текущий запрос'), icon: 'send', kbd: [MOD, '↵'], run: () => void sendActiveRequest() },
+      { id: 'find-replace', title: tr('Найти и заменить'), icon: 'search', kbd: [MOD, 'Shift', 'F'], run: () => useFindReplace.getState().openDialog() },
+      { id: 'runner', title: tr('Раннер коллекций'), icon: 'play', kbd: [MOD, 'Shift', 'R'], run: () => useRunner.getState().openPicker() },
+      { id: 'console', title: tr('Консоль запросов'), icon: 'code2', run: () => useConsole.getState().setOpen(true) },
       { id: 'import', title: tr('Импортировать…'), icon: 'download', run: () => {
         useUi.getState().setSideTab('collections') // ImportDialog lives in the collections tree
         useUi.getState().setImportOpen(true)

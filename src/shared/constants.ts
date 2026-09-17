@@ -5,8 +5,11 @@
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '0.9.3'
-export const FEEDBACK_EMAIL = 'chukepc.best@gmail.com'
+export const APP_VERSION = '1.0.0'
+export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
+/** Author contacts shown next to the feedback address in About. */
+export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'
+export const FEEDBACK_TELEGRAM = 'https://t.me/PowerOfNsk'
 /**
  * GitHub owner/repo used for release update checks; placeholder until the app
  * is published — the checker must fail gracefully.

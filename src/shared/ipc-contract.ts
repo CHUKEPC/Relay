@@ -189,6 +189,7 @@ export const IPC = {
   app: {
     platform: 'app:platform',
     themeChanged: 'app:themeChanged',
+    windowMaximized: 'app:windowMaximized',
     minimize: 'app:minimize',
     maximize: 'app:maximize',
     close: 'app:close',
@@ -450,4 +451,6 @@ export interface RelayApi {
   /* ---- misc ---- */
   openExternal(url: string): Promise<void>
   onNativeThemeChange(cb: (theme: 'light' | 'dark') => void): () => void
+  /** Window maximized/restored — the titlebar button mirrors the real state. */
+  onWindowMaximized(cb: (maximized: boolean) => void): () => void
 }

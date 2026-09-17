@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
+import type { SettingsDoc } from '@shared/types'
+import { APP_VERSION } from '@shared/constants'
 import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
 import { kbd } from '@renderer/lib/platform'
@@ -52,6 +54,18 @@ const STEPS: TourStep[] = [
     body: 'Здесь выбирается активное окружение. Переменные вида {{var}} подставляются в URL, заголовки и тело перед отправкой.'
   },
   {
+    target: '[data-tour="runner"]',
+    title: 'Раннер коллекций',
+    body: 'Прогон коллекции, папки или отмеченного набора запросов: итерации, файл данных CSV/JSON, тесты и отчёт по результатам — {key}.',
+    keyHint: 'Shift+R'
+  },
+  {
+    target: '[data-tour="find"]',
+    title: 'Поиск и замена',
+    body: 'Поиск по всем коллекциям, окружениям и переменным — с заменой там, где вы её подтвердите. Пригодится, чтобы разом сменить домен или версию API — {key}.',
+    keyHint: 'Shift+F'
+  },
+  {
     target: '[data-tour="console"]',
     title: 'Консоль',
     body: 'Лог всех отправленных запросов с заголовками и таймингами. Консоль можно открепить в отдельное окно.'
@@ -91,8 +105,9 @@ export const useTour = create<TourState>((set, get) => ({
   stop: () => {
     if (!get().active) return
     set({ active: false })
-    // Finishing OR skipping both count as "seen" — never auto-show again.
-    useSettings.getState().update({ onboardingDone: true })
+    // Finishing OR skipping both count as "seen" — never auto-show again for
+    // this major version (see shouldShowTour).
+    useSettings.getState().update({ onboardingDone: true, onboardingVersion: APP_VERSION })
   },
   next: () => {
     travelDir = 1
@@ -109,6 +124,17 @@ export const useTour = create<TourState>((set, get) => ({
 /** Imperative entry point — used by App bootstrap and the restart buttons. */
 export function startTour(): void {
   useTour.getState().start()
+}
+
+/**
+ * Show the tour on a first run — and once more after a major upgrade, since
+ * that is where new things to point at land. Upgrading 1.0.1 → 1.0.2 never
+ * re-opens it.
+ */
+export function shouldShowTour(settings: Pick<SettingsDoc, 'onboardingDone' | 'onboardingVersion'>): boolean {
+  if (!settings.onboardingDone) return true
+  const major = (v: string): string => v.split('.')[0] ?? ''
+  return major(settings.onboardingVersion ?? '') !== major(APP_VERSION)
 }
 
 interface Rect {

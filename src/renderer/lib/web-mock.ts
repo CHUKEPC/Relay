@@ -245,7 +245,8 @@ if (!window.api) {
     getAppVersion: async () => APP_VERSION,
     checkUpdates: async () => ({ ok: false, error: 'web-mode' }),
     openExternal: async () => {},
-    onNativeThemeChange: () => () => {}
+    onNativeThemeChange: () => () => {},
+    onWindowMaximized: () => () => {}
   }
 
   ;(window as unknown as { api: RelayApi }).api = api

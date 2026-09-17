@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Kbd } from '@renderer/components/primitives'
 import { MOD } from '@renderer/lib/platform'
-import { KEY_ACTIONS, comboFromEvent, findConflict, formatCombo } from '@renderer/lib/keymap'
+import { KEY_ACTIONS, comboFromEvent, findConflict, formatCombo, setRecordingShortcut } from '@renderer/lib/keymap'
 import type { KeyActionGroup, KeyActionId } from '@renderer/lib/keymap'
 import { useSettings } from '@renderer/store/settings'
 import { tr, trf } from '@renderer/lib/i18n'
@@ -52,9 +52,12 @@ export function ShortcutsSection(): JSX.Element {
   }
 
   // Capture-phase listener: swallow every keydown while recording so the
-  // app's global shortcuts (and the captured combo itself) don't fire.
+  // app's global shortcuts (and the captured combo itself) don't fire. The app
+  // listens in the capture phase too and was registered first, so it also has
+  // to be told to stand down (setRecordingShortcut).
   useEffect(() => {
     if (!capturingId) return
+    setRecordingShortcut(true)
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault()
       e.stopPropagation()
@@ -84,7 +87,10 @@ export function ShortcutsSection(): JSX.Element {
       stopCapture()
     }
     window.addEventListener('keydown', onKey, { capture: true })
-    return () => window.removeEventListener('keydown', onKey, { capture: true })
+    return () => {
+      setRecordingShortcut(false)
+      window.removeEventListener('keydown', onKey, { capture: true })
+    }
   }, [capturingId])
 
   return (

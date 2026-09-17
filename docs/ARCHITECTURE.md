@@ -110,6 +110,24 @@ Suggested slices: `requestStore` (open tabs + active request draft), `collection
 `environmentsStore`, `historyStore`, `responseStore`, `aiStore`, `settingsStore`, `uiStore`
 (theme, panel layout). Persistence is delegated to main via IPC, not kept only in `localStorage`.
 
+## Keyboard shortcuts (`src/renderer/lib/keymap.ts`)
+
+One table (`KEY_ACTIONS`) owns every action, its label and its default combo; user overrides live in
+`SettingsDoc.keybindings` (`''` disables an action). Combos resolve from the PHYSICAL key (`e.code`)
+so they survive a non-Latin layout, and both windows listen in the **capture phase** — Monaco, Radix
+dialogs and plain inputs all stop keydown before it reaches `window`, which otherwise made a
+shortcut work only while focus happened to sit on the page background. Two consequences worth
+keeping in mind:
+
+- The Shortcuts screen sets `setRecordingShortcut(true)` while it records, or the app would run the
+  very shortcut being rebound.
+- AltGr (reported as Ctrl+Alt on the layouts that have it) is ignored only for a target that takes
+  typed text, so `Ctrl+Alt+<key>` stays available as a shortcut everywhere else.
+
+The default Electron menu is removed in main (`Menu.setApplicationMenu(null)`): it is invisible in a
+frameless window, but its accelerators ran first — Ctrl+W closed the window instead of the tab.
+The Help screen and the tour render their key hints from the same table, so they cannot go stale.
+
 ## Variable interpolation
 
 A single resolver used everywhere: given a string and a merged variable scope (collection → env →

@@ -159,8 +159,12 @@ export function registerIpc(ctx: IpcContext): void {
   })
 
   // App-level bridges.
+  // http(s) and mailto only — everything else (file:, javascript:, custom
+  // protocol handlers) stays blocked. mailto used to fall through here, which
+  // is why the «Написать» button in About looked dead.
   ipcMain.handle(IPC.app.openExternal, async (_e, url: string) => {
-    if (/^https?:\/\//i.test(url)) await shell.openExternal(url)
+    if (/^(https?|mailto):/i.test(url)) await shell.openExternal(url)
+    else throw new Error(`Refused to open ${url.slice(0, 40)}`)
   })
   // Window controls act on the window that asked (main or a detached pane).
   ipcMain.handle(IPC.app.minimize, (e) => windowOf(e.sender)?.minimize())

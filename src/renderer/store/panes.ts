@@ -331,11 +331,18 @@ export const usePanes = create<PanesState>((set, get) => {
 
     applyPreset: (n) => {
       if (get().windowMode !== 'main') return
-      const s = get()
-      if (n > Math.min(s.maxPanes, MAX_PANES)) {
-        atLimit(s.maxPanes)
+      if (n > Math.min(get().maxPanes, MAX_PANES)) {
+        atLimit(get().maxPanes)
         return
       }
+      // A pane with no tab in it is a dead end — the user has to hunt for the
+      // picker before the pane does anything. Open as many requests as the
+      // layout needs first, then lay them out.
+      const before = get()
+      const available = leavesOf(before.root).filter((l) => l.tabId).length + freeTabs(before).length
+      for (let i = available; i < n; i++) useTabs.getState().openNew()
+      // openNew() makes its tab active, which can re-home tabs between panes.
+      const s = get()
       const current = leavesOf(s.root)
       const activeTab = findLeaf(s.root, s.activeId)?.tabId ?? null
       // Keep what is on screen (active tab first), then fill new panes with open tabs.
@@ -353,16 +360,23 @@ export const usePanes = create<PanesState>((set, get) => {
     },
 
     splitActive: (dir) => {
-      const s = get()
-      if (s.windowMode !== 'main') return
-      if (!canGrow(s)) {
-        atLimit(s.maxPanes)
+      const s0 = get()
+      if (s0.windowMode !== 'main') return
+      if (!canGrow(s0)) {
+        atLimit(s0.maxPanes)
         return
       }
-      const active = findLeaf(s.root, s.activeId)
+      const active0 = findLeaf(s0.root, s0.activeId)
+      if (!active0) return
+      // The new pane gets a tab nobody is showing, or a fresh request.
+      const tabId = freeTabs(s0)[0]?.id ?? useTabs.getState().openNew()
+      // openNew() made that tab active, and the active pane may have taken it:
+      // put the pane being split back on its own tab before splitting it.
+      const root = updateLeaf(get().root, s0.activeId, { tabId: active0.tabId })
+      const active = findLeaf(root, s0.activeId)
       if (!active) return
-      const leaf = newLeaf(freeTabs(s)[0]?.id ?? null)
-      commit(replaceNode(s.root, active.id, split(dir, active, leaf)), leaf.id, { maximizedId: null })
+      const leaf = newLeaf(tabId)
+      commit(replaceNode(root, active.id, split(dir, active, leaf)), leaf.id, { maximizedId: null })
     },
 
     closePane: (id) => {

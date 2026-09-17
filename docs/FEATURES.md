@@ -142,6 +142,18 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] Collection **Runner** (N iterations + optional CSV/JSON data file). Each iteration binds one
       data row as the highest-precedence scope and exposes `pm.iterationData`; runs every request
       in order with pre-request/test scripts; live progress; per-request/iteration pass/fail; stop.
+      The run list is editable: a collection or folder fills it, the tick boxes decide what runs and
+      the arrows set the order, so an arbitrary set of requests — from different collections — can
+      be sent as one pass. Opens from a collection's context menu, from the sidebar («Раннер»,
+      empty, for hand-picking) or with Ctrl/⌘+Shift+R. «Stop on failure» ends the run at the first
+      failed request or test, and the result can be saved as a JSON report.
+- [x] **Find & replace across the workspace** (Ctrl/⌘+Shift+F): one pass over every collection,
+      environment and global variable — names, URLs, params, headers, bodies (raw, GraphQL, form),
+      auth fields, scripts and descriptions. Case, whole-word and regex switches; the search area
+      narrows by field group and by scope. Matches come back as a list with context, each with a
+      tick box, so a bulk edit (a domain, an API version) lands only where it should. Secret
+      variable values never take part. The logic is pure and unit-tested
+      (`src/renderer/lib/find-replace.ts`).
 - [x] **WebSocket** + **SSE** client (main-process engines over undici; per-connection IPC event
       stream; custom handshake headers; WS send + binary frames as base64; SSE `event/data/id/retry`
       parsing with auto-reconnect + `Last-Event-ID`). Mode switch in the URL bar; messages/events

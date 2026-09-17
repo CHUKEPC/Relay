@@ -467,6 +467,8 @@ export interface SettingsDoc extends DocEnvelope {
   keybindings: Record<string, string>
   updateCheckEnabled: boolean
   onboardingDone: boolean
+  /** app version whose tour was completed — a new major re-offers it once */
+  onboardingVersion?: string
   /** UI language: 'ru'/'en' always, more from the «Дополнительные языки» pack */
   language: string
   requestTimeoutMs: number

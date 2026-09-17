@@ -28,6 +28,8 @@ interface TabsState {
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
   markSaved: (tabId: string, savedRequestId: string) => void
+  /** Re-read tabs from their saved requests after a bulk edit (find & replace). */
+  refreshSaved: (updated: Record<string, RequestModel>) => void
 }
 
 type ActiveTabFallback = (remaining: TabModel[], closedIndex: number) => string | null
@@ -177,6 +179,18 @@ export const useTabs = create<TabsState>((set, get) => {
     markSaved: (tabId, savedRequestId) => {
       const tabs = get().doc.tabs.map((t) => (t.id === tabId ? { ...t, savedRequestId, dirty: false } : t))
       commit({ tabs })
+    },
+
+    refreshSaved: (updated) => {
+      let touched = false
+      const tabs = get().doc.tabs.map((t) => {
+        const saved = t.savedRequestId ? updated[t.savedRequestId] : undefined
+        // A tab with unsaved edits keeps them: it is the user's draft, not a copy.
+        if (!saved || t.dirty) return t
+        touched = true
+        return { ...t, request: structuredClone(saved) }
+      })
+      if (touched) commit({ tabs })
     }
   }
 })

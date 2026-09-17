@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
 import { useCap } from '@renderer/store/features'
@@ -17,6 +17,7 @@ export function Titlebar() {
   const resolvedTheme = useSettings((s) => s.resolvedTheme)
   const themeChoice = useSettings((s) => s.settings.theme)
   const aiOpen = useUi((s) => s.aiOpen)
+  const sidebarCollapsed = useUi((s) => s.sidebarCollapsed)
   const hasAi = useCap('ai')
   const paneCount = usePanes((s) => leavesOf(s.root).length)
   const keybindings = useSettings((s) => s.settings.keybindings)
@@ -29,6 +30,10 @@ export function Titlebar() {
   const titlebarButtons = useMemo(() => collectButtons(pluginList, 'titlebar'), [pluginList])
 
   const isMac = window.api.platform === 'darwin'
+  // Mirrors the real window state: the OS can maximize it too (Win+Up, a
+  // double-click on the drag region, the taskbar).
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => window.api.onWindowMaximized(setMaximized), [])
 
   return (
     <div className="titlebar drag-region">
@@ -39,7 +44,15 @@ export function Titlebar() {
           <i title={tr('Развернуть')} onClick={() => void window.api.maximizeWindow()} />
         </div>
       )}
-      <div className="brand" style={{ marginLeft: isMac ? 6 : 4 }}>
+      <button
+        className={`icon-btn nodrag${sidebarCollapsed ? '' : ' on'}`}
+        style={{ marginLeft: isMac ? 6 : 4 }}
+        title={trf('Показать/скрыть боковую панель ({key})', { key: kbd('B') })}
+        onClick={() => useUi.getState().toggleSidebar()}
+      >
+        <Icon name="sidebar" size={15} />
+      </button>
+      <div className="brand" style={{ marginLeft: 2 }}>
         <div className="brand-mark">
           <Icon name="bolt" size={13} style={{ color: '#fff' }} />
         </div>
@@ -175,8 +188,8 @@ export function Titlebar() {
           <button className="wc" title={tr('Свернуть')} onClick={() => void window.api.minimizeWindow()}>
             <Icon name="winMin" size={14} />
           </button>
-          <button className="wc" title={tr('Развернуть')} onClick={() => void window.api.maximizeWindow()}>
-            <Icon name="winMax" size={12} />
+          <button className="wc" title={tr(maximized ? 'Свернуть в окно' : 'Развернуть')} onClick={() => void window.api.maximizeWindow()}>
+            <Icon name={maximized ? 'restore' : 'winMax'} size={maximized ? 13 : 12} />
           </button>
           <button className="wc close" title={tr('Закрыть')} onClick={() => void window.api.closeWindow()}>
             <Icon name="close" size={14} />

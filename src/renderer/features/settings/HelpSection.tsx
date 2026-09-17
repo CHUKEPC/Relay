@@ -16,6 +16,7 @@ type TopicId =
   | 'scripts'
   | 'import-export'
   | 'ai'
+  | 'runner'
   | 'shortcuts'
   | 'faq'
 
@@ -26,6 +27,7 @@ const TOPICS: { id: TopicId; label: string }[] = [
   { id: 'scripts', label: 'Скрипты и тесты' },
   { id: 'import-export', label: 'Импорт и экспорт' },
   { id: 'ai', label: 'AI-ассистент' },
+  { id: 'runner', label: 'Раннер и поиск' },
   { id: 'shortcuts', label: 'Горячие клавиши' },
   { id: 'faq', label: 'FAQ' }
 ]
@@ -102,7 +104,7 @@ function CollectionsTopic(): JSX.Element {
         <p> {tr('Коллекция целиком экспортируется в JSON формата Postman v2.1 через контекстное меню. Папки и отдельные запросы тоже экспортируются в JSON — удобно, чтобы поделиться парой запросов, не отдавая всю коллекцию.')} </p>
       </Card>
       <Card title={tr('Запуск')}>
-        <p> {tr('Пункт «Запустить» в контекстном меню открывает Runner: все запросы коллекции или папки выполняются по очереди, с тестами и итоговым отчётом.')} </p>
+        <p> {tr('Пункт «Запустить» в контекстном меню открывает раннер уже с этой коллекцией или папкой. Кнопка «Раннер» в боковой панели открывает его пустым, чтобы отметить произвольный набор запросов из разных коллекций.')} </p>
       </Card>
     </>
   )
@@ -225,36 +227,53 @@ function AiTopic(): JSX.Element {
   )
 }
 
+function RunnerTopic(): JSX.Element {
+  return (
+    <>
+      <div className="help-topic-title">{tr('Раннер и поиск')}</div>
+      <Card title={tr('Раннер коллекций')}>
+        <p>
+          {tr('Кнопка «Раннер» в боковой панели или')} <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>R</Kbd>{' '}
+          {tr('открывают прогон. Сверху выбирается коллекция или папка, ниже — список запросов: галочками отмечается, что именно выполнять, стрелками меняется порядок. «Запустить» из контекстного меню коллекции сразу подставляет её в этот список.')}
+        </p>
+      </Card>
+      <Card title={tr('Итерации и данные')}>
+        <p> {tr('«Итераций» повторяет весь набор нужное число раз, «Задержка» выдерживает паузу между запросами, а файл CSV или JSON подставляет по строке на итерацию — колонки доступны как переменные и в pm.iterationData. «Стоп при ошибке» прерывает прогон на первом упавшем запросе или тесте.')} </p>
+      </Card>
+      <Card title={tr('Результаты')}>
+        <p> {tr('По каждому запросу видно статус, время и число пройденных тестов; итог — сверху. Кнопка «Отчёт» сохраняет прогон в JSON, который можно приложить к баг-репорту.')} </p>
+      </Card>
+      <Card title={tr('Поиск и замена')}>
+        <p>
+          <Kbd>{MOD}</Kbd> <Kbd>Shift</Kbd> <Kbd>F</Kbd>{' '}
+          {tr('ищет сразу по всем коллекциям, окружениям и глобальным переменным: по названиям, URL, параметрам, заголовкам, телу, авторизации, скриптам и описаниям. Область поиска сужается чипами, а Aa, ab и .* включают регистр, слово целиком и регулярные выражения.')}
+        </p>
+        <p> {tr('Найденное показывается списком с контекстом; галочки решают, что заменить, — поэтому массовую замену вроде смены домена можно применить только там, где нужно. Значения секретных переменных в поиск не попадают.')} </p>
+      </Card>
+    </>
+  )
+}
+
 function ShortcutsTopic(): JSX.Element {
-  // Labels go through tr() where they are rendered, a few lines below.
-  const rows: { label: string; keys: string[] }[] = [
-    { label: 'Командная палитра', keys: [MOD, 'K'] },
-    { label: 'Отправить запрос', keys: [MOD, '↵'] },
-    { label: 'Новый запрос', keys: [MOD, 'N'] },
-    { label: 'Открыть/скрыть AI', keys: [MOD, 'J'] },
-    { label: 'Сохранить', keys: [MOD, 'S'] },
-    { label: 'Закрыть вкладку', keys: [MOD, 'W'] },
-    { label: 'Настройки', keys: [MOD, ','] }
-  ]
   const keybindings = useSettings((st) => st.settings.keybindings)
-  const paneRows = KEY_ACTIONS.filter((a) => a.group === 'panes').map((a) => {
-    const custom = keybindings[a.id]
-    const combo = custom !== undefined ? custom : a.defaultCombo
-    return { id: a.id, label: a.label, keys: combo ? formatCombo(combo) : [] }
-  })
+  // Both lists are generated from the one shortcut table, so a shortcut that is
+  // added or rebound can never leave the help text behind.
+  const rowsOf = (group: 'general' | 'panes') =>
+    KEY_ACTIONS.filter((a) => a.group === group).map((a) => {
+      const custom = keybindings[a.id]
+      const combo = custom !== undefined ? custom : a.defaultCombo
+      return { id: a.id, label: a.label, keys: combo ? formatCombo(combo) : [] }
+    })
+  const rows = rowsOf('general')
+  const paneRows = rowsOf('panes')
   return (
     <>
       <div className="help-topic-title">{tr('Горячие клавиши')}</div>
       <Card title={tr('Основные сочетания')}>
         {rows.map((r) => (
-          <div
-            key={r.label}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
-          >
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
             <span style={{ flex: 1, fontSize: 12.5, color: 'var(--tx-1)' }}>{tr(r.label)}</span>
-            {r.keys.map((k, i) => (
-              <Kbd key={i}>{k}</Kbd>
-            ))}
+            {r.keys.length ? r.keys.map((k, i) => <Kbd key={i}>{k}</Kbd>) : <span style={{ color: 'var(--tx-3)', fontSize: 12 }}>{tr('не назначено')}</span>}
           </div>
         ))}
       </Card>
@@ -296,7 +315,16 @@ function FaqTopic(): JSX.Element {
         {tr('«Настройки → Основные» → выключите «Проверять SSL-сертификаты». Пригодится для localhost с самоподписанным сертификатом; для боевых серверов проверку лучше не отключать.')}
       </FaqItem>
       <FaqItem q={tr('Как сделать резервную копию всех данных?')}> {tr('«Настройки → Данные» → «Резервная копия (SQLite)»: экспорт коллекций, окружений и истории в один файл')} <code>.sqlite</code> {tr('и обратный импорт на любом компьютере.')} </FaqItem>
-      <FaqItem q={tr('Куда писать с предложениями и багами?')}> {tr('На')} <code>{FEEDBACK_EMAIL}</code>{tr('. В разделе «О приложении» есть кнопки «Написать» и «Копировать» для этого адреса.')} </FaqItem>
+      <FaqItem q={tr('Как прогнать всю коллекцию разом?')}>
+        {trf('Кнопка «Раннер» в боковой панели или {mod}+Shift+R: выберите коллекцию либо отметьте отдельные запросы, задайте число итераций и при желании файл CSV/JSON с данными. После прогона виден отчёт по каждому запросу и тесту, его можно сохранить в JSON.', { mod: MOD })}
+      </FaqItem>
+      <FaqItem q={tr('Как разом поменять домен во всех запросах?')}>
+        {trf('{mod}+Shift+F — поиск и замена по всем коллекциям, окружениям и переменным. Найденное показывается списком: снимите галочки там, где менять не нужно, и нажмите «Заменить». Лучше же держать адрес в переменной окружения — тогда менять придётся одно значение.', { mod: MOD })}
+      </FaqItem>
+      <FaqItem q={tr('Не работает горячая клавиша — что проверить?')}>
+        {tr('«Настройки → Горячие клавиши»: там видны все текущие сочетания, конфликты и кнопка «Сбросить все». Сочетание можно переназначить на любое со своим Ctrl, Alt или F-клавишей.')}
+      </FaqItem>
+      <FaqItem q={tr('Куда писать с предложениями и багами?')}> {tr('На')} <code>{FEEDBACK_EMAIL}</code>{tr('. В разделе «О приложении» есть почта, GitHub и Telegram автора — каждый с кнопкой «Написать» и копированием в буфер.')} </FaqItem>
     </>
   )
 }
@@ -308,6 +336,7 @@ const TOPIC_CONTENT: Record<TopicId, () => JSX.Element> = {
   scripts: ScriptsTopic,
   'import-export': ImportExportTopic,
   ai: AiTopic,
+  runner: RunnerTopic,
   shortcuts: ShortcutsTopic,
   faq: FaqTopic
 }

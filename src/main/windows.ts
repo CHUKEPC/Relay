@@ -44,6 +44,14 @@ export function createAppWindow(opts: AppWindowOptions): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
+  // The titlebar is ours, so it has to be told what the OS did to the window —
+  // including a double-click on the drag region or Win+Up.
+  const sendState = (maximized: boolean) => win.webContents.send(IPC.app.windowMaximized, maximized)
+  win.on('maximize', () => sendState(true))
+  win.on('unmaximize', () => sendState(false))
+  win.on('enter-full-screen', () => sendState(true))
+  win.on('leave-full-screen', () => sendState(false))
+
   if (opts.isDev) {
     win.webContents.on('console-message', (_e, level, message, line, source) => {
       if (level >= 2) console.log(`[renderer:${level}] ${message} (${source}:${line})`)

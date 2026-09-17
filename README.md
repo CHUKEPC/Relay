@@ -22,6 +22,10 @@ helps you build, debug, and test APIs right inside the app.
 - **Pre-request & Test scripts** with a sandboxed `pm.*` API and a Test Results tab.
 - **Import** Postman v2.1 / OpenAPI 3 / cURL, **export** Postman v2.1, **code generation**
   (cURL/JS/Python/Node/Go), **paste-cURL**, command palette, keyboard shortcuts.
+- **Collection runner** for a collection, a folder or any ticked set of requests: iterations, a
+  CSV/JSON data file, stop-on-failure and a JSON report.
+- **Find & replace across the workspace**: search collections, environments and variables by field
+  group, then replace exactly the matches you confirm.
 - **Local-first**: everything persists as JSON in `userData`; API keys are encrypted via Electron
   `safeStorage`. No telemetry; the only outbound traffic is your own API and AI calls.
 
