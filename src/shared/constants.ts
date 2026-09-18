@@ -5,7 +5,7 @@
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.1.0'
+export const APP_VERSION = '1.1.1'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'

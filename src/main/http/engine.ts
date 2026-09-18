@@ -868,9 +868,14 @@ export async function runRequest(
   }
 
   // --- 5. Per-hop dispatcher (proxy / client TLS / verification toggle). ---
-  // Relaxed TLS verification is per request but must NOT be carried across an
-  // origin the user didn't opt into; `relaxTls` is forced back on once we cross.
-  let relaxTls = !rejectUnauthorized
+  // «Verify SSL certificates» off is an app-wide choice, and it holds for every
+  // hop — as in Postman. It used to snap back on at a cross-origin redirect,
+  // which is exactly how an auth endpoint behind a load balancer kept failing
+  // with «self signed certificate in certificate chain» after the user had
+  // turned verification off: the first hop passed, the redirected one did not.
+  // Credentials are still stripped at an origin change (below); only the TLS
+  // strictness is the user's to decide.
+  const relaxTls = !rejectUnauthorized
   let dispatcher: Dispatcher | undefined
   // Cache the dispatcher across hops; rebuild only when the host or TLS-relax
   // state changes so same-origin redirects / digest replays reuse the pool.
@@ -1082,9 +1087,6 @@ export async function runRequest(
           }
           cookieJar.clear()
           userCookie = undefined
-          // Don't carry a "disable TLS verification" choice to a host the user
-          // didn't opt into — revert to secure verification across origins.
-          relaxTls = false
         }
 
         // Per RFC 7231: 303 (and commonly 301/302) downgrade to GET and drop

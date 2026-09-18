@@ -297,6 +297,22 @@
 .toast.error {
   border-color: color-mix(in oklch, var(--s-5xx) 40%, var(--line-2));
 }
+/* the one-click fix a toast can carry (e.g. «Отключить проверку SSL») */
+.toast-act {
+  margin-left: 6px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in oklch, var(--accent) 45%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.toast-act:hover {
+  background: color-mix(in oklch, var(--accent) 22%, transparent);
+}
 .toast .t-ico.ok {
   color: var(--s-2xx);
 }

@@ -21,6 +21,12 @@ export interface ConsoleFloatRect {
   h: number
 }
 
+/** A one-click fix a toast can offer (e.g. «Отключить проверку SSL»). */
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+
 interface UiState {
   sideTab: SideTab
   sidebarCollapsed: boolean
@@ -30,7 +36,7 @@ interface UiState {
   helpTopic: string
   paletteOpen: boolean
   saveDialogOpen: boolean
-  toast: { id: number; message: string; kind: 'ok' | 'error' } | null
+  toast: { id: number; message: string; kind: 'ok' | 'error'; action?: ToastAction } | null
   sidebarWidth: number
   aiWidth: number
   consoleDock: ConsoleDock
@@ -48,7 +54,9 @@ interface UiState {
   setPaletteOpen: (v: boolean) => void
   togglePalette: () => void
   setSaveDialogOpen: (v: boolean) => void
-  showToast: (message: string, kind?: 'ok' | 'error') => void
+  /** An `action` adds a button and keeps the toast up long enough to use it. */
+  showToast: (message: string, kind?: 'ok' | 'error', action?: ToastAction) => void
+  dismissToast: () => void
   setSidebarWidth: (px: number) => void
   setAiWidth: (px: number) => void
   setConsoleDock: (d: ConsoleDock) => void
@@ -160,13 +168,17 @@ export const useUi = create<UiState>((set, get) => {
     setPaletteOpen: (v) => set({ paletteOpen: v }),
     togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
     setSaveDialogOpen: (v) => set({ saveDialogOpen: v }),
-    showToast: (message, kind = 'ok') => {
+    showToast: (message, kind = 'ok', action) => {
       const id = ++toastSeq
-      set({ toast: { id, message, kind } })
-      window.setTimeout(() => {
-        set((s) => (s.toast?.id === id ? { toast: null } : {}))
-      }, 2400)
+      set({ toast: { id, message, kind, action } })
+      window.setTimeout(
+        () => {
+          set((s) => (s.toast?.id === id ? { toast: null } : {}))
+        },
+        action ? 9000 : 2400
+      )
     },
+    dismissToast: () => set({ toast: null }),
     setSidebarWidth: (px) => {
       set({ sidebarWidth: clamp(px, 200, 460) })
       persistPrefs()

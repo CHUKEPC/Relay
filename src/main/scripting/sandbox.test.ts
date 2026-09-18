@@ -326,3 +326,171 @@ describe('buildSendRequestSpec', () => {
     expect(() => buildSendRequestSpec({ method: 'POST' })).toThrow(/URL is required/)
   })
 })
+
+describe('buildSendRequestSpec — Postman body modes', () => {
+  it('sends a urlencoded list, the usual client_credentials call', () => {
+    // Regression: only `raw` was understood, so this exact body went out empty
+    // and the token endpoint answered 400.
+    const spec = buildSendRequestSpec({
+      url: 'https://auth.internal/passport/oauth2/token',
+      method: 'POST',
+      header: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: {
+        mode: 'urlencoded',
+        urlencoded: [
+          { key: 'client_id', value: 'svc@app' },
+          { key: 'client_secret', value: undefined },
+          { key: 'grant_type', value: 'client_credentials' },
+          { key: 'scope', value: 'x', disabled: true }
+        ]
+      }
+    })
+    expect(spec.body).toEqual({
+      type: 'urlencoded',
+      items: [
+        { key: 'client_id', value: 'svc@app', enabled: true },
+        // an unset global must not go out as the word "undefined"
+        { key: 'client_secret', value: '', enabled: true },
+        { key: 'grant_type', value: 'client_credentials', enabled: true },
+        { key: 'scope', value: 'x', enabled: false }
+      ]
+    })
+  })
+
+  it('accepts urlencoded as a plain object or an encoded string', () => {
+    expect(buildSendRequestSpec({ url: 'https://x', method: 'POST', body: { mode: 'urlencoded', urlencoded: { a: 1, b: 'two' } } }).body).toEqual({
+      type: 'urlencoded',
+      items: [
+        { key: 'a', value: '1', enabled: true },
+        { key: 'b', value: 'two', enabled: true }
+      ]
+    })
+    expect(buildSendRequestSpec({ url: 'https://x', method: 'POST', body: { mode: 'urlencoded', urlencoded: 'a=1&b=two%20words' } }).body).toEqual({
+      type: 'urlencoded',
+      items: [
+        { key: 'a', value: '1', enabled: true },
+        { key: 'b', value: 'two words', enabled: true }
+      ]
+    })
+  })
+
+  it('keeps the raw language, so JSON gets its Content-Type', () => {
+    const spec = buildSendRequestSpec({
+      url: 'https://x',
+      method: 'POST',
+      body: { mode: 'raw', raw: '{"a":1}', options: { raw: { language: 'json' } } }
+    })
+    expect(spec.body).toEqual({ type: 'raw', language: 'json', text: '{"a":1}' })
+  })
+
+  it('sends text form-data parts, never a file part, and drops a boundary-less multipart header', () => {
+    const spec = buildSendRequestSpec({
+      url: 'https://x',
+      method: 'POST',
+      header: { 'Content-Type': 'multipart/form-data' },
+      body: {
+        mode: 'formdata',
+        formdata: [
+          { key: 'name', value: 'relay' },
+          // a script (maybe from an imported collection) must not be able to
+          // read a local file and upload it
+          { key: 'steal', type: 'file', value: 'C:/Users/me/.ssh/id_rsa' }
+        ]
+      }
+    })
+    expect(spec.body).toEqual({ type: 'formdata', items: [{ key: 'name', value: 'relay', enabled: true, type: 'text' }] })
+    expect(spec.headers).toEqual([])
+  })
+
+  it('maps a graphql body, with object variables serialised', () => {
+    const spec = buildSendRequestSpec({
+      url: 'https://x/graphql',
+      method: 'POST',
+      body: { mode: 'graphql', graphql: { query: '{ me { id } }', variables: { id: 7 } } }
+    })
+    expect(spec.body).toEqual({ type: 'graphql', query: '{ me { id } }', variables: '{"id":7}' })
+  })
+})
+
+describe('pm.sendRequest end to end — the token script', () => {
+  let server: Server
+  let url = ''
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        const form = new URLSearchParams(body)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            access_token: form.get('client_secret') === 's3cr3t' ? 'jwt-ok' : 'jwt-wrong',
+            content_type: req.headers['content-type'],
+            received: body
+          })
+        )
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/passport/oauth2/token`
+  })
+
+  afterAll(() => {
+    server.close()
+  })
+
+  it('posts the form and stores the token, written exactly as in Postman', async () => {
+    const res = await runSandbox(
+      base({
+        phase: 'pre-request',
+        response: undefined,
+        globals: { 'adsd-if-epa_secret': 's3cr3t' },
+        code: `
+          const clientSecret = pm.globals.get("adsd-if-epa_secret");
+          const postRequest = {
+            url: '${url}',
+            method: 'POST',
+            header: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: {
+              mode: 'urlencoded',
+              urlencoded: [
+                { key: 'client_id', value: 'adsd-if-epa@app.b2c.vtb.ru' },
+                { key: 'client_secret', value: clientSecret },
+                { key: 'grant_type', value: 'client_credentials' },
+              ]
+            }
+          };
+          pm.sendRequest(postRequest, (error, response) => {
+            console.log(error ? error : response.json());
+            responseToken = response.json().access_token
+            pm.globals.set("depoAccessToken", "Bearer " + responseToken)
+          });
+        `
+      })
+    )
+    expect(res.error).toBeUndefined()
+    expect(res.globalUpdates.depoAccessToken).toBe('Bearer jwt-ok')
+    const logged = JSON.parse(res.logs[0].message)
+    expect(logged.content_type).toBe('application/x-www-form-urlencoded')
+    expect(logged.received).toBe('client_id=adsd-if-epa%40app.b2c.vtb.ru&client_secret=s3cr3t&grant_type=client_credentials')
+  })
+
+  it('prints a transport error as its message, not as {}', async () => {
+    // Port 1 on loopback refuses at once — no network needed.
+    const res = await runSandbox(
+      base({
+        phase: 'pre-request',
+        response: undefined,
+        code: `pm.sendRequest("http://127.0.0.1:1/token", (error, response) => { console.log(error) })`
+      })
+    )
+    expect(res.logs[0].message).toMatch(/^Error: .+/)
+    expect(res.logs[0].message).not.toBe('{}')
+  })
+
+  it('prints an Error thrown inside the script realm by its message too', async () => {
+    const res = await runSandbox(base({ phase: 'pre-request', response: undefined, code: `console.log(new TypeError("boom"))` }))
+    expect(res.logs[0].message).toBe('TypeError: boom')
+  })
+})

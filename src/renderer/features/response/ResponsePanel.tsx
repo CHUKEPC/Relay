@@ -10,6 +10,8 @@ import { Icon } from '@renderer/components/Icon'
 import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
+import { disableSslVerification, isCertificateError } from '@renderer/lib/tls-hint'
+import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { kbd } from '@renderer/lib/platform'
 import { VisualizerTab } from './VisualizerTab'
 import { CookieManager } from '@renderer/features/cookies/CookieManager'
@@ -102,8 +104,10 @@ function RespLoading(): JSX.Element {
  * Error card (rendered inside the body area)
  * ============================================================ */
 
-function RespError({ result, onAskAI }: { result: ResponseResult; onAskAI: () => void }): JSX.Element {
+function RespError({ result, onAskAI, tabId }: { result: ResponseResult; onAskAI: () => void; tabId: string }): JSX.Element {
   const hasAi = useCap('ai')
+  const verifying = useSettings((s) => s.settings.rejectUnauthorized !== false)
+  const certRefused = result.status === 0 && (result.error?.kind === 'tls' || isCertificateError(result.error?.message))
   return (
     <div className="empty" style={{ alignItems: 'flex-start', paddingTop: 30 }}>
       <div className="empty-card">
@@ -124,10 +128,30 @@ function RespError({ result, onAskAI }: { result: ResponseResult; onAskAI: () =>
               ? tr('Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки — или попросите AI разобраться.')
               : tr('Сервер вернул ошибку при обработке запроса. Проверьте тело запроса и заголовки.'))}
         </p>
-        {hasAi && (
+        {certRefused && !verifying && (
+          <p style={{ color: 'var(--tx-2)' }}>
+            {tr('Проверка SSL-сертификатов уже отключена, так что дело не в доверии к сертификату: проверьте клиентский сертификат для этого хоста («Настройки → Сеть») и версию TLS сервера.')}
+          </p>
+        )}
+        {(hasAi || (certRefused && verifying)) && (
           <div className="empty-actions">
-            <button className="btn primary" onClick={onAskAI}>
-              <Icon name="sparkle" size={14} /> {tr('Спросить AI о причине')} </button>
+            {certRefused && verifying && (
+              // Postman offers the same switch right in the error.
+              <button
+                className="btn primary"
+                onClick={() => {
+                  disableSslVerification()
+                  void sendActiveRequest(tabId)
+                }}
+              >
+                <Icon name="refresh" size={14} /> {tr('Отключить проверку SSL и повторить')}
+              </button>
+            )}
+            {hasAi && (
+              <button className={certRefused && verifying ? 'btn' : 'btn primary'} onClick={onAskAI}>
+                <Icon name="sparkle" size={14} /> {tr('Спросить AI о причине')}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -783,7 +807,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
       <div className="resp-body">
         {effectiveTab === 'body' &&
           (isError ? (
-            <RespError result={result} onAskAI={onAskAI} />
+            <RespError result={result} onAskAI={onAskAI} tabId={tabId} />
           ) : (
             <BodyPane result={result} view={bodyView} wordWrap={wordWrap} hostRef={bodyHostRef} />
           ))}

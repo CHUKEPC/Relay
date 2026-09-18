@@ -18,7 +18,8 @@ import { useHistory } from '../store/history'
 import { useConsole } from '../store/console'
 import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
-import { trf } from './i18n'
+import { tr, trf } from './i18n'
+import { disableSslVerification, isCertificateError, sslVerificationOn } from './tls-hint'
 
 /** Short, readable body preview for the console log. */
 function consoleBodyPreview(body: RequestModel['body']): string | undefined {
@@ -216,7 +217,20 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
       applyScriptSideEffects(tab.savedRequestId, result)
       // Pre-request scripts have no results pane — surface a failure so it isn't
       // silently dropped (e.g. a sandbox timeout that skipped an auth header).
-      if (result.error) useUi.getState().showToast(trf('Pre-request скрипт: {error}', { error: result.error }), 'error')
+      // A certificate refusal inside pm.sendRequest usually reaches the result
+      // only as the callback's follow-up TypeError, with the real cause in a
+      // logged line — so both are checked, and the fix is offered in place.
+      const certRefused = [result.error, ...(result.logs ?? []).map((l) => l.message)].some(isCertificateError)
+      if (certRefused && sslVerificationOn()) {
+        useUi
+          .getState()
+          .showToast(tr('Pre-request скрипт: сервер прислал сертификат, которому нет доверия (самоподписанный или корпоративный)'), 'error', {
+            label: tr('Отключить проверку SSL'),
+            run: disableSslVerification
+          })
+      } else if (result.error) {
+        useUi.getState().showToast(trf('Pre-request скрипт: {error}', { error: result.error }), 'error')
+      }
       workingReq = applyRequestPatch(workingReq, result.requestPatch)
     } catch (err) {
       console.error('pre-request script failed', err)

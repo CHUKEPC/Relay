@@ -9,6 +9,9 @@
 import { createContext, runInContext } from 'node:vm'
 import type {
   HttpMethod,
+  KV,
+  RawLanguage,
+  RequestBody,
   RequestSettings,
   RequestSpec,
   ScriptConsoleLine,
@@ -342,7 +345,18 @@ class Assertion {
   }
 }
 
+/** An Error from either realm — one thrown inside the vm context is not an
+ *  `instanceof Error` of the host, so it is recognised by shape as well. */
+function isErrorLike(v: unknown): v is { name?: string; message: string } {
+  if (typeof v !== 'object' || v === null) return false
+  const e = v as { message?: unknown; stack?: unknown }
+  return typeof e.message === 'string' && (v instanceof Error || typeof e.stack === 'string')
+}
+
 function json(v: unknown): string {
+  // Error fields are non-enumerable, so JSON.stringify(err) is "{}" — which is
+  // all `console.log(error)` used to print for a failed pm.sendRequest.
+  if (isErrorLike(v)) return `${v.name || 'Error'}: ${v.message}`
   try {
     return JSON.stringify(v)
   } catch {
@@ -401,6 +415,26 @@ function cookieDomainMatches(host: string, cookieDomain: string): boolean {
   return host.endsWith(`.${d}`)
 }
 
+/** One Postman key/value entry (`urlencoded`, `formdata`). */
+interface PostmanParam {
+  key?: unknown
+  value?: unknown
+  disabled?: boolean
+  type?: string
+}
+
+/** A Postman request body, in every mode a script is likely to use. */
+type SendRequestBody =
+  | string
+  | {
+      mode?: string
+      raw?: string
+      urlencoded?: PostmanParam[] | Record<string, unknown> | string
+      formdata?: PostmanParam[] | Record<string, unknown>
+      graphql?: { query?: string; variables?: unknown }
+      options?: { raw?: { language?: string } }
+    }
+
 /** A request accepted by pm.sendRequest (string URL or a Postman-like object). */
 type SendRequestInput =
   | string
@@ -408,7 +442,7 @@ type SendRequestInput =
       url?: string
       method?: string
       header?: Array<{ key: string; value: string }> | Record<string, string>
-      body?: { mode?: string; raw?: string } | string
+      body?: SendRequestBody
     }
 
 /** The Postman-like response object handed back from pm.sendRequest. */
@@ -432,6 +466,72 @@ const SEND_REQUEST_DEFAULTS: RequestSettings = {
   rejectUnauthorized: true
 }
 
+const RAW_LANGUAGES: readonly RawLanguage[] = ['json', 'text', 'xml', 'html', 'javascript']
+
+/** A parameter value as it goes on the wire: no "undefined", no "[object Object]". */
+function paramValue(v: unknown): string {
+  if (v == null) return ''
+  if (typeof v === 'object') return json(v)
+  return String(v)
+}
+
+/** Postman accepts a list of {key, value, disabled}, a plain object, or (for
+ *  urlencoded) an already-encoded string. */
+function paramsOf(source: unknown): KV[] {
+  if (Array.isArray(source)) {
+    return (source as PostmanParam[])
+      .filter((p) => p && p.key != null && String(p.key) !== '')
+      .map((p) => ({ key: String(p.key), value: paramValue(p.value), enabled: p.disabled !== true }))
+  }
+  if (typeof source === 'string') {
+    return [...new URLSearchParams(source)].map(([key, value]) => ({ key, value, enabled: true }))
+  }
+  if (source && typeof source === 'object') {
+    return Object.entries(source as Record<string, unknown>).map(([key, value]) => ({ key, value: paramValue(value), enabled: true }))
+  }
+  return []
+}
+
+/**
+ * The engine body for a pm.sendRequest body. Only `raw` used to be understood,
+ * so the most common token call there is — `mode: 'urlencoded'` with
+ * client_id / client_secret / grant_type — went out with NO body at all and the
+ * auth server answered 400.
+ */
+function bodyOf(body: SendRequestBody | undefined): RequestBody | null {
+  if (body == null) return null
+  if (typeof body === 'string') return { type: 'raw', language: 'text', text: body }
+  switch (body.mode) {
+    case 'raw': {
+      if (typeof body.raw !== 'string') return null
+      const wanted = body.options?.raw?.language as RawLanguage | undefined
+      return { type: 'raw', language: wanted && RAW_LANGUAGES.includes(wanted) ? wanted : 'text', text: body.raw }
+    }
+    case 'urlencoded':
+      return { type: 'urlencoded', items: paramsOf(body.urlencoded) }
+    case 'formdata':
+      // Text parts only. A file part would let a script — possibly from an
+      // imported collection — read any local file and upload it.
+      return {
+        type: 'formdata',
+        items: paramsOf(
+          Array.isArray(body.formdata) ? (body.formdata as PostmanParam[]).filter((p) => p?.type !== 'file') : body.formdata
+        ).map((p) => ({ key: p.key, value: p.value, enabled: p.enabled, type: 'text' as const }))
+      }
+    case 'graphql': {
+      const variables = body.graphql?.variables
+      return {
+        type: 'graphql',
+        query: String(body.graphql?.query ?? ''),
+        variables: typeof variables === 'string' ? variables : variables == null ? '' : json(variables)
+      }
+    }
+    default:
+      // Postman's raw mode can be implied by a bare `raw` field.
+      return typeof body.raw === 'string' ? { type: 'raw', language: 'text', text: body.raw } : null
+  }
+}
+
 /**
  * Turn a pm.sendRequest argument into a spec for the app's own engine.
  * Exported for the tests: this mapping is where a dropped setting would hide.
@@ -440,7 +540,7 @@ export function buildSendRequestSpec(input: SendRequestInput, settings?: Request
   let url: string
   let method = 'GET'
   const headers: Record<string, string> = {}
-  let body: string | undefined
+  let body: RequestBody | null = null
 
   if (typeof input === 'string') {
     url = input
@@ -452,11 +552,18 @@ export function buildSendRequestSpec(input: SendRequestInput, settings?: Request
     } else if (input.header && typeof input.header === 'object') {
       for (const [k, v] of Object.entries(input.header)) headers[k] = String(v ?? '')
     }
-    if (typeof input.body === 'string') body = input.body
-    else if (input.body && input.body.mode === 'raw' && typeof input.body.raw === 'string') body = input.body.raw
+    body = bodyOf(input.body)
   }
 
   if (!url) throw new Error('pm.sendRequest: a URL is required')
+
+  // A hand-written `multipart/form-data` header has no boundary, and the one the
+  // engine generates must win or the server cannot split the parts.
+  if (body?.type === 'formdata') {
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === 'content-type' && /^multipart\/form-data/i.test(headers[key])) delete headers[key]
+    }
+  }
 
   // GET/HEAD carry no body — the engine would refuse one anyway.
   const carriesBody = body != null && method !== 'GET' && method !== 'HEAD'
@@ -465,9 +572,9 @@ export function buildSendRequestSpec(input: SendRequestInput, settings?: Request
     url,
     query: [],
     headers: Object.entries(headers).map(([key, value]) => ({ key, value, enabled: true })),
-    // 'text' only decides the default Content-Type, and only when the script
-    // did not set one itself.
-    body: carriesBody ? { type: 'raw', language: 'text', text: body as string } : { type: 'none' },
+    // The body's language/mode only decides the default Content-Type, and only
+    // when the script did not set one itself.
+    body: carriesBody && body ? body : { type: 'none' },
     auth: { type: 'none' },
     settings: settings ?? SEND_REQUEST_DEFAULTS
   }

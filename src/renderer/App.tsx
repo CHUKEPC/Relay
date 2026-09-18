@@ -217,6 +217,18 @@ export function App() {
           <div className={`toast ${toast.kind === 'error' ? 'error' : ''}`}>
             <Icon name={toast.kind === 'error' ? 'warn' : 'check'} size={14} className={`t-ico ${toast.kind === 'error' ? 'err' : 'ok'}`} />
             {toast.message}
+            {toast.action && (
+              <button
+                className="toast-act"
+                onClick={() => {
+                  const run = toast.action?.run
+                  useUi.getState().dismissToast()
+                  run?.()
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         </div>
       )}

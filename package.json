@@ -1,6 +1,6 @@
 {
   "name": "relay-api-client",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Relay — a cross-platform desktop API client with a built-in multi-provider AI assistant.",
   "productName": "Relay",
   "author": {

@@ -179,6 +179,17 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       than nesting. One name defined in several scopes appears once, attributed to the scope that
       wins. The matching/ranking logic is pure and unit-tested (`src/renderer/lib/var-suggest.ts`),
       and the Monaco provider (`var-completion.ts`) feeds from the same function.
+- [x] **pm.sendRequest speaks every Postman body mode**: `urlencoded` (list, object or encoded
+      string), `raw` with `options.raw.language`, `formdata` (text parts only — a script cannot
+      upload a local file) and `graphql`. Only `raw` used to be understood, so the standard
+      client_credentials token call went out with an empty body. A failed call's `error` prints as
+      its message in the script console instead of `{}`.
+- [x] **«Verify SSL certificates» off holds on every hop**: it used to snap back on at a
+      cross-origin redirect, so an auth endpoint behind a load balancer still failed with
+      «self signed certificate in certificate chain» after the user had switched it off. Postman
+      semantics now; credentials are still stripped at an origin change. A certificate error —
+      in the response card or from a pre-request script — offers **«Отключить проверку SSL»** in
+      place (`src/renderer/lib/tls-hint.ts`).
 - [x] **Scripts and plugins actually run in a packaged build**: the sandbox children are the
       Electron binary in `ELECTRON_RUN_AS_NODE` mode, where the built-in `electron` module does not
       exist — and they used to be handed the app's main bundle, whose top-level `require('electron')`
