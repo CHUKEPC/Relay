@@ -1,0 +1,16 @@
+{
+  "id": "request-id",
+  "name": "Request ID",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Adds a unique X-Request-Id header to every request before it is sent.",
+  "author": "you",
+  "main": "main.js",
+  "permissions": ["request:write"],
+  "contributes": {
+    "events": ["request"]
+  },
+  "config": [
+    { "key": "headerName", "label": "Имя заголовка", "type": "string", "placeholder": "X-Request-Id" }
+  ]
+}

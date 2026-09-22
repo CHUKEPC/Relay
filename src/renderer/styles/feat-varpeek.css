@@ -52,3 +52,32 @@
 
 .varpeek-none { padding: 18px 12px; text-align: center; font-size: 12px; color: var(--tx-3); }
 .varpeek-foot { font-size: 11px; color: var(--tx-3); }
+
+/* ---------- variable import dialog / collection variables editor ---------- */
+.env-editor-note { font-size: 12px; line-height: 1.5; color: var(--tx-2); margin: -4px 0 12px; }
+.var-import-dest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.var-import-dest select.input { height: 30px; width: auto; min-width: 200px; font-family: var(--font-ui); }
+.var-import-text { height: 150px; font-family: var(--font-mono); font-size: 12px; padding: 10px; resize: vertical; }
+.var-import-error { color: var(--s-5xx); font-size: 12.5px; margin-top: 4px; }
+.var-import-summary { font-size: 12px; color: var(--tx-1); margin: 6px 0 8px; }
+.var-import-table { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.var-import-row {
+  display: grid; grid-template-columns: minmax(120px, 1fr) 1.4fr 88px; gap: 10px; align-items: center;
+  padding: 6px 10px; font-size: 12px; border-top: 1px solid var(--line);
+}
+.var-import-row:first-child { border-top: 0; }
+.var-import-row.off { opacity: 0.55; }
+.var-import-row .k, .var-import-row .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.var-import-row .v { color: var(--tx-2); }
+.var-import-row .tag { justify-self: end; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; }
+.var-import-row .tag.new { color: var(--s-2xx); background: color-mix(in oklab, var(--s-2xx) 14%, transparent); }
+.var-import-row .tag.upd { color: var(--s-3xx); background: color-mix(in oklab, var(--s-3xx) 14%, transparent); }
+.var-import-more { padding: 6px 10px; font-size: 11.5px; color: var(--tx-3); border-top: 1px solid var(--line); }
+.var-import-note { font-size: 11.5px; color: var(--tx-3); margin-top: 6px; }
+.var-export-secrets { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--tx-1); margin: 4px 0 10px; cursor: pointer; }
+.var-export-secrets input { margin-top: 3px; accent-color: var(--accent); }
+.var-export-preview {
+  margin: 6px 0 4px; padding: 10px 12px; max-height: 220px; overflow: auto;
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5; white-space: pre;
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--radius); color: var(--tx-1);
+}

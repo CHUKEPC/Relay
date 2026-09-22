@@ -2,6 +2,7 @@
  * Shared type contract used across main, preload and renderer.
  * Must have NO Node or DOM dependencies.
  */
+import type { PackTheme } from './pack-data'
 
 /* ============================================================
  * HTTP request engine
@@ -444,7 +445,12 @@ export interface TabsDoc extends DocEnvelope {
   activeTabId: string | null
 }
 
-export type ThemePreset = 'relay' | 'postman' | 'insomnia' | 'custom'
+/**
+ * 'pack' = a theme from an enabled theme pack (`packTheme`). 'postman' and
+ * 'insomnia' were built-in presets before 1.2; they moved into the theme pack
+ * and are only read to migrate old settings.
+ */
+export type ThemePreset = 'relay' | 'postman' | 'insomnia' | 'custom' | 'pack'
 
 /** User-defined theme: a base palette plus CSS variable overrides. */
 export interface CustomTheme {
@@ -461,6 +467,13 @@ export interface SettingsDoc extends DocEnvelope {
   accentColor: string | null
   themePreset: ThemePreset
   customTheme: CustomTheme | null
+  /** `<packId>/<themeId>` of the pack theme in use (themePreset 'pack') */
+  packTheme?: string | null
+  /**
+   * Copy of that theme, so it paints before the packs are read at startup;
+   * refreshed whenever the pack is read again.
+   */
+  packThemeData?: PackTheme | null
   /** appearance stashed before a plugin theme was applied (for revert) */
   appearanceSnapshot?: { themePreset: ThemePreset; customTheme: CustomTheme | null } | null
   /** actionId -> combo like 'mod+shift+k' */
@@ -925,10 +938,12 @@ export type PluginsBroadcastEvent =
 export type ImportKind = 'postman' | 'openapi' | 'curl' | 'har' | 'swagger' | 'insomnia' | 'environment' | 'auto'
 
 export interface ImportResult {
-  kind: 'collection' | 'request' | 'environment'
+  /** 'globals' = a Postman globals export; merged into the global variables */
+  kind: 'collection' | 'request' | 'environment' | 'globals'
   collection?: CollectionFolderNode
   request?: RequestModel
   environment?: Environment
+  variables?: VariableDef[]
   warnings: string[]
 }
 

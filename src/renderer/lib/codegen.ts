@@ -15,11 +15,18 @@ export type CodeTarget =
   | 'rust'
   | 'powershell'
   | 'httpie'
+  | 'http'
+  | 'wget'
 
-export const CODE_TARGETS: { id: CodeTarget; label: string; lang: string }[] = [
-  { id: 'curl', label: 'cURL', lang: 'bash' },
-  { id: 'javascript', label: 'JavaScript (fetch)', lang: 'javascript' },
-  { id: 'python', label: 'Python (requests)', lang: 'python' },
+/**
+ * `core` targets are always there; the rest come with the «Генерация кода:
+ * другие языки» pack (capability `codegen.extra`), so the dialog stays short.
+ */
+export const CODE_TARGETS: { id: CodeTarget; label: string; lang: string; core?: true }[] = [
+  { id: 'curl', label: 'cURL', lang: 'bash', core: true },
+  { id: 'http', label: 'HTTP', lang: 'http', core: true },
+  { id: 'javascript', label: 'JavaScript (fetch)', lang: 'javascript', core: true },
+  { id: 'python', label: 'Python (requests)', lang: 'python', core: true },
   { id: 'node', label: 'Node (https)', lang: 'javascript' },
   { id: 'go', label: 'Go', lang: 'go' },
   { id: 'java', label: 'Java (OkHttp)', lang: 'java' },
@@ -30,21 +37,35 @@ export const CODE_TARGETS: { id: CodeTarget; label: string; lang: string }[] = [
   { id: 'kotlin', label: 'Kotlin (OkHttp)', lang: 'kotlin' },
   { id: 'rust', label: 'Rust (reqwest)', lang: 'rust' },
   { id: 'powershell', label: 'PowerShell', lang: 'powershell' },
-  { id: 'httpie', label: 'HTTPie', lang: 'bash' }
+  { id: 'httpie', label: 'HTTPie', lang: 'bash' },
+  { id: 'wget', label: 'wget', lang: 'bash' }
 ]
+
+/**
+ * Percent-encode a query/form component but leave `{{var}}` placeholders as
+ * they are, so the generated code shows `q={{token}}` like Postman does
+ * instead of `q=%7B%7Btoken%7D%7D`.
+ */
+function encodeComponent(s: string): string {
+  return s
+    .split(/({{[^{}]*}})/)
+    .map((part, i) => (i % 2 ? part : encodeURIComponent(part)))
+    .join('')
+}
 
 function effectiveUrl(req: RequestModel): string {
   const enabled = req.query.filter((q) => q.enabled && q.key)
   if (!enabled.length) return req.url
   const sep = req.url.includes('?') ? '&' : '?'
-  return req.url + sep + enabled.map((q) => `${encodeURIComponent(q.key)}=${encodeURIComponent(q.value)}`).join('&')
+  return req.url + sep + enabled.map((q) => `${encodeComponent(q.key)}=${encodeComponent(q.value)}`).join('&')
 }
 
 function effectiveHeaders(req: RequestModel): KV[] {
   const headers = req.headers.filter((h) => h.enabled && h.key).map((h) => ({ ...h }))
   applyAuthToHeaders(headers, req.auth)
   // content-type from raw language if not present
-  if (req.body.type === 'raw' && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
+  // An empty raw body sends nothing, so it gets no Content-Type either.
+  if (req.body.type === 'raw' && req.body.text && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
     const ct = { json: 'application/json', xml: 'application/xml', html: 'text/html', javascript: 'application/javascript', text: 'text/plain' }[req.body.language]
     headers.push({ key: 'Content-Type', value: ct, enabled: true })
   }
@@ -74,13 +95,13 @@ function applyAuthToHeaders(headers: KV[], auth: Auth): void {
 function bodyString(body: RequestBody): string | null {
   switch (body.type) {
     case 'raw':
-      return body.text
+      return body.text ? body.text : null
     case 'graphql':
       return JSON.stringify({ query: body.query, variables: safeJson(body.variables) })
     case 'urlencoded':
       return body.items
         .filter((i) => i.enabled)
-        .map((i) => `${encodeURIComponent(i.key)}=${encodeURIComponent(i.value)}`)
+        .map((i) => `${encodeComponent(i.key)}=${encodeComponent(i.value)}`)
         .join('&')
     case 'formdata':
       return null // handled specially per language
@@ -437,6 +458,60 @@ function genHttpie(req: RequestModel): string {
   return parts.join(' \\\n  ')
 }
 
+/* ---------------- raw HTTP message ---------------- */
+function genHttp(req: RequestModel): string {
+  let target = effectiveUrl(req)
+  let host = ''
+  try {
+    const u = new URL(target)
+    host = u.host
+    target = (u.pathname || '/') + u.search
+  } catch {
+    // {{baseUrl}}/path — keep what was typed; the Host line comes from the URL text.
+    const m = /^(?:[a-z]+:\/\/)?([^/?#]+)(.*)$/i.exec(target)
+    if (m) {
+      host = m[1]
+      target = m[2] || '/'
+    }
+  }
+  const headers = effectiveHeaders(req)
+  const lines = [`${req.method.toUpperCase()} ${target} HTTP/1.1`]
+  if (host) lines.push(`Host: ${host}`)
+  for (const h of headers) lines.push(`${h.key}: ${h.value}`)
+  let body = bodyString(req.body)
+  if (req.body.type === 'formdata') {
+    const boundary = '----RelayFormBoundary'
+    lines.push(`Content-Type: multipart/form-data; boundary=${boundary}`)
+    const parts = req.body.items
+      .filter((i) => i.enabled)
+      .map((i) =>
+        i.type === 'file'
+          ? [`--${boundary}`, `Content-Disposition: form-data; name="${i.key}"; filename="${i.fileName ?? 'file'}"`, '', `<${i.filePath ?? 'file'}>`].join('\n')
+          : [`--${boundary}`, `Content-Disposition: form-data; name="${i.key}"`, '', i.value].join('\n')
+      )
+    body = [...parts, `--${boundary}--`].join('\n')
+  } else if (req.body.type === 'binary') body = `<${req.body.filePath ?? 'file'}>`
+  if (req.body.type === 'urlencoded' && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
+    lines.push('Content-Type: application/x-www-form-urlencoded')
+  }
+  return body != null ? [...lines, '', body].join('\n') : lines.join('\n')
+}
+
+/* ---------------- wget ---------------- */
+function genWget(req: RequestModel): string {
+  const parts = ['wget', '--server-response', '--output-document=-', `--method=${req.method.toUpperCase()}`]
+  for (const h of effectiveHeaders(req)) parts.push(shQuote(`--header=${h.key}: ${h.value}`))
+  let note = ''
+  if (req.body.type === 'formdata') note = '# NOTE: wget cannot send multipart/form-data — use cURL\n'
+  else if (req.body.type === 'binary') parts.push(shQuote(`--body-file=${req.body.filePath ?? 'file'}`))
+  else {
+    const b = bodyString(req.body)
+    if (b != null) parts.push(shQuote(`--body-data=${b}`))
+  }
+  parts.push(shQuote(effectiveUrl(req)))
+  return note + parts.join(' \\\n  ')
+}
+
 /* ---------------- string escapers ---------------- */
 function jStr(s: string): string {
   // Java/JSON share the same escape rules for these characters.
@@ -501,5 +576,9 @@ export function generateCode(target: CodeTarget, req: RequestModel): string {
       return genPowerShell(req)
     case 'httpie':
       return genHttpie(req)
+    case 'http':
+      return genHttp(req)
+    case 'wget':
+      return genWget(req)
   }
 }

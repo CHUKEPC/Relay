@@ -576,7 +576,7 @@ export async function encodeBody(body: RequestBody | undefined, headers: Record<
  * Collect enabled user headers into a plain record (last value wins for
  * duplicate names). Header names are kept as the user typed them.
  */
-function collectUserHeaders(headers: KV[]): Record<string, string> {
+export function collectUserHeaders(headers: KV[]): Record<string, string> {
   const out: Record<string, string> = {}
   for (const kv of headers ?? []) {
     if (!kv || kv.enabled === false || !kv.key) continue

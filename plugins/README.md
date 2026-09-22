@@ -27,6 +27,14 @@ never executes code, which is what separates it from a user plugin
 | `auth.advanced` | Digest, JWT, OAuth 1.0, AWS Signature v4, Hawk, Akamai, ASAP, NTLM |
 | `i18n.extra` | the UI languages listed in `locales` |
 | `panes.extra` | up to 16 panes instead of four, and the 8-pane preset |
+| `backup.extra` | ZIP and SQLite backups |
+| `snippets` | the snippets panel on the Scripts tab, filled from the pack's `snippets.json` |
+| `themes.extra` | colour themes in Settings → Appearance, from the pack's `themes.json` |
+| `codegen.extra` | twelve more languages in the «Code» window (Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie, wget) |
+
+Snippet and theme packs carry their data next to the manifest; the formats, the
+full token list and ready-to-copy examples are in
+[`docs/plugin-guide`](../docs/plugin-guide/README.md).
 
 Deleting a folder removes the feature; switching a pack off in
 Settings → Plugins hides it until it is enabled again. The enabled/disabled

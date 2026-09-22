@@ -1152,7 +1152,8 @@
    ============================================================ */
 .snippet-panel {
   width: 250px; flex: none; margin-right: 14px; border: 1px solid var(--line);
-  border-radius: var(--radius); background: var(--bg-1); overflow-y: auto; max-height: 300px; padding: 6px;
+  border-radius: var(--radius); background: var(--bg-1); overflow-y: auto; padding: 6px;
+  margin-bottom: 14px; min-height: 0;
 }
 .snippet-head {
   font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
@@ -1164,6 +1165,11 @@
   transition: background .12s, color .12s;
 }
 .snippet-item:hover { background: var(--bg-hover); color: var(--tx-0); }
+.snippet-group + .snippet-group { margin-top: 6px; }
+.snippet-group-title {
+  font-size: 10.5px; font-weight: 600; color: var(--tx-2); padding: 6px 7px 3px;
+}
+.snippet-empty { font-size: 12px; color: var(--tx-3); padding: 6px 7px; }
 .snippet-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- undo reveal: briefly highlights the restored area ---------- */
@@ -1181,3 +1187,38 @@
   background: var(--bg-1);
   border-radius: var(--radius-sm);
 }
+
+/* ---------- request builder fills its pane ----------
+   The builder, the active tab body and the body / script editors stretch
+   to the pane, so dragging the response divider resizes the editors instead
+   of scrolling a fixed-height box. */
+.req-builder { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.req-tab-body { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.tab-fill { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.code-editor.grow { flex: 1 1 0; min-height: 120px; height: auto; }
+.scripts-row { flex: 1 1 auto; display: flex; min-height: 0; }
+
+/* ---------- split button («cURL ▾» → terminal) ---------- */
+.split-btn { display: inline-flex; align-items: stretch; }
+.split-btn > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 8px; }
+.split-btn .split-btn-arrow {
+  border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 6px; min-width: 0;
+  border-left: 1px solid var(--line);
+}
+.pop-hint { font-size: 11px; color: var(--tx-3); margin-left: 10px; }
+
+/* ---------- Settings → Plugins: link to the authoring guide ---------- */
+.plugin-guide-note {
+  display: flex; gap: 12px; align-items: flex-start; margin: 22px 0 6px; padding: 12px 14px;
+  border: 1px dashed var(--line-2); border-radius: var(--radius-md);
+  font-size: 12.5px; line-height: 1.55; color: var(--tx-1);
+}
+.plugin-guide-note > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.plugin-guide-title { font-weight: 600; color: var(--tx-0); margin-bottom: 2px; }
+/* The header rows (meta, URL bar, tab strip — some sit in display:contents
+   wrappers) keep their height; only the tab body gives way. */
+.req-builder > *:not(.req-tab-body),
+.req-builder > [data-undo-field]:not(.req-tab-body) > * { flex-shrink: 0; }
+
+/* ---------- «Код»: hint for the extra-languages pack ---------- */
+.codegen-more { font-size: 12px; line-height: 1.5; color: var(--tx-2); margin: -6px 0 12px; }

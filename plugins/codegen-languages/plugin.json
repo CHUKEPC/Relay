@@ -1,0 +1,7 @@
+{
+  "id": "codegen-languages",
+  "name": "Генерация кода: другие языки",
+  "description": "Добавляет в окно «Код» Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie и wget. Без плагина остаются cURL, HTTP, JavaScript и Python.",
+  "version": "1.0.0",
+  "capabilities": ["codegen.extra"]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "script-snippets",
+  "name": "Сниппеты для скриптов",
+  "description": "Готовые фрагменты для вкладки Scripts: проверки кода ответа для каждого метода HTTP, тела и заголовков, работа с переменными, pm.sendRequest и cookie.",
+  "version": "1.0.0",
+  "capabilities": ["snippets"]
+}

@@ -8,7 +8,8 @@ import { useUi } from '@renderer/store/ui'
 import { useFeatures } from '@renderer/store/features'
 import { PackRow } from './FeaturePacks'
 
-import { tr, trf } from '@renderer/lib/i18n'
+import { tr, trf, useI18n } from '@renderer/lib/i18n'
+import { PLUGIN_GUIDE_URL } from '@shared/constants'
 /** Human consequence line per permission token (consent must be readable). */
 function permissionLabel(p: PluginPermission): string {
   if (p === 'net') return tr('Доступ в интернет — любой хост')
@@ -462,6 +463,21 @@ export function PluginsSection(): JSX.Element {
       {plugins.map((p) => (
         <PluginCard key={p.manifest.id} info={p} />
       ))}
+
+      <div className="plugin-guide-note">
+        <Icon name="book" size={16} />
+        <div>
+          <div className="plugin-guide-title">{tr('Хотите написать свой плагин?')}</div>
+          <div>
+            {tr(
+              'Подробное руководство с примерами — темы, сниппеты, кнопки, вкладки ответа, изменение запросов, разрешения и упаковка — лежит в репозитории Relay на GitHub, в папке docs/plugin-guide.'
+            )}{' '}
+            <button className="link-btn" onClick={() => void window.api.openExternal(useI18n.getState().lang === 'ru' ? PLUGIN_GUIDE_URL.ru : PLUGIN_GUIDE_URL.en)}>
+              {tr('Открыть руководство')}
+            </button>
+          </div>
+        </div>
+      </div>
     </>
   )
 }

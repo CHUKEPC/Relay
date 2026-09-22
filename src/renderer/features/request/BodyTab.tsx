@@ -80,7 +80,7 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
   }
 
   return (
-    <div>
+    <div className="tab-fill">
       <div className="subbar">
         <div className="seg" style={{ flexWrap: 'wrap' }}>
           {BODY_TYPES.map((t) => (
@@ -113,7 +113,7 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
       )}
 
       {body.type === 'raw' && (
-        <div className="code-editor" style={{ height: 300 }}>
+        <div className="code-editor grow">
           <CodeEditor value={body.text} language={monacoLang(body.language)} onChange={(text) => setBody({ ...body, text })} />
         </div>
       )}
@@ -188,7 +188,7 @@ function GraphqlBody({
   const status = entry?.status ?? 'idle'
 
   return (
-    <div>
+    <div className="tab-fill">
       <div className="subbar" style={{ gap: 8 }}>
         <button className="btn ghost" style={{ height: 26 }} onClick={runIntrospect} disabled={status === 'loading'}>
           <Icon name="refresh" size={14} />
@@ -206,11 +206,11 @@ function GraphqlBody({
       {docsOpen && entry?.schema && <SchemaDocs schema={entry.schema} />}
 
       <div className="section-title">Query</div>
-      <div className="code-editor" style={{ height: 200, marginTop: 0 }}>
+      <div className="code-editor grow" style={{ flexGrow: 3, marginTop: 0 }}>
         <CodeEditor value={query} language="graphql" onChange={onQuery} />
       </div>
       <div className="section-title">Variables</div>
-      <div className="code-editor" style={{ height: 140, marginTop: 0 }}>
+      <div className="code-editor grow" style={{ flexGrow: 2, minHeight: 90, marginTop: 0 }}>
         <CodeEditor value={variables} language="json" onChange={onVariables} />
       </div>
     </div>

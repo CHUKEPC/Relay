@@ -1,0 +1,7 @@
+{
+  "id": "theme-pack",
+  "name": "Пак тем оформления",
+  "description": "Postman, Insomnia, Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, One Dark, Synthwave ’84, Rosé Pine и авторские темы. Выбираются в Настройках → Внешний вид.",
+  "version": "1.0.0",
+  "capabilities": ["themes.extra"]
+}

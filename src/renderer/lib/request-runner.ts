@@ -18,6 +18,7 @@ import { useHistory } from '../store/history'
 import { useConsole } from '../store/console'
 import { useUi } from '../store/ui'
 import { buildRequestSpec } from './request-spec'
+import { TOOL_LABEL, type TerminalTool } from '@shared/terminal-command'
 import { tr, trf } from './i18n'
 import { disableSslVerification, isCertificateError, sslVerificationOn } from './tls-hint'
 
@@ -389,4 +390,67 @@ export function currentSecretValues(tabId?: string): string[] {
     .filter((v) => v.secret && v.enabled)
     .map((v) => v.value)
   return [...envGlobalSecrets, ...collectionSecrets]
+}
+
+/**
+ * «Send to terminal»: resolve the tab's request exactly as a send would
+ * (variables, inherited auth, network settings, jar cookies) and let the main
+ * process run it with `tool` in a terminal window. Scripts do not run there,
+ * which the terminal says before the output.
+ */
+export async function sendToTerminal(tool: TerminalTool, tabId?: string): Promise<void> {
+  const tab = tabFor(tabId)
+  if (!tab) return
+  const collections = useCollections.getState()
+  const envStore = useEnvironments.getState()
+  const scope: VariableScope = {
+    collection: collections.collectionScopeFor(tab.savedRequestId),
+    environment: envStore.envScope(),
+    global: envStore.globalScope()
+  }
+  const req = tab.request
+  if (!req.url.trim()) {
+    useUi.getState().showToast(tr('Укажите адрес запроса'), 'error')
+    return
+  }
+  const built = buildRequestSpec(req, scope, settingsToRequestSettings(), collections.inheritedAuthFor(tab.savedRequestId))
+  const spec = built.spec
+  const notes: string[] = []
+  if (built.unresolved.length) notes.push(trf('Не найдены переменные: {names} — они уйдут как есть.', { names: built.unresolved.join(', ') }))
+  if (preScriptBodies(req, tab.savedRequestId).length) notes.push(tr('Pre-request скрипты не выполняются.'))
+  if (testScriptBodies(req, tab.savedRequestId).length) notes.push(tr('Тесты (post-response) не выполняются.'))
+
+  // The engine sends matching jar cookies; so does the terminal, unless the
+  // request sets its own Cookie header.
+  if (!spec.headers.some((h) => h.enabled && h.key.toLowerCase() === 'cookie')) {
+    const now = Date.now()
+    const jar = (await cookieSnapshotFor(spec.url)).filter((c) => !c.expires || Date.parse(c.expires) > now)
+    if (jar.length) {
+      spec.headers = [...spec.headers, { key: 'Cookie', value: jar.map((c) => `${c.key}=${c.value}`).join('; '), enabled: true }]
+      notes.push(trf('Добавлены cookie из хранилища Relay: {n}.', { n: jar.length }))
+    }
+  }
+
+  try {
+    const res = await window.api.terminalRun(tool, spec, notes)
+    if (res.ok) useUi.getState().showToast(trf('Запрос открыт в терминале ({tool})', { tool: TOOL_LABEL[tool] }))
+    else useUi.getState().showToast(trf('Не удалось открыть терминал: {error}', { error: res.error }), 'error')
+  } catch (err) {
+    useUi.getState().showToast(trf('Не удалось открыть терминал: {error}', { error: (err as Error).message }), 'error')
+  }
+}
+
+/** The command `sendToTerminal` would run, for the code dialog (no cookies, no files). */
+export async function terminalPreviewFor(tool: TerminalTool, tabId?: string): Promise<string> {
+  const tab = tabFor(tabId)
+  if (!tab) return ''
+  const collections = useCollections.getState()
+  const envStore = useEnvironments.getState()
+  const scope: VariableScope = {
+    collection: collections.collectionScopeFor(tab.savedRequestId),
+    environment: envStore.envScope(),
+    global: envStore.globalScope()
+  }
+  const { spec } = buildRequestSpec(tab.request, scope, settingsToRequestSettings(), collections.inheritedAuthFor(tab.savedRequestId))
+  return window.api.terminalPreview(tool, spec)
 }

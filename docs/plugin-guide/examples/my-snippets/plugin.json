@@ -1,0 +1,7 @@
+{
+  "id": "my-snippets",
+  "name": "My Snippets",
+  "description": "Team snippets for the Scripts tab.",
+  "version": "1.0.0",
+  "capabilities": ["snippets"]
+}

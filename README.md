@@ -21,9 +21,17 @@ helps you build, debug, and test APIs right inside the app.
 - **Monaco-powered** request bodies and a Pretty/Raw/Preview response viewer.
 - **Pre-request & Test scripts** with a sandboxed `pm.*` API and a Test Results tab.
 - **Import** Postman v2.1 / OpenAPI 3 / cURL, **export** Postman v2.1, **code generation**
-  (cURL/JS/Python/Node/Go), **paste-cURL**, command palette, keyboard shortcuts.
+  (cURL/HTTP/JS/Python, twelve more languages with a pack), **paste-cURL**, command palette,
+  keyboard shortcuts.
 - **Collection runner** for a collection, a folder or any ticked set of requests: iterations, a
   CSV/JSON data file, stop-on-failure and a JSON report.
+- **Send to terminal**: one click runs the request with curl (or HTTPie, wget, PowerShell) in a new
+  terminal window, with variables, auth, cookies, proxy and TLS settings carried over.
+- **Variable import and export** — Postman, JSON, `.env` and CSV — for globals, environments and
+  collections.
+- **Plugins**: feature packs (themes, snippets, code-generation languages, UI languages, protocols)
+  and sandboxed code plugins —
+  see the [plugin guide](docs/plugin-guide/README.md) ([по-русски](docs/plugin-guide/README.ru.md)).
 - **Find & replace across the workspace**: search collections, environments and variables by field
   group, then replace exactly the matches you confirm.
 - **Local-first**: everything persists as JSON in `userData`; API keys are encrypted via Electron
@@ -53,6 +61,24 @@ npm run build:linux  # package Linux AppImage + deb
 
 Packaged artifacts land in `release/`. macOS/Windows builds are unsigned by default — configure
 signing/notarization in `electron-builder.yml` for distribution.
+
+### Releases
+
+Pushing a version tag builds Windows, macOS and Linux packages in GitHub Actions
+(`.github/workflows/release.yml`) and publishes them. Without Actions, publish from each OS:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+npm run release        # builds for this OS and uploads to the v1.2.0 release
+```
+
+`npm run release` needs `gh auth login` or a `GH_TOKEN` with write access to the repository
+contents; run it on Windows, macOS and Linux to add each system's files to the same release.
+On Windows, `npm run release -- --linux-tar` also builds a portable Linux `tar.gz` (the script
+restores the execute bits NTFS cannot store); `.deb`, `.AppImage` and the macOS `.dmg` need a
+Linux / macOS machine or the CI workflow.
+Release notes are read from `docs/releases/v<version>.md`.
 
 ### Test & lint
 

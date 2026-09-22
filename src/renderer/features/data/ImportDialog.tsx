@@ -6,6 +6,7 @@ import { useCollections } from '@renderer/store/collections'
 import { useEnvironments } from '@renderer/store/environments'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
+import { mergeVariables } from '@shared/var-import'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
@@ -85,6 +86,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       let collections = 0
       let requests = 0
       let environments = 0
+      let globals = 0
       for (const r of results) {
         warnings.push(...r.warnings)
         if (r.kind === 'collection' && r.collection) {
@@ -93,6 +95,10 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         } else if (r.kind === 'environment' && r.environment) {
           addEnvironment(r.environment)
           environments++
+        } else if (r.kind === 'globals' && r.variables) {
+          const envStore = useEnvironments.getState()
+          envStore.setGlobalVars(mergeVariables(envStore.globals.variables, r.variables, 'merge').variables)
+          globals += r.variables.length
         } else if (r.kind === 'request' && r.request) {
           openNew(r.request)
           requests++
@@ -101,7 +107,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       const parts = [
         collections && trf('коллекций: {n}', { n: collections }) + (totalReqs ? ` ${trf('(запросов: {n})', { n: totalReqs })}` : ''),
         requests && trf('запросов: {n}', { n: requests }),
-        environments && trf('сред: {n}', { n: environments })
+        environments && trf('сред: {n}', { n: environments }),
+        globals && trf('глобальных переменных: {n}', { n: globals })
       ].filter(Boolean)
       showToast(
         trf('Импортировано ({what})', { what: parts.join(', ') || tr('данные') }) +

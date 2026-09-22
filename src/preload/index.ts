@@ -136,10 +136,17 @@ const api: RelayApi = {
     return () => ipcRenderer.removeListener(channel, handler)
   },
 
+  /* ---- send to terminal ---- */
+  terminalTools: () => ipcRenderer.invoke(IPC.terminal.tools),
+  terminalRun: (tool: string, spec: unknown, notes: string[]) => ipcRenderer.invoke(IPC.terminal.run, tool, spec, notes),
+  terminalPreview: (tool: string, spec: unknown) => ipcRenderer.invoke(IPC.terminal.preview, tool, spec),
+
   /* ---- feature plugins (bundled capability packs) ---- */
   featuresList: () => ipcRenderer.invoke(IPC.features.list),
   featuresSetEnabled: (id: string, enabled: boolean) => ipcRenderer.invoke(IPC.features.setEnabled, id, enabled),
   featuresLocale: (code: string) => ipcRenderer.invoke(IPC.features.locale, code),
+  featuresSnippets: () => ipcRenderer.invoke(IPC.features.snippets),
+  featuresThemes: () => ipcRenderer.invoke(IPC.features.themes),
   featuresOpenFolder: () => ipcRenderer.invoke(IPC.features.openFolder),
   featuresInstall: () => ipcRenderer.invoke(IPC.features.install),
   featuresRemove: (id: string) => ipcRenderer.invoke(IPC.features.remove, id),

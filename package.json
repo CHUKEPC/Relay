@@ -1,6 +1,6 @@
 {
   "name": "relay-api-client",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Relay — a cross-platform desktop API client with a built-in multi-provider AI assistant.",
   "productName": "Relay",
   "author": {
@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx --cache && npm run typecheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",

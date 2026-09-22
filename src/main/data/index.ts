@@ -99,6 +99,9 @@ export function importData(kind: ImportKind, text: string): ImportResult[] {
     case 'environment': {
       const obj = parseJsonOrThrow(text, 'Postman environment')
       const environment = importPostmanEnvironment(obj)
+      // A globals export belongs in the global variables, not in a new
+      // environment that merely happens to be called "Globals".
+      if (obj._postman_variable_scope === 'globals') return [{ kind: 'globals', variables: environment.variables, warnings: [] }]
       return [{ kind: 'environment', environment, warnings: [] }]
     }
     case 'openapi':

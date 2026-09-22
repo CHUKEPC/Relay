@@ -15,6 +15,7 @@ import { ScriptsTab } from './ScriptsTab'
 import { ExamplesTab } from './ExamplesTab'
 import { RequestMeta } from './RequestMeta'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
+import { TerminalButton } from './TerminalButton'
 
 import { tr } from '@renderer/lib/i18n'
 
@@ -104,7 +105,7 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
   const activeSubTab: Tab = tabs.some((t) => t.id === subTab) ? subTab : 'params'
 
   return (
-    <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }} data-undo-tab={tab.id}>
+    <div className="req-builder" data-undo-tab={tab.id}>
       <div style={{ display: 'contents' }} data-undo-field="meta">
         <RequestMeta tab={tab} />
       </div>
@@ -154,9 +155,10 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
           >
             <Icon name="code2" size={14} /> {tr('Код')} </button>
         )}
+        {httpLike && <TerminalButton tabId={tab.id} beforeRun={activateThis} onShowCode={() => setCodeGenOpen(true)} />}
       </div>
       <CodeGenModal open={codeGenOpen} onOpenChange={setCodeGenOpen} />
-      <div style={{ overflowY: 'auto', minHeight: 0 }} data-undo-field={activeSubTab}>
+      <div className="req-tab-body" data-undo-field={activeSubTab}>
         {activeSubTab === 'params' && (
           <>
             <KVTable rows={req.query} onChange={(query) => patch({ query })} showDescription scope={scope} keyPlaceholder="param" />

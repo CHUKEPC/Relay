@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { useSettings } from '@renderer/store/settings'
+import { useCap, useFeatures } from '@renderer/store/features'
+import { useUi } from '@renderer/store/ui'
+import { themeVariant, type PackTheme } from '@shared/pack-data'
 
 import { tr, trf } from '@renderer/lib/i18n'
 type ThemeChoice = SettingsDoc['theme']
@@ -32,11 +35,40 @@ interface BrandPresetDef {
   dot?: boolean
 }
 
-const BRAND_PRESETS: BrandPresetDef[] = [
-  { id: 'relay', label: 'Relay', bg: ['#1a1b1f', '#26272d'], accent: 'oklch(0.62 0.19 264)' },
-  { id: 'postman', label: 'Postman', bg: ['#1c1c1c', '#262626'], accent: '#ff6c37', dot: true },
-  { id: 'insomnia', label: 'Insomnia', bg: ['#13111c', '#201c2e'], accent: '#9b6dff', dot: true }
-]
+// Postman, Insomnia and the rest live in the theme pack since 1.2.
+const BRAND_PRESETS: BrandPresetDef[] = [{ id: 'relay', label: 'Relay', bg: ['#1a1b1f', '#26272d'], accent: 'oklch(0.62 0.19 264)' }]
+
+/** UI mode a theme card previews: the chosen mode, or the OS mode for 'system'. */
+function previewMode(choice: ThemeChoice): 'light' | 'dark' {
+  if (choice !== 'system') return choice
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function PackThemeCard({ theme, mode, on, card }: { theme: PackTheme; mode: 'light' | 'dark'; on: boolean; card: Record<string, unknown> }) {
+  const { vars } = themeVariant(theme, mode)
+  const accent = theme.accent ?? vars['--accent'] ?? 'oklch(0.62 0.19 264)'
+  const only = theme.variants.dark && theme.variants.light ? null : theme.variants.dark ? 'dark' : 'light'
+  return (
+    <div className={`theme-swatch${on ? ' on' : ''}`} title={theme.description ? tr(theme.description) : theme.name} aria-pressed={on} {...card}>
+      <div className="prev">
+        <div style={{ width: '38%', background: vars['--bg-1'] ?? vars['--bg-0'] }} />
+        <div style={{ flex: 1, background: vars['--bg-2'] ?? vars['--bg-0'], display: 'grid', placeItems: 'center' }}>
+          <div style={{ width: 28, height: 6, borderRadius: 3, background: accent }} />
+        </div>
+      </div>
+      <div className="lab">
+        <span className="accent-dot" style={{ background: accent }} />
+        <span className="pack-theme-name">{tr(theme.name)}</span>
+        {only && (
+          <span className="pack-theme-mode" title={only === 'dark' ? tr('Только тёмный вариант') : tr('Только светлый вариант')}>
+            <Icon name={only === 'dark' ? 'moon' : 'sun'} size={11} />
+          </span>
+        )}
+        {on && <Icon name="check" size={13} style={{ color: 'var(--accent)' }} />}
+      </div>
+    </div>
+  )
+}
 
 const CUSTOM_VAR_ROWS: { key: string; label: string }[] = [
   { key: '--bg-0', label: 'Фон' },
@@ -161,6 +193,10 @@ export function AppearanceSection(): JSX.Element {
   const setAccentColor = useSettings((s) => s.setAccentColor)
   const setThemePreset = useSettings((s) => s.setThemePreset)
   const setCustomTheme = useSettings((s) => s.setCustomTheme)
+  const setPackTheme = useSettings((s) => s.setPackTheme)
+  const packTheme = useSettings((s) => s.settings.packTheme)
+  const hasThemePack = useCap('themes.extra')
+  const packThemes = useFeatures((s) => s.themes)
 
   const [draft, setDraft] = useState<CustomTheme | null>(null)
 
@@ -220,7 +256,7 @@ export function AppearanceSection(): JSX.Element {
         ))}
       </div>
 
-      <div className="set-group-label">{tr('Фирменные темы')}</div>
+      <div className="set-group-label">{tr('Оформление')}</div>
       <div className="theme-swatch-row brand-theme-row">
         {BRAND_PRESETS.map((p) => (
           <div
@@ -258,6 +294,35 @@ export function AppearanceSection(): JSX.Element {
           </div>
         </div>
       </div>
+
+      {hasThemePack ? (
+        packThemes.length > 0 && (
+          <>
+            <div className="set-group-label">{tr('Темы из плагинов')}</div>
+            <div className="theme-swatch-row brand-theme-row pack-theme-row">
+              {packThemes.map((t) => (
+                <PackThemeCard
+                  key={t.id}
+                  theme={t}
+                  mode={previewMode(theme)}
+                  on={themePreset === 'pack' && packTheme === t.id}
+                  card={selectCard(() => setPackTheme(t))}
+                />
+              ))}
+            </div>
+          </>
+        )
+      ) : (
+        <div className="pack-theme-hint">
+          <Icon name="info" size={13} />
+          <span>
+            {tr('Postman, Insomnia, Dracula, Nord и другие темы — в плагине «Пак тем оформления».')}{' '}
+            <button className="link-btn" onClick={() => useUi.getState().openSettings('plugins')}>
+              {tr('Открыть «Плагины»')}
+            </button>
+          </span>
+        </div>
+      )}
 
       {themePreset === 'custom' && draft && (
         <div className="custom-theme-editor">

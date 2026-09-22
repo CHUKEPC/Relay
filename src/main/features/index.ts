@@ -15,6 +15,7 @@ import type { StorageManager } from '../storage'
 import { mt } from '../i18n'
 import { readInstallChoice } from './install'
 import { MANIFEST, MANIFEST_MAX_BYTES, stageSource, validateManifest } from './pack-source'
+import { PACK_DATA_MAX_BYTES, parseSnippets, parseThemes, SNIPPETS_FILE, THEMES_FILE, type PackSnippet, type PackTheme } from '@shared/pack-data'
 
 const LOCALE_MAX_BYTES = 512 * 1024
 const LOCALE_CODE = /^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/
@@ -111,6 +112,8 @@ export class FeatureRegistry {
       this.storage.set('features', { ...doc, enabled: { ...this.enabled }, appliedInstall: choice.stamp })
       await this.applyInstallLocale(choice.locale)
     }
+    // After the installer choice, which rewrites the features document.
+    await this.migrate(folders)
     return this.list()
   }
 
@@ -222,6 +225,80 @@ export class FeatureRegistry {
     return this.list()
   }
 
+  /**
+   * Parsed data file of every enabled pack that has `cap`. The path is built
+   * from the pack folder and a fixed file name, never from the renderer.
+   */
+  private readPackData<T>(cap: Capability, file: string, parse: (raw: unknown, packId: string) => T[]): T[] {
+    const out: T[] = []
+    for (const p of this.plugins) {
+      if (!p.enabled || p.error || !p.capabilities.includes(cap)) continue
+      const path = join(p.dir, file)
+      if (!resolve(path).startsWith(resolve(p.dir))) continue
+      try {
+        if (!existsSync(path) || statSync(path).size > PACK_DATA_MAX_BYTES) continue
+        out.push(...parse(JSON.parse(readFileSync(path, 'utf8')) as unknown, p.id))
+      } catch (err) {
+        console.error(`[features] ${p.id}/${file} is not readable:`, (err as Error).message)
+      }
+    }
+    return out
+  }
+
+  /** Script snippets of all enabled snippet packs (first pack wins on an id clash). */
+  snippets(): PackSnippet[] {
+    const seen = new Set<string>()
+    return this.readPackData('snippets', SNIPPETS_FILE, (raw) => parseSnippets(raw)).filter((s) => !seen.has(s.id) && !!seen.add(s.id))
+  }
+
+  /** Colour themes of all enabled theme packs, ids namespaced by pack. */
+  themes(): PackTheme[] {
+    return this.readPackData('themes.extra', THEMES_FILE, parseThemes)
+  }
+
+  /**
+   * 1.2 moved built-in things into packs: the script snippets, the Postman /
+   * Insomnia themes and most code-generation languages. Someone upgrading must
+   * not lose them, so once per installation: an existing user gets the snippet
+   * and code-generation packs added, and a Postman/Insomnia theme is carried
+   * over to the theme pack (which is added too). A fresh install is left alone —
+   * packs stay opt-in there.
+   */
+  private async migrate(folders: string[]): Promise<void> {
+    try {
+      const doc = await this.storage.get('features')
+      const done = new Set(doc.migrations ?? [])
+      const pending = ['packs-1.2', 'codegen-1.2'].filter((m) => !done.has(m))
+      if (!pending.length) return
+      const settings = await this.storage.get('settings')
+      const existingUser = !!(settings.onboardingDone || settings.onboardingVersion)
+      const add = (id: string): void => {
+        if (!folders.includes(id) || id in this.enabled) return
+        this.enabled[id] = true
+        const p = this.plugins.find((x) => x.id === id)
+        if (p && !p.error) p.enabled = true
+      }
+      // The code-generation languages beyond cURL/HTTP/JS/Python moved into a pack too.
+      if (pending.includes('codegen-1.2') && existingUser) add('codegen-languages')
+      if (pending.includes('packs-1.2') && existingUser) add('script-snippets')
+
+      const legacy = settings.themePreset === 'postman' || settings.themePreset === 'insomnia' ? settings.themePreset : null
+      if (pending.includes('packs-1.2') && legacy) {
+        add('theme-pack')
+        const theme = this.themes().find((t) => t.id === `theme-pack/${legacy}`)
+        this.storage.set(
+          'settings',
+          theme
+            ? { ...settings, themePreset: 'pack', packTheme: theme.id, packThemeData: theme }
+            : { ...settings, themePreset: 'relay', packTheme: null, packThemeData: null }
+        )
+      }
+      this.storage.set('features', { ...doc, enabled: { ...this.enabled }, migrations: [...done, ...pending] })
+    } catch (err) {
+      console.error('[features] migration failed:', (err as Error).message)
+    }
+  }
+
   /** Locale codes offered by enabled language plugins. */
   extraLocales(): string[] {
     const out = new Set<string>()
@@ -270,6 +347,14 @@ export function registerFeatureHandlers(
   ipcMain.handle(IPC.features.list, async () => (registry.isLoaded() ? registry.list() : registry.load()))
   ipcMain.handle(IPC.features.setEnabled, (_e, id: string, enabled: boolean) => registry.setEnabled(id, enabled))
   ipcMain.handle(IPC.features.locale, (_e, code: string) => registry.readLocale(code))
+  ipcMain.handle(IPC.features.snippets, async () => {
+    if (!registry.isLoaded()) await registry.load()
+    return registry.snippets()
+  })
+  ipcMain.handle(IPC.features.themes, async () => {
+    if (!registry.isLoaded()) await registry.load()
+    return registry.themes()
+  })
   ipcMain.handle(IPC.features.install, async (): Promise<PickResult | null> => {
     // The path always comes from a native dialog, never from the renderer. It
     // opens in the plugins folder — where the packs that ship with the app wait

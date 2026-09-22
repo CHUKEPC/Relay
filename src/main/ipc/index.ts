@@ -18,6 +18,7 @@ import { registerGrpcHandlers } from '../grpc'
 import { registerSqliteHandlers } from '../sqlite'
 import { checkForUpdate } from '../update'
 import { FeatureRegistry, registerFeatureHandlers } from '../features'
+import { registerTerminalHandlers } from '../terminal'
 
 /** Max size of a user-picked text file the renderer may read (runner data files). */
 const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
@@ -64,6 +65,9 @@ export function registerIpc(ctx: IpcContext): void {
     (spec, signal) => plugins.runRequestHooks(spec, signal)
   )
   registerCookieHandlers(ipcMain, cookieJar)
+
+  // «Send to terminal»: curl / HTTPie / wget / PowerShell in a real terminal.
+  registerTerminalHandlers(ipcMain)
 
   // Realtime: WebSocket + SSE clients (streamed to the renderer per connection).
   registerRealtimeHandlers(ipcMain)

@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
+import { themeVariant, type PackTheme } from '@shared/pack-data'
 import { defaultSettingsDoc } from './defaults'
 import { persist } from './persist'
+import { onPackThemes } from './features'
 import '@renderer/styles/feat-themes.css'
 
 type ThemeChoice = SettingsDoc['theme']
@@ -15,6 +17,8 @@ interface SettingsState {
   setAccentHue: (hue: number) => void
   setAccentColor: (hex: string | null) => void
   setThemePreset: (preset: ThemePreset) => void
+  /** Use a theme from an enabled theme pack. */
+  setPackTheme: (theme: PackTheme) => void
   setCustomTheme: (theme: CustomTheme | null) => void
   update: (patch: Partial<SettingsDoc>) => void
 }
@@ -66,30 +70,36 @@ function applyCustomVars(vars: Record<string, string>): void {
   }
 }
 
+/** Palette of the selected pack theme for the current UI mode, if one is selected. */
+function packPalette(doc: SettingsDoc): { mode: 'light' | 'dark'; vars: Record<string, string> } | null {
+  if (doc.themePreset !== 'pack' || !doc.packThemeData) return null
+  return themeVariant(doc.packThemeData, resolveTheme(doc.theme))
+}
+
 /** Apply the full appearance (theme base, preset attr, accent, custom vars). */
 function applyAppearance(doc: SettingsDoc): 'light' | 'dark' {
   const custom = doc.themePreset === 'custom' ? doc.customTheme : null
-  const resolved = custom ? custom.base : resolveTheme(doc.theme)
+  const pack = custom ? null : packPalette(doc)
+  // A pack theme without a variant for the chosen mode keeps its own base.
+  const resolved = custom ? custom.base : pack ? pack.mode : resolveTheme(doc.theme)
   const root = document.documentElement
   root.setAttribute('data-theme', resolved)
-  if (doc.themePreset === 'relay') root.removeAttribute('data-preset')
-  else root.setAttribute('data-preset', doc.themePreset)
+  // 'postman' / 'insomnia' are pre-1.2 values; their palettes now come from the
+  // theme pack, so they render as the Relay look until migrated.
+  if (doc.themePreset === 'custom' || (doc.themePreset === 'pack' && pack)) root.setAttribute('data-preset', doc.themePreset)
+  else root.removeAttribute('data-preset')
   // Accent first, custom vars LAST: a custom theme (e.g. a plugin theme) that
   // defines --accent* must win over the derived accent, not be clobbered by it.
   if (doc.accentColor) applyAccentColor(doc.accentColor)
   else applyAccentHue(doc.accentHue)
   if (custom) applyCustomVars(custom.vars)
+  else if (pack) applyCustomVars(pack.vars)
   else clearCustomVars()
   document.body.classList.add('theming')
   window.setTimeout(() => document.body.classList.remove('theming'), 400)
+  // Code editors re-derive their colours from the tokens just applied.
+  window.dispatchEvent(new Event('relay:appearance'))
   return resolved
-}
-
-/** Built-in preset accents; 'relay' returns to the hue-derived accent. */
-const PRESET_ACCENT: Partial<Record<ThemePreset, string | null>> = {
-  relay: null,
-  postman: '#ff6c37',
-  insomnia: '#7400e1'
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
@@ -129,7 +139,21 @@ export const useSettings = create<SettingsState>((set, get) => ({
 
   setThemePreset: (preset) => {
     const settings = { ...get().settings, themePreset: preset }
-    if (preset in PRESET_ACCENT) settings.accentColor = PRESET_ACCENT[preset] ?? null
+    // Back to the Relay look also means back to its hue-derived accent.
+    if (preset === 'relay') settings.accentColor = null
+    const resolved = applyAppearance(settings)
+    set({ settings, resolvedTheme: resolved })
+    persist('settings', settings)
+  },
+
+  setPackTheme: (theme) => {
+    const settings: SettingsDoc = {
+      ...get().settings,
+      themePreset: 'pack',
+      packTheme: theme.id,
+      packThemeData: theme,
+      accentColor: theme.accent ?? null
+    }
     const resolved = applyAppearance(settings)
     set({ settings, resolvedTheme: resolved })
     persist('settings', settings)
@@ -150,7 +174,8 @@ export const useSettings = create<SettingsState>((set, get) => ({
       patch.accentHue != null ||
       patch.accentColor !== undefined ||
       patch.themePreset ||
-      patch.customTheme !== undefined
+      patch.customTheme !== undefined ||
+      patch.packThemeData !== undefined
     ) {
       const resolved = applyAppearance(settings)
       set({ resolvedTheme: resolved })
@@ -158,6 +183,24 @@ export const useSettings = create<SettingsState>((set, get) => ({
     persist('settings', settings)
   }
 }))
+
+/**
+ * Keep a pack theme in step with its pack: refresh the stored copy when the
+ * pack file changed, and fall back to the Relay look when the pack (or the
+ * theme in it) is gone — a switched-off pack must leave no trace.
+ */
+onPackThemes((themes) => {
+  const { settings } = useSettings.getState()
+  if (settings.themePreset !== 'pack') return
+  const theme = themes.find((t) => t.id === settings.packTheme)
+  if (!theme) {
+    useSettings.getState().update({ themePreset: 'relay', packTheme: null, packThemeData: null, accentColor: null })
+    return
+  }
+  if (JSON.stringify(theme) !== JSON.stringify(settings.packThemeData)) {
+    useSettings.getState().update({ packThemeData: theme })
+  }
+})
 
 /** Re-apply theme when the OS theme changes and we're in 'system' mode. */
 let unwatchTheme: (() => void) | null = null

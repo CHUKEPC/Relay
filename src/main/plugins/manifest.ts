@@ -4,6 +4,7 @@
  * an error string and the plugin can never be enabled (docs/PLUGINS.md §3.1).
  */
 import { PLUGIN_API_VERSION } from '@shared/types'
+import { isSafeCssValue } from '@shared/pack-data'
 import type {
   PluginButtonContribution,
   PluginCommandContribution,
@@ -37,16 +38,7 @@ const CONFIG_TYPES = new Set(['string', 'secret'])
  * `url(...)` beacons or spoof chrome the moment a component renders. Only
  * color-shaped and simple numeric values pass; everything else is dropped.
  */
-const CSS_HEX_RE = /^#[0-9a-f]{3,8}$/i
-const CSS_COLOR_FN_RE = /^(rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|hwb)\(\s*[\d.,%\s/+-]*\)$/i
-const CSS_KEYWORD_RE = /^[a-z][a-z-]{0,30}$/i
-const CSS_LENGTH_RE = /^-?\d+(\.\d+)?(px|rem|em|%)?$/
-
-export function isSafeCssValue(value: string): boolean {
-  const s = value.trim()
-  if (!s || s.length > 200) return false
-  return CSS_HEX_RE.test(s) || CSS_COLOR_FN_RE.test(s) || CSS_KEYWORD_RE.test(s) || CSS_LENGTH_RE.test(s)
-}
+export { isSafeCssValue }
 
 const MAX_BUTTONS = 10
 const MAX_PANELS = 10

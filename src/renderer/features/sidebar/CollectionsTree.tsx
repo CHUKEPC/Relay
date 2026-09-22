@@ -1,5 +1,6 @@
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { useEffect, useRef, useState } from 'react'
+import { EnvEditor } from '@renderer/features/environments/EnvEditor'
 import type { DragEvent } from 'react'
 import type { CollectionNode } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
@@ -161,6 +162,8 @@ function TreeNode({
   const [open, setOpen] = useState(depth < 2)
   // Where a dragged node would land relative to this row (drives the indicator).
   const [dropIntent, setDropIntent] = useState<DropIntent | null>(null)
+  // Collection variables editor (Postman's collection scope), opened from the menu.
+  const [varsOpen, setVarsOpen] = useState(false)
   const openSaved = useTabs((s) => s.openSaved)
   const activeSavedId = useTabs((s) => s.doc.tabs.find((t) => t.id === s.doc.activeTabId)?.savedRequestId ?? null)
   const store = useCollections()
@@ -322,6 +325,11 @@ function TreeNode({
         </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => useRunner.getState().openFor(node)}>
           <Icon name="play" size={14} /> {tr('Запустить')} </ContextMenu.Item>
+        {node.type === 'collection' && (
+          <ContextMenu.Item className="pop-item" onSelect={() => setVarsOpen(true)}>
+            <Icon name="env" size={14} /> {tr('Переменные коллекции')}
+          </ContextMenu.Item>
+        )}
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item
           className="pop-item"
@@ -402,6 +410,7 @@ function TreeNode({
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
+      {varsOpen && <EnvEditor target={{ kind: 'collection', id: node.id }} onClose={() => setVarsOpen(false)} />}
       {node.type !== 'request' && expanded && (
         <div className="tree-children">
           {node.children.map((c) => (

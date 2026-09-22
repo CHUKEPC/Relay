@@ -6,6 +6,8 @@ import { useCollections } from '@renderer/store/collections'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { tr, trf } from '@renderer/lib/i18n'
+import { VarImportDialog } from './VarImportDialog'
+import { VarExportDialog } from './VarExportDialog'
 import '@renderer/styles/feat-varpeek.css'
 
 type Source = 'collection' | 'environment' | 'global'
@@ -36,6 +38,8 @@ export function VariablePeek(): JSX.Element {
   const globals = useEnvironments((s) => s.globals)
   const tabs = useTabs((s) => s.doc)
   const [query, setQuery] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
 
   const activeEnv = env.environments.find((e) => e.id === env.activeEnvironmentId) ?? null
@@ -72,6 +76,7 @@ export function VariablePeek(): JSX.Element {
   }
 
   return (
+    <>
     <Popover.Root>
       <Popover.Trigger asChild>
         <button className="icon-btn nodrag" title={tr('Показать переменные текущего окружения')}>
@@ -92,6 +97,12 @@ export function VariablePeek(): JSX.Element {
               }}
             >
               <Icon name="pencil" size={12} /> {tr('Изменить')}
+            </button>
+            <button className="btn ghost varpeek-edit" title={tr('Импорт переменных (Postman, JSON, .env, CSV)')} onClick={() => setImportOpen(true)}>
+              <Icon name="download" size={12} /> {tr('Импорт')}
+            </button>
+            <button className="btn ghost varpeek-edit" title={tr('Экспорт переменных (Postman, JSON, .env, CSV)')} onClick={() => setExportOpen(true)}>
+              <Icon name="upload" size={12} /> {tr('Экспорт')}
             </button>
           </div>
 
@@ -141,5 +152,8 @@ export function VariablePeek(): JSX.Element {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    <VarImportDialog open={importOpen} onOpenChange={setImportOpen} />
+    <VarExportDialog open={exportOpen} onOpenChange={setExportOpen} />
+    </>
   )
 }

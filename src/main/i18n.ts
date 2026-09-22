@@ -17,7 +17,11 @@ const EN: Record<string, string> = {
   'Все файлы': 'All files',
   'Установить плагин из .zip': 'Install a plugin from a .zip',
   Запрос: 'Request',
-  'Плагин {name}: {message}': 'Plugin {name}: {message}'
+  'Плагин {name}: {message}': 'Plugin {name}: {message}',
+  'Системный прокси не передаётся — задайте его переменными окружения терминала.':
+    'The system proxy is not passed on — set it with the terminal environment variables.',
+  'Клиентские сертификаты не передаются.': 'Client certificates are not passed on.',
+  'Не найден эмулятор терминала (gnome-terminal, konsole, xterm…).': 'No terminal emulator found (gnome-terminal, konsole, xterm…).'
 }
 
 let lang = 'ru'
@@ -34,4 +38,9 @@ export function mt(source: string): string {
 /** `mt` with `{name}` placeholders, mirroring the renderer's `trf`. */
 export function mtf(source: string, vars: Record<string, string | number>): string {
   return mt(source).replace(/\{(\w+)\}/g, (m, key: string) => (key in vars ? String(vars[key]) : m))
+}
+
+/** The UI language the renderer last reported. */
+export function mainLanguage(): string {
+  return lang
 }

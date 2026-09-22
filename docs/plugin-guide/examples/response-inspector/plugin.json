@@ -1,0 +1,13 @@
+{
+  "id": "response-inspector",
+  "name": "Response Inspector",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "A response tab with a summary of the last response: status, timing, size and the largest headers.",
+  "author": "you",
+  "main": "main.js",
+  "permissions": ["response:read"],
+  "contributes": {
+    "panels": [{ "id": "summary", "label": "Сводка", "icon": "info", "location": "response-tab" }]
+  }
+}

@@ -5,7 +5,7 @@
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.1.1'
+export const APP_VERSION = '1.2.0'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'
@@ -15,6 +15,12 @@ export const FEEDBACK_TELEGRAM = 'https://t.me/PowerOfNsk'
  * is published — the checker must fail gracefully.
  */
 export const UPDATE_REPO = 'CHUKEPC/Relay'
+
+/** The plugin authoring guide on GitHub (docs/plugin-guide), per UI language. */
+export const PLUGIN_GUIDE_URL = {
+  ru: `https://github.com/${UPDATE_REPO}/blob/main/docs/plugin-guide/README.ru.md`,
+  en: `https://github.com/${UPDATE_REPO}/blob/main/docs/plugin-guide/README.md`
+}
 
 export const STORAGE_VERSION = 1
 

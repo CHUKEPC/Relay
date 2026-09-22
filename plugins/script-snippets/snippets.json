@@ -1,0 +1,242 @@
+{
+  "snippets": [
+    {
+      "id": "status-200",
+      "group": "Status code",
+      "label": "Code is 200",
+      "phase": "test",
+      "code": "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});\n"
+    },
+    {
+      "id": "status-2xx",
+      "group": "Status code",
+      "label": "Successful 2xx",
+      "phase": "test",
+      "code": "pm.test(\"Status is 2xx\", function () {\n    pm.expect(pm.response.code).to.be.below(300);\n    pm.expect(pm.response.code).to.be.at.least(200);\n});\n"
+    },
+    {
+      "id": "status-code-name",
+      "group": "Status code",
+      "label": "Code name has string",
+      "phase": "test",
+      "code": "pm.test(\"Status code name has string\", function () {\n    pm.response.to.have.status(\"OK\");\n});\n"
+    },
+    {
+      "id": "method-expected-status",
+      "group": "HTTP methods",
+      "label": "Status fits the method (RFC 9110)",
+      "phase": "test",
+      "code": "const expected = {\n    GET: [200, 206, 304],\n    HEAD: [200],\n    POST: [200, 201, 202],\n    PUT: [200, 201, 204],\n    PATCH: [200, 204],\n    DELETE: [200, 202, 204],\n    OPTIONS: [200, 204]\n}[pm.request.method] || [200];\n\npm.test(pm.request.method + \" returns \" + expected.join(\"/\"), function () {\n    pm.expect(expected).to.include(pm.response.code);\n});\n"
+    },
+    {
+      "id": "post-created",
+      "group": "HTTP methods",
+      "label": "POST: 201 Created with Location",
+      "phase": "test",
+      "code": "pm.test(\"Resource created (201)\", function () {\n    pm.response.to.have.status(201);\n    pm.response.to.have.header(\"Location\");\n});\n"
+    },
+    {
+      "id": "post-save-id",
+      "group": "HTTP methods",
+      "label": "POST: save the new id to the environment",
+      "phase": "test",
+      "code": "// Takes the id from the JSON body, or the last segment of Location.\nconst location = pm.response.headers.get(\"Location\") || \"\";\nlet id;\ntry {\n    id = pm.response.json().id;\n} catch (e) {}\nif (id == null && location) id = location.split(\"/\").filter(Boolean).pop();\nif (id != null) pm.environment.set(\"resourceId\", String(id));\n"
+    },
+    {
+      "id": "get-json-array",
+      "group": "HTTP methods",
+      "label": "GET: 200 and a non-empty JSON array",
+      "phase": "test",
+      "code": "pm.test(\"List is returned\", function () {\n    pm.response.to.have.status(200);\n    const data = pm.response.json();\n    pm.expect(Array.isArray(data)).to.equal(true);\n    pm.expect(data.length).to.be.above(0);\n});\n"
+    },
+    {
+      "id": "put-replaced",
+      "group": "HTTP methods",
+      "label": "PUT: 200 or 204",
+      "phase": "test",
+      "code": "pm.test(\"Resource replaced\", function () {\n    pm.expect([200, 204]).to.include(pm.response.code);\n});\n"
+    },
+    {
+      "id": "patch-field-changed",
+      "group": "HTTP methods",
+      "label": "PATCH: the field has the new value",
+      "phase": "test",
+      "code": "// Put the value you send first, e.g. pm.environment.set(\"expectedName\", \"New name\").\npm.test(\"Field was updated\", function () {\n    pm.expect(pm.response.json().name).to.eql(pm.environment.get(\"expectedName\"));\n});\n"
+    },
+    {
+      "id": "delete-no-content",
+      "group": "HTTP methods",
+      "label": "DELETE: 204 No Content",
+      "phase": "test",
+      "code": "pm.test(\"Resource deleted (204)\", function () {\n    pm.response.to.have.status(204);\n    pm.expect(pm.response.text()).to.equal(\"\");\n});\n"
+    },
+    {
+      "id": "delete-gone",
+      "group": "HTTP methods",
+      "label": "DELETE: the resource is gone (GET → 404)",
+      "phase": "test",
+      "code": "// DELETE is idempotent: after it, the resource must answer 404.\npm.sendRequest(pm.request.url, function (err, res) {\n    pm.test(\"Deleted resource returns 404\", function () {\n        pm.expect(err).to.equal(null);\n        pm.expect(res.code).to.equal(404);\n    });\n});\n"
+    },
+    {
+      "id": "head-no-body",
+      "group": "HTTP methods",
+      "label": "HEAD: no body, has Content-Length",
+      "phase": "test",
+      "code": "pm.test(\"HEAD has headers only\", function () {\n    pm.response.to.have.status(200);\n    pm.expect(pm.response.text()).to.equal(\"\");\n    pm.response.to.have.header(\"Content-Length\");\n});\n"
+    },
+    {
+      "id": "options-allow",
+      "group": "HTTP methods",
+      "label": "OPTIONS: Allow lists the methods",
+      "phase": "test",
+      "code": "pm.test(\"Allow header lists GET\", function () {\n    const allow = pm.response.headers.get(\"Allow\") || pm.response.headers.get(\"Access-Control-Allow-Methods\") || \"\";\n    pm.expect(allow.toUpperCase()).to.include(\"GET\");\n});\n"
+    },
+    {
+      "id": "response-time-200ms",
+      "label": "Response time is less than 200ms",
+      "phase": "test",
+      "code": "pm.test(\"Response time < 200ms\", function () {\n    pm.expect(pm.response.responseTime).to.be.below(200);\n});\n",
+      "group": "Response time"
+    },
+    {
+      "id": "body-contains-string",
+      "group": "Response body",
+      "label": "Contains string",
+      "phase": "test",
+      "code": "pm.test(\"Body contains string\", function () {\n    pm.expect(pm.response.text()).to.include(\"string\");\n});\n"
+    },
+    {
+      "id": "body-equals-string",
+      "group": "Response body",
+      "label": "Is equal to a string",
+      "phase": "test",
+      "code": "pm.test(\"Body is equal to a string\", function () {\n    pm.expect(pm.response.text()).to.eql(\"response_body_string\");\n});\n"
+    },
+    {
+      "id": "body-json-value-check",
+      "group": "Response body",
+      "label": "JSON value check",
+      "phase": "test",
+      "code": "const json = pm.response.json();\npm.test(\"JSON value check\", function () {\n    pm.expect(json.value).to.eql(100);\n});\n"
+    },
+    {
+      "id": "body-to-json",
+      "group": "Response body",
+      "label": "Convert response to JSON",
+      "phase": "test",
+      "code": "const json = pm.response.json();\nconsole.log(json);\n"
+    },
+    {
+      "id": "header-content-type-present",
+      "group": "Response headers",
+      "label": "Content-Type is present",
+      "phase": "test",
+      "code": "pm.test(\"Content-Type is present\", function () {\n    pm.response.to.have.header(\"Content-Type\");\n});\n"
+    },
+    {
+      "id": "header-content-type-check",
+      "group": "Response headers",
+      "label": "Content-Type header check",
+      "phase": "test",
+      "code": "pm.test(\"Content-Type header check\", function () {\n    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");\n});\n"
+    },
+    {
+      "id": "env-set",
+      "label": "Set an environment variable",
+      "phase": "pre",
+      "code": "pm.environment.set(\"key\", \"value\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "env-get",
+      "label": "Get an environment variable",
+      "phase": "both",
+      "code": "pm.environment.get(\"key\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "global-set",
+      "label": "Set a global variable",
+      "phase": "both",
+      "code": "pm.globals.set(\"key\", \"value\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "save-response-field-to-var",
+      "label": "Save a response field to a variable",
+      "phase": "test",
+      "code": "const json = pm.response.json();\npm.environment.set(\"token\", json.token);\n",
+      "group": "Variables"
+    },
+    {
+      "id": "env-clear",
+      "label": "Clear an environment variable",
+      "phase": "both",
+      "code": "pm.environment.unset(\"key\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "collection-var-set",
+      "label": "Set a collection variable",
+      "phase": "both",
+      "code": "pm.collectionVariables.set(\"key\", \"value\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "local-var-set",
+      "label": "Set a local (this-run-only) variable",
+      "phase": "both",
+      "code": "pm.variables.set(\"key\", \"value\");\n",
+      "group": "Variables"
+    },
+    {
+      "id": "pre-set-timestamp",
+      "group": "Pre-request",
+      "label": "Set a timestamp variable",
+      "phase": "pre",
+      "code": "pm.environment.set(\"timestamp\", String(Date.now()));\n"
+    },
+    {
+      "id": "pre-guid",
+      "group": "Pre-request",
+      "label": "Generate a unique id",
+      "phase": "pre",
+      "code": "const id = \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, function (c) {\n    const r = Math.random() * 16 | 0;\n    return (c === \"x\" ? r : (r & 0x3 | 0x8)).toString(16);\n});\npm.variables.set(\"requestId\", id);\n"
+    },
+    {
+      "id": "pre-require-var",
+      "group": "Pre-request",
+      "label": "Stop if a variable is missing",
+      "phase": "pre",
+      "code": "if (!pm.environment.get(\"baseUrl\")) {\n    throw new Error(\"Set baseUrl in the active environment first\");\n}\n"
+    },
+    {
+      "id": "send-request-get",
+      "label": "Send a request (pm.sendRequest)",
+      "phase": "both",
+      "code": "pm.sendRequest(\"https://postman-echo.com/get\", function (err, res) {\n    if (err) { console.log(err); return; }\n    console.log(res.json());\n});\n",
+      "group": "Requests & cookies"
+    },
+    {
+      "id": "send-request-post",
+      "label": "Send a POST request with a JSON body",
+      "phase": "both",
+      "code": "pm.sendRequest({\n    url: \"https://postman-echo.com/post\",\n    method: \"POST\",\n    header: { \"Content-Type\": \"application/json\" },\n    body: { mode: \"raw\", raw: JSON.stringify({ hello: \"world\" }) }\n}, function (err, res) {\n    if (err) { console.log(err); return; }\n    pm.expect(res.code).to.eql(200);\n});\n",
+      "group": "Requests & cookies"
+    },
+    {
+      "id": "cookies-get",
+      "label": "Read a cookie value (pm.cookies.get)",
+      "phase": "both",
+      "code": "const sessionId = pm.cookies.get(\"sessionid\");\nconsole.log(sessionId);\n",
+      "group": "Requests & cookies"
+    },
+    {
+      "id": "cookies-jar-set",
+      "label": "Set a cookie in the jar",
+      "phase": "both",
+      "code": "pm.cookies.jar().set({ name: \"token\", value: \"abc123\", domain: \"example.com\", path: \"/\" });\n",
+      "group": "Requests & cookies"
+    }
+  ]
+}

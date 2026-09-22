@@ -4,9 +4,13 @@ import { makeId } from '@shared/id'
 import { Icon } from '@renderer/components/Icon'
 import { Modal } from '@renderer/components/primitives'
 import { useEnvironments } from '@renderer/store/environments'
+import { useCollections } from '@renderer/store/collections'
+import { VarImportDialog } from './VarImportDialog'
+import { VarExportDialog } from './VarExportDialog'
 
-import { tr } from '@renderer/lib/i18n'
-export type EnvEditorTarget = { kind: 'env'; id: string } | { kind: 'globals' } | null
+import { tr, trf } from '@renderer/lib/i18n'
+/** `collection` edits the variables of a collection or folder (Postman's collection scope). */
+export type EnvEditorTarget = { kind: 'env'; id: string } | { kind: 'globals' } | { kind: 'collection'; id: string } | null
 
 export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClose: () => void }) {
   const env = useEnvironments((s) => s.env)
@@ -14,39 +18,69 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
   const setEnvVars = useEnvironments((s) => s.setEnvVars)
   const setGlobalVars = useEnvironments((s) => s.setGlobalVars)
   const renameEnv = useEnvironments((s) => s.renameEnv)
+  const folder = useCollections((s) => {
+    if (target?.kind !== 'collection') return null
+    const found = s.locate(target.id)
+    return found && found.node.type !== 'request' ? found.node : null
+  })
+  const [importOpen, setImportOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   if (!target) return null
 
   const isGlobals = target.kind === 'globals'
-  const environment = !isGlobals ? env.environments.find((e) => e.id === target.id) : undefined
-  const vars: VariableDef[] = isGlobals ? globals.variables : environment?.variables ?? []
-  const title = isGlobals ? tr('Глобальные переменные') : tr(environment?.name || 'Среда')
+  const environment = target.kind === 'env' ? env.environments.find((e) => e.id === target.id) : undefined
+  const vars: VariableDef[] = isGlobals ? globals.variables : target.kind === 'collection' ? folder?.variables ?? [] : environment?.variables ?? []
+  const title = isGlobals
+    ? tr('Глобальные переменные')
+    : target.kind === 'collection'
+      ? trf('Переменные «{name}»', { name: folder?.name ?? '' })
+      : tr(environment?.name || 'Среда')
 
   const commit = (next: VariableDef[]) => {
     if (isGlobals) setGlobalVars(next)
+    else if (target.kind === 'collection') folder && useCollections.getState().updateFolderMeta(folder.id, { variables: withIds(next) })
     else if (environment) setEnvVars(environment.id, next)
   }
 
   return (
     <Modal open onOpenChange={(o) => !o && onClose()} width={680} title={undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <Icon name="env" size={18} style={{ color: 'var(--m-get)' }} />
-        {isGlobals ? (
-          <div style={{ fontSize: 15, fontWeight: 650 }}>{title}</div>
-        ) : (
+        <Icon name={target.kind === 'collection' ? 'folder' : 'env'} size={18} style={{ color: 'var(--m-get)' }} />
+        {target.kind === 'env' ? (
           <input
             className="input"
             style={{ height: 32, maxWidth: 280, fontWeight: 600 }}
             value={environment?.name ?? ''}
             onChange={(e) => environment && renameEnv(environment.id, e.target.value)}
           />
+        ) : (
+          <div style={{ fontSize: 15, fontWeight: 650 }}>{title}</div>
         )}
         <div style={{ flex: 1 }} />
+        <button className="btn ghost" onClick={() => setImportOpen(true)} title={tr('Импорт из Postman, JSON, .env или CSV')}>
+          <Icon name="download" size={14} /> {tr('Импорт')}
+        </button>
+        <button className="btn ghost" onClick={() => setExportOpen(true)} title={tr('Экспорт в Postman, JSON, .env или CSV')}>
+          <Icon name="upload" size={14} /> {tr('Экспорт')}
+        </button>
         <button className="btn" onClick={onClose}> {tr('Готово')} </button>
       </div>
+      {target.kind === 'collection' && (
+        <div className="env-editor-note">
+          {tr('Действуют во всех запросах этой коллекции и важнее переменных окружения и глобальных с тем же именем. Выше них — только локальные переменные сценария (pm.variables).')}
+        </div>
+      )}
       <VarTable vars={vars} onChange={commit} />
+      <VarImportDialog open={importOpen} onOpenChange={setImportOpen} target={target} />
+      <VarExportDialog open={exportOpen} onOpenChange={setExportOpen} target={target} />
     </Modal>
   )
+}
+
+/** Imported / hand-added collection variables need stable ids like environment ones. */
+function withIds(vars: VariableDef[]): VariableDef[] {
+  return vars.map((v) => (v.id ? v : { ...v, id: makeId('var') }))
 }
 
 function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: VariableDef[]) => void }) {

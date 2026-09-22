@@ -16,7 +16,10 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
   'auth.advanced': 'Схемы Digest, JWT, OAuth 1.0, AWS, Hawk, Akamai, ASAP, NTLM',
   'i18n.extra': 'Дополнительные языки интерфейса',
   'panes.extra': 'До 16 панелей вместо четырёх',
-  'backup.extra': 'Резервные копии в ZIP и SQLite'
+  'backup.extra': 'Резервные копии в ZIP и SQLite',
+  snippets: 'Панель готовых сниппетов на вкладке Scripts',
+  'themes.extra': 'Дополнительные темы в Настройках → Внешний вид',
+  'codegen.extra': 'Ещё 12 языков в «Код»: Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie, wget'
 }
 
 const LOCALE_NAME: Record<string, string> = {

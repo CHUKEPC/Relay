@@ -1,0 +1,15 @@
+{
+  "id": "hello-toast",
+  "name": "Hello Toast",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "The smallest code plugin: a titlebar button that shows a toast.",
+  "author": "you",
+  "main": "main.js",
+  "permissions": [],
+  "contributes": {
+    "buttons": [
+      { "id": "hello", "label": "Привет", "icon": "sparkle", "location": "titlebar", "tooltip": "Сказать привет" }
+    ]
+  }
+}

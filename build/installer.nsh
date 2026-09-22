@@ -40,6 +40,12 @@
   LangString relayPackPanes 1049 "Дополнительные панели (до 16 вместо 4)"
   LangString relayPackBackup 1033 "Extra backup formats (SQLite, ZIP)"
   LangString relayPackBackup 1049 "Дополнительные форматы резервных копий (SQLite, ZIP)"
+  LangString relayPackSnippets 1033 "Script snippets (ready-made tests for every HTTP method)"
+  LangString relayPackSnippets 1049 "Сниппеты для скриптов (готовые тесты для каждого метода HTTP)"
+  LangString relayPackThemes 1033 "Theme pack (Postman, Insomnia, Dracula, Nord and more)"
+  LangString relayPackThemes 1049 "Пак тем оформления (Postman, Insomnia, Dracula, Nord и другие)"
+  LangString relayPackCodegen 1033 "More code-generation languages (Node, Go, Java, C#, PHP and others)"
+  LangString relayPackCodegen 1049 "Больше языков генерации кода (Node, Go, Java, C#, PHP и другие)"
 !endif
 
 !ifdef BUILD_UNINSTALLER
@@ -76,6 +82,9 @@
     Var relayPackLanguagesBox
     Var relayPackPanesBox
     Var relayPackBackupBox
+    Var relayPackSnippetsBox
+    Var relayPackThemesBox
+    Var relayPackCodegenBox
     Var relayPacks
     Var relayPacksChosen
 
@@ -166,26 +175,32 @@
         Abort
       ${endif}
 
-      ${NSD_CreateCheckbox} 0 0u 100% 12u "$(relayPackWebsocket)"
+      ${NSD_CreateCheckbox} 0 0u 100% 10u "$(relayPackWebsocket)"
       Pop $relayPackWebsocketBox
-      ${NSD_CreateCheckbox} 0 13u 100% 12u "$(relayPackSse)"
+      ${NSD_CreateCheckbox} 0 10u 100% 10u "$(relayPackSse)"
       Pop $relayPackSseBox
-      ${NSD_CreateCheckbox} 0 26u 100% 12u "$(relayPackSocketio)"
+      ${NSD_CreateCheckbox} 0 20u 100% 10u "$(relayPackSocketio)"
       Pop $relayPackSocketioBox
-      ${NSD_CreateCheckbox} 0 39u 100% 12u "$(relayPackMqtt)"
+      ${NSD_CreateCheckbox} 0 30u 100% 10u "$(relayPackMqtt)"
       Pop $relayPackMqttBox
-      ${NSD_CreateCheckbox} 0 52u 100% 12u "$(relayPackGrpc)"
+      ${NSD_CreateCheckbox} 0 40u 100% 10u "$(relayPackGrpc)"
       Pop $relayPackGrpcBox
-      ${NSD_CreateCheckbox} 0 65u 100% 12u "$(relayPackAi)"
+      ${NSD_CreateCheckbox} 0 50u 100% 10u "$(relayPackAi)"
       Pop $relayPackAiBox
-      ${NSD_CreateCheckbox} 0 78u 100% 12u "$(relayPackAuth)"
+      ${NSD_CreateCheckbox} 0 60u 100% 10u "$(relayPackAuth)"
       Pop $relayPackAuthBox
-      ${NSD_CreateCheckbox} 0 91u 100% 12u "$(relayPackLanguages)"
+      ${NSD_CreateCheckbox} 0 70u 100% 10u "$(relayPackLanguages)"
       Pop $relayPackLanguagesBox
-      ${NSD_CreateCheckbox} 0 104u 100% 12u "$(relayPackPanes)"
+      ${NSD_CreateCheckbox} 0 80u 100% 10u "$(relayPackPanes)"
       Pop $relayPackPanesBox
-      ${NSD_CreateCheckbox} 0 117u 100% 12u "$(relayPackBackup)"
+      ${NSD_CreateCheckbox} 0 90u 100% 10u "$(relayPackBackup)"
       Pop $relayPackBackupBox
+      ${NSD_CreateCheckbox} 0 100u 100% 10u "$(relayPackSnippets)"
+      Pop $relayPackSnippetsBox
+      ${NSD_CreateCheckbox} 0 110u 100% 10u "$(relayPackThemes)"
+      Pop $relayPackThemesBox
+      ${NSD_CreateCheckbox} 0 120u 100% 10u "$(relayPackCodegen)"
+      Pop $relayPackCodegenBox
 
       nsDialogs::Show
     FunctionEnd
@@ -240,6 +255,15 @@
       Call relayCollectPack
       Push $relayPackBackupBox
       Push "backup-formats"
+      Call relayCollectPack
+      Push $relayPackSnippetsBox
+      Push "script-snippets"
+      Call relayCollectPack
+      Push $relayPackThemesBox
+      Push "theme-pack"
+      Call relayCollectPack
+      Push $relayPackCodegenBox
+      Push "codegen-languages"
       Call relayCollectPack
       StrCpy $relayPacksChosen "1"
     FunctionEnd

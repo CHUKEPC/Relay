@@ -22,7 +22,10 @@ export const CAPABILITIES = [
   'auth.advanced',
   'i18n.extra',
   'panes.extra',
-  'backup.extra'
+  'backup.extra',
+  'snippets',
+  'themes.extra',
+  'codegen.extra'
 ] as const
 
 export type Capability = (typeof CAPABILITIES)[number]

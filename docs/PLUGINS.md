@@ -1,5 +1,9 @@
 # Relay Plugin System
 
+> Writing a plugin? Start with the step-by-step guide and examples in
+> [`docs/plugin-guide`](plugin-guide/README.md) ([по-русски](plugin-guide/README.ru.md)). This
+> document describes the architecture and the security model behind it.
+
 > Status: **v1 + P1 + P2 — implemented**. On top of v1/P1 (buttons, themes, request/response
 > hooks, panels, storage, secret config, per-host net editor, apiVersion): command-palette
 > commands, `clipboard` + `history:read` permissions, `workspace`/`collection` events,
@@ -522,6 +526,13 @@ plugins/
 ├── advanced-auth/plugin.json      → auth.advanced
 ├── extra-panes/plugin.json        → panes.extra
 ├── backup-formats/plugin.json     → backup.extra
+├── codegen-languages/plugin.json  → codegen.extra
+├── script-snippets/
+│   ├── plugin.json                → snippets
+│   └── snippets.json
+├── theme-pack/
+│   ├── plugin.json                → themes.extra
+│   └── themes.json
 └── extra-languages/
     ├── plugin.json                → i18n.extra
     └── locales/{de,es}.json
@@ -550,6 +561,8 @@ reinstalling.
 | renderer store + `useCap()` | `src/renderer/store/features.ts` |
 | settings UI | `src/renderer/features/settings/FeaturePacks.tsx` |
 | translation engine | `src/renderer/lib/i18n.ts`, `src/renderer/locales/en.json` |
+| snippet / theme data files: parsing, colour allowlist, variants | `src/shared/pack-data.ts` (unit-tested with the bundled packs) |
+| theme application, Monaco palette | `src/renderer/store/settings.ts`, `src/renderer/lib/monaco.ts` |
 
 Packs are **opt-in**: a pack that has never been switched on stays off, so a fresh install is
 the base app and nothing else. The Windows installer asks which packs to enable and writes the

@@ -155,3 +155,30 @@ describe('formdata is handled best-effort with a note', () => {
     })
   }
 })
+
+describe('placeholders and empty bodies', () => {
+  it('keeps {{var}} placeholders in query values readable', () => {
+    const req = baseRequest({ query: [{ key: 'q', value: '{{$guid}}', enabled: true }, { key: 'name', value: 'a b', enabled: true }] })
+    for (const id of ALL_TARGETS) {
+      const code = generateCode(id, req)
+      // Kotlin escapes `$` inside its string templates.
+      expect(code, id).toMatch(/q=\{\{\\?\$guid\}\}/)
+      expect(code, id).not.toContain('%7B%7B')
+      expect(code, id).toContain('name=a%20b')
+    }
+  })
+
+  it('keeps placeholders in urlencoded fields', () => {
+    const req = baseRequest({ method: 'POST', body: { type: 'urlencoded', items: [{ key: 'token', value: '{{token}}', enabled: true }] } })
+    expect(generateCode('curl', req)).toContain('token={{token}}')
+  })
+
+  it('treats an empty raw body as no body', () => {
+    const req = baseRequest({ body: { type: 'raw', language: 'json', text: '' } })
+    const curl = generateCode('curl', req)
+    expect(curl).not.toContain('-d ')
+    expect(curl).not.toContain('Content-Type')
+    expect(generateCode('http', req)).not.toContain('Content-Type')
+    expect(generateCode('python', req)).not.toContain('data=')
+  })
+})

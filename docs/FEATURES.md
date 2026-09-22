@@ -97,9 +97,10 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Import**: Postman Collection v2.1, OpenAPI 3.x **and Swagger 2.0** (JSON **or YAML**),
       **HAR**, **Insomnia v4**, and cURL (paste or file).
 - [x] **Export**: collection as Postman v2.1 JSON; full workspace as a portable `.sqlite`.
-- [x] **Code generation** (14 targets): cURL, JavaScript (fetch), Python (requests), Node, Go,
-      **Java (OkHttp), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), Swift (URLSession),
-      Kotlin (OkHttp), Rust (reqwest), PowerShell, HTTPie**.
+- [x] **Code generation** (16 targets): cURL, raw HTTP, JavaScript (fetch) and Python (requests) in
+      the core; Node, Go, **Java (OkHttp), C# (HttpClient), PHP (cURL), Ruby (Net::HTTP), Swift
+      (URLSession), Kotlin (OkHttp), Rust (reqwest), PowerShell, HTTPie, wget** with the
+      `codegen-languages` pack (1.2).
 - [x] **Paste cURL** into the URL bar to auto-fill the whole request.
 - [x] **~50 dynamic variables** (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomIP}}`,
       `{{$randomDatetime}}`, … the Postman set) plus `{{$guid}}/{{$timestamp}}/{{$counter}}`.
@@ -298,6 +299,43 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       history — exported to **JSON** in the base app, plus **ZIP** (one file per kind) and **SQLite**
       from the «Дополнительные форматы резервных копий» pack. Restore either merges into the current
       workspace or replaces it (two-step confirmation). Secrets are never written into a backup.
+
+- [x] **Send to terminal** (1.2): the «cURL» split button next to «Код» runs the resolved request —
+      variables, inherited auth incl. Digest/NTLM and AWS/OAuth 1/Hawk/Akamai signatures, body, jar
+      cookies, proxy, CA bundle, SSL switch, redirects, timeout — with curl, HTTPie, wget (macOS/Linux)
+      or PowerShell (Windows) in a new terminal window (Windows Terminal/PowerShell, Terminal.app,
+      gnome-terminal/konsole/xterm/…). The main process builds the script from the RequestSpec (the
+      renderer can't hand it a shell command), quotes for the target syntax (a curl config file, POSIX
+      shell, PowerShell), writes it into a private temp folder the script deletes after the run, and
+      prints what the terminal run does differently (scripts not executed, unresolved variables).
+      Code generation gains raw **HTTP** and **wget** targets and «Выполнить в терминале».
+- [x] **Variable import** (1.2) into globals, an environment (existing or new) or a collection:
+      Postman environment / globals / collection exports, JSON (flat, nested Insomnia-style, or a list of
+      entries), `.env` and CSV/TSV/semicolon tables; merge or replace with a preview of what is added
+      and updated. Entry points: the «Среды» sidebar head, the variable peek (eye) and every variable
+      editor. The general «Импорт» now puts a Postman globals export into the globals.
+- [x] **Variable export** (1.2) of globals, an environment or a collection's variables as a Postman
+      environment/globals export, flat JSON, `.env` or CSV — each reads back through the import.
+      Secret values are written empty unless explicitly included; copy or save with a preview.
+      Entry points: the «Среды» sidebar head, an environment's context menu, the variable peek and
+      every variable editor.
+- [x] **Collection variables editor** (1.2): collection context menu → «Переменные коллекции».
+- [x] **Theme pack** (1.2, pack `theme-pack`, capability `themes.extra`): 15 themes — Postman and
+      Insomnia (moved out of the core), Dracula, Nord, Tokyo Night, Catppuccin, Gruvbox, Solarized, One
+      Dark, Synthwave ’84, Rosé Pine and four originals. Themes are data (`themes.json`, dark and/or
+      light variants, colour allowlist); Monaco editors derive their palette from the active theme.
+- [x] **Script snippets as a pack** (1.2, `script-snippets`, capability `snippets`): the snippets
+      panel is data from `snippets.json`, grouped, with checks for every HTTP method. Upgrading from
+      1.1 adds the pack and carries a Postman/Insomnia theme over to the theme pack (one-time migration).
+- [x] **Code-generation languages as a pack** (1.2, `codegen-languages`, capability `codegen.extra`):
+      «Код» keeps cURL, HTTP, JavaScript and Python; the other 12 targets come with the pack. Existing
+      installations get the pack added on upgrade (migration `codegen-1.2`).
+- [x] **Resizable editors** (1.2): the request builder fills its pane, so dragging the response divider
+      resizes the body, GraphQL and script editors instead of scrolling a fixed 300 px box.
+- [x] **Plugin authoring guide** (1.2): `docs/plugin-guide` (EN + RU) with five tested examples,
+      linked at the bottom of Settings → Плагины.
+- [x] **Local release script** (1.2): `npm run release` builds for the current OS and creates or
+      updates the GitHub release through the API — for when GitHub Actions is unavailable.
 
 ## Out of scope (needs a hosted backend)
 

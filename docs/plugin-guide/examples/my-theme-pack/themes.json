@@ -1,0 +1,63 @@
+{
+  "themes": [
+    {
+      "id": "mint",
+      "name": "Mint",
+      "description": "Dark teal with a mint accent.",
+      "accent": "#2ee6a8",
+      "variants": {
+        "dark": {
+          "--bg-0": "#0d1716",
+          "--bg-1": "#111e1c",
+          "--bg-2": "#162624",
+          "--bg-3": "#1e3330",
+          "--bg-hover": "rgb(46 230 168 / 0.06)",
+          "--bg-active": "rgb(46 230 168 / 0.1)",
+          "--line": "rgb(200 255 235 / 0.1)",
+          "--line-2": "rgb(200 255 235 / 0.16)",
+          "--tx-0": "#e8fbf4",
+          "--tx-1": "#b4d8cc",
+          "--tx-2": "#7fa89b",
+          "--tx-3": "#5b7f74",
+          "--code-bg": "#0b1413",
+          "--c-key": "#7cd4ff",
+          "--c-str": "#2ee6a8",
+          "--c-num": "#ffcf6e",
+          "--c-bool": "#c9a3ff",
+          "--c-null": "#5b7f74",
+          "--c-punct": "#7fa89b",
+          "--accent-fg": "#06110e"
+        }
+      }
+    },
+    {
+      "id": "paper",
+      "name": "Paper",
+      "description": "Warm off-white paper with ink-blue text.",
+      "accent": "#2f5bd3",
+      "variants": {
+        "light": {
+          "--bg-0": "#f4f1ea",
+          "--bg-1": "#f8f6f0",
+          "--bg-2": "#fffdf8",
+          "--bg-3": "#f6f3ec",
+          "--bg-hover": "rgb(30 40 80 / 0.045)",
+          "--bg-active": "rgb(30 40 80 / 0.08)",
+          "--line": "rgb(30 40 80 / 0.12)",
+          "--line-2": "rgb(30 40 80 / 0.19)",
+          "--tx-0": "#1f2640",
+          "--tx-1": "#454c66",
+          "--tx-2": "#6b7189",
+          "--tx-3": "#9398aa",
+          "--code-bg": "#f7f4ee",
+          "--c-key": "#2f5bd3",
+          "--c-str": "#2e7d4f",
+          "--c-num": "#b35a12",
+          "--c-bool": "#8a3fb5",
+          "--c-null": "#9398aa",
+          "--c-punct": "#6b7189"
+        }
+      }
+    }
+  ]
+}

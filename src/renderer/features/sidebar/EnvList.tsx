@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { useEnvironments } from '@renderer/store/environments'
 import { EnvEditor, type EnvEditorTarget } from '@renderer/features/environments/EnvEditor'
+import { VarImportDialog, type VarTarget } from '@renderer/features/environments/VarImportDialog'
+import { VarExportDialog } from '@renderer/features/environments/VarExportDialog'
 
 import { tr, trf } from '@renderer/lib/i18n'
 export function EnvList() {
@@ -12,11 +14,25 @@ export function EnvList() {
   const duplicateEnv = useEnvironments((s) => s.duplicateEnv)
   const deleteEnv = useEnvironments((s) => s.deleteEnv)
   const [editor, setEditor] = useState<EnvEditorTarget>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  // null = closed; undefined = open without a preset source
+  const [exportTarget, setExportTarget] = useState<VarTarget | null | undefined>(null)
 
   return (
     <>
       <div className="side-section-head">
         <span>{tr('Среды')}</span>
+        <button
+          className="icon-btn"
+          style={{ width: 22, height: 22, marginLeft: 'auto' }}
+          title={tr('Импорт переменных (Postman, JSON, .env, CSV)')}
+          onClick={() => setImportOpen(true)}
+        >
+          <Icon name="download" size={14} />
+        </button>
+        <button className="icon-btn" style={{ width: 22, height: 22 }} title={tr('Экспорт переменных (Postman, JSON, .env, CSV)')} onClick={() => setExportTarget(undefined)}>
+          <Icon name="upload" size={14} />
+        </button>
         <button
           className="icon-btn"
           style={{ width: 22, height: 22 }}
@@ -63,6 +79,8 @@ export function EnvList() {
               <ContextMenu.Content className="popover" style={{ position: 'relative', minWidth: 170 }}>
                 <ContextMenu.Item className="pop-item" onSelect={() => setEditor({ kind: 'env', id: e.id })}>
                   <Icon name="settings" size={14} /> {tr('Переменные')} </ContextMenu.Item>
+                <ContextMenu.Item className="pop-item" onSelect={() => setExportTarget({ kind: 'env', id: e.id })}>
+                  <Icon name="upload" size={14} /> {tr('Экспорт…')} </ContextMenu.Item>
                 <ContextMenu.Item className="pop-item" onSelect={() => duplicateEnv(e.id)}>
                   <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
                 <ContextMenu.Separator className="pop-sep" />
@@ -87,6 +105,8 @@ export function EnvList() {
       </div>
 
       <EnvEditor target={editor} onClose={() => setEditor(null)} />
+      <VarImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <VarExportDialog open={exportTarget !== null} onOpenChange={(o) => !o && setExportTarget(null)} target={exportTarget ?? undefined} />
     </>
   )
 }

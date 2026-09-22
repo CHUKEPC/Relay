@@ -1,0 +1,7 @@
+{
+  "id": "my-theme-pack",
+  "name": "My Theme Pack",
+  "description": "Two example themes: Mint (dark) and Paper (light).",
+  "version": "1.0.0",
+  "capabilities": ["themes.extra"]
+}

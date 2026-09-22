@@ -49,6 +49,8 @@ import type {
   WsConnectSpec
 } from './types'
 import type { FeaturePluginInfo } from './features'
+import type { PackSnippet, PackTheme } from './pack-data'
+import type { TerminalOs, TerminalTool } from './terminal-command'
 
 /** Persisted enable/disable state of the bundled feature plugins (app-level). */
 export interface FeaturePluginsDoc {
@@ -57,6 +59,8 @@ export interface FeaturePluginsDoc {
   enabled: Record<string, boolean>
   /** mtime of the install-config.json whose pack selection was already applied */
   appliedInstall?: number
+  /** one-time data migrations already applied (e.g. 'packs-1.2') */
+  migrations?: string[]
 }
 
 /** Channel names, grouped. Use these constants on both ends. */
@@ -148,6 +152,12 @@ export const IPC = {
     delete: 'workspace:delete',
     switch: 'workspace:switch'
   },
+  /** «Send to terminal»: run the request with curl / HTTPie / wget / PowerShell */
+  terminal: {
+    tools: 'terminal:tools',
+    run: 'terminal:run',
+    preview: 'terminal:preview'
+  },
   /** feature plugins bundled with the app (declarative capability packs) */
   features: {
     list: 'features:list',
@@ -156,6 +166,10 @@ export const IPC = {
     install: 'features:install',
     remove: 'features:remove',
     openFolder: 'features:openFolder',
+    /** script snippets merged from every enabled `snippets` pack */
+    snippets: 'features:snippets',
+    /** colour themes merged from every enabled `themes.extra` pack */
+    themes: 'features:themes',
     /** broadcast: the enabled set changed (sent to every window) */
     changed: 'features:changed'
   },
@@ -361,12 +375,27 @@ export interface RelayApi {
   /** Subscribe to gRPC events for a call. Returns an unsubscribe fn. */
   onGrpc(connId: string, cb: (event: RealtimeEvent) => void): () => void
 
+  /* ---- send to terminal ---- */
+  /** Command-line clients this OS offers, and which of them are installed. */
+  terminalTools(): Promise<{ os: TerminalOs; tools: { id: TerminalTool; label: string; available: boolean }[] }>
+  /**
+   * Open a terminal and run the resolved request there with `tool`. `notes`
+   * are printed before the output (e.g. unresolved variables).
+   */
+  terminalRun(tool: TerminalTool, spec: RequestSpec, notes: string[]): Promise<{ ok: true; preview: string } | { ok: false; error: string }>
+  /** The command that `terminalRun` would execute, for display. */
+  terminalPreview(tool: TerminalTool, spec: RequestSpec): Promise<string>
+
   /* ---- feature plugins bundled in `plugins/` (docs/PLUGINS.md §10) ---- */
   featuresList(): Promise<FeaturePluginInfo[]>
   /** Turn a bundled feature pack on or off. Returns the updated list. */
   featuresSetEnabled(id: string, enabled: boolean): Promise<FeaturePluginInfo[]>
   /** Read one UI locale catalog contributed by an enabled language pack. */
   featuresLocale(code: string): Promise<Record<string, string> | null>
+  /** Script snippets from the enabled snippet packs (empty without one). */
+  featuresSnippets(): Promise<PackSnippet[]>
+  /** Colour themes from the enabled theme packs (empty without one). */
+  featuresThemes(): Promise<PackTheme[]>
   /** Reveal the bundled plugins folder; false when it is missing. */
   featuresOpenFolder(): Promise<boolean>
   /**
