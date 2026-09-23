@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs'
-import { readFile, writeFile, rename } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { StorageKey, StorageMap } from '@shared/ipc-contract'
 
@@ -33,11 +33,37 @@ export class JsonStore {
     if (this.pending.has(key)) return this.pending.get(key) as StorageMap[K]
     try {
       const raw = await readFile(this.fileFor(key), 'utf8')
-      return JSON.parse(raw) as StorageMap[K]
+      const parsed: unknown = JSON.parse(raw)
+      // Every document is an envelope object; anything else (a truncated file
+      // that still parses, a hand-edited array) would reach the renderer as a
+      // malformed document. Treat it like a corrupt file.
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        console.error(`[storage] ${key}.json is not a document object`)
+        await this.quarantine(key)
+        return null
+      }
+      return parsed as StorageMap[K]
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
       console.error(`[storage] failed to read ${key}:`, (err as Error).message)
+      // The caller re-seeds a key that fails to load and saves the seed right
+      // back over it, so an unreadable document would be destroyed. Move it
+      // aside first: the data is still on disk and can be repaired by hand.
+      await this.quarantine(key)
       return null
+    }
+  }
+
+  /** Move an unreadable document out of the way (best effort, never throws). */
+  private async quarantine(key: string): Promise<void> {
+    const file = this.fileFor(key)
+    const target = `${file}.corrupt-${Date.now()}`
+    try {
+      await rename(file, target)
+      console.error(`[storage] ${key}.json was unreadable — kept as ${target}`)
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT') console.error(`[storage] failed to preserve ${key}:`, (err as Error).message)
     }
   }
 
@@ -77,6 +103,8 @@ export class JsonStore {
       await rename(tmp, file)
     } catch (err) {
       console.error(`[storage] failed to write ${key}:`, (err as Error).message)
+      // Don't leave a half-written temp file behind in userData.
+      await rm(tmp, { force: true }).catch(() => undefined)
     }
   }
 

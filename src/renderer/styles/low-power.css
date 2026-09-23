@@ -1,0 +1,72 @@
+/*
+ * Low-power mode (Settings → General → «Режим для слабых ПК»).
+ *
+ * Everything here is paint work the UI can do without: compositing layers,
+ * blur, shadows and animation. No rule hides or disables a control — the app
+ * looks flatter and behaves exactly the same. The attribute is set on <html>
+ * once at startup by the settings store.
+ */
+
+/* Blur is the single most expensive effect in the app: every frame re-samples
+   the area behind the surface. Flat backgrounds cost nothing. */
+[data-low-power] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Transitions and animations keep the compositor busy long after a click.
+   The spinner is the exception: it is the only feedback that work is running. */
+[data-low-power] *:not(.spin):not(.spin *) {
+  transition: none !important;
+  animation: none !important;
+  will-change: auto !important;
+}
+
+/* Gradients are re-rasterized on every resize; a flat surface is enough. */
+[data-low-power] .titlebar,
+[data-low-power] .sidebar,
+[data-low-power] .popover,
+[data-low-power] .modal,
+[data-low-power] .card,
+[data-low-power] .resp-head {
+  background-image: none !important;
+}
+
+/* Rounded + translucent surfaces force an extra layer; opaque is cheaper. */
+[data-low-power] .popover,
+[data-low-power] .modal {
+  background-color: var(--bg-1) !important;
+}
+
+/* The plain editor that replaces Monaco in this mode. */
+.plain-editor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 10px 12px;
+  background: var(--bg-0);
+  color: var(--tx-1);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 20px;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.plain-editor[data-wrap='on'] {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.plain-editor::placeholder {
+  color: var(--tx-3);
+}

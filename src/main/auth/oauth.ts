@@ -10,9 +10,9 @@
  * Client credentials can be presented either in the request body (default) or as
  * an HTTP Basic `Authorization` header (`clientAuth: 'basic'`).
  *
- * The interactive browser redirect for authorization_code, and the user-facing
- * step of the device flow, happen out-of-band; the UI collects the code / device
- * code and calls back here. `fetchDeviceCode` performs RFC 8628 step 1.
+ * The browser step of authorization_code lives in `oauth-authorize.ts` (loopback
+ * redirect, state, PKCE challenge); the user-facing step of the device flow
+ * happens out-of-band. `fetchDeviceCode` performs RFC 8628 step 1.
  */
 import type { IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'

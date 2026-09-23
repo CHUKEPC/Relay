@@ -11,6 +11,7 @@ import './styles/base.css'
 import './styles/components.css'
 import './styles/ai.css'
 import './styles/extra.css'
+import './styles/low-power.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

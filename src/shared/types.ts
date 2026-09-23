@@ -241,7 +241,8 @@ export interface RunOptions {
   requestId: string
 }
 
-export type HttpErrorKind = 'dns' | 'connect' | 'tls' | 'timeout' | 'abort' | 'protocol' | 'unknown'
+/** `auth`: the configured auth could not be produced (bad key, bad JSON), so nothing was sent. */
+export type HttpErrorKind = 'dns' | 'connect' | 'tls' | 'timeout' | 'abort' | 'protocol' | 'auth' | 'unknown'
 
 export interface HttpError {
   kind: HttpErrorKind
@@ -295,6 +296,12 @@ export interface ResponseResult {
   /** the final URL after redirects */
   finalUrl: string
   error?: HttpError
+  /**
+   * Set when an OAuth 2.0 token was refreshed on a 401 during this send. The
+   * renderer stores it on the request, so the next send uses it instead of
+   * paying for another refresh round-trip.
+   */
+  refreshedAuth?: { accessToken: string; refreshToken?: string }
 }
 
 /* ============================================================
@@ -354,8 +361,24 @@ export interface RequestModel {
   wsMessage?: string
   /** saved realtime message templates (WS/Socket.IO/MQTT) */
   messageTemplates?: MessageTemplate[]
-  /** per-request MQTT QoS + Last-Will config (mqtt mode) */
-  mqtt?: { qos?: 0 | 1 | 2; lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean } }
+  /** per-request MQTT connection config (mqtt mode) */
+  mqtt?: {
+    qos?: 0 | 1 | 2
+    lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean }
+    /** broker credentials — `{{variables}}` are resolved at connect time */
+    username?: string
+    password?: string
+    clientId?: string
+    /** topics subscribed to right after connecting, comma or newline separated */
+    subscribeTopics?: string
+  }
+  /** WebSocket / Socket.IO connection options (websocket, socketio modes) */
+  realtime?: {
+    /** WebSocket subprotocols (Sec-WebSocket-Protocol), comma separated */
+    protocols?: string
+    /** Socket.IO events to listen for, comma separated; empty = every event */
+    listenEvents?: string
+  }
   /** gRPC mode config (proto text, target, selected service/method, message) */
   grpc?: GrpcConfig
   /** pre-request and test scripts (P1) */
@@ -478,7 +501,6 @@ export interface SettingsDoc extends DocEnvelope {
   appearanceSnapshot?: { themePreset: ThemePreset; customTheme: CustomTheme | null } | null
   /** actionId -> combo like 'mod+shift+k' */
   keybindings: Record<string, string>
-  updateCheckEnabled: boolean
   onboardingDone: boolean
   /** app version whose tour was completed — a new major re-offers it once */
   onboardingVersion?: string
@@ -501,8 +523,15 @@ export interface SettingsDoc extends DocEnvelope {
   caPath?: string
   /** allow HTTP/2 negotiation for outbound requests */
   http2: boolean
-  /** run without the GPU: less video memory, softer scrolling (needs a restart) */
-  disableHardwareAcceleration: boolean
+  /**
+   * Low-power mode for weak machines: draw without the GPU and drop everything
+   * that costs memory or cycles but no features — animations, shadows, blur, and
+   * the Monaco editor (a plain editor with the same `{{` autocomplete takes its
+   * place). Every feature keeps working. Needs a restart.
+   */
+  lowPowerMode: boolean
+  /** @deprecated 1.2 name of `lowPowerMode`; read once to migrate */
+  disableHardwareAcceleration?: boolean
 }
 
 /* ============================================================
@@ -987,6 +1016,26 @@ export interface OAuthTokenResult {
 }
 
 /** Device Authorization Grant — step 1 (RFC 8628). */
+/** Browser step of the authorization-code grant (RFC 6749 §4.1, RFC 8252). */
+export interface OAuthAuthorizeRequest {
+  authUrl: string
+  clientId: string
+  redirectUri?: string
+  scope?: string
+  /** base64url(SHA-256(code_verifier)); present when the request uses PKCE */
+  codeChallenge?: string
+}
+
+export interface OAuthAuthorizeResult {
+  ok: boolean
+  /** the authorization code, when the redirect was caught on a loopback address */
+  code?: string
+  /** the browser was opened but the redirect goes elsewhere — the user pastes the code */
+  manual?: boolean
+  state?: string
+  error?: string
+}
+
 export interface OAuthDeviceRequest {
   deviceAuthUrl: string
   clientId: string

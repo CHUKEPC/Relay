@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useRef, useState, type DragEvent } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
+import { RequestTag } from '@renderer/components/RequestTag'
 import { useUi } from '@renderer/store/ui'
 import { useTabs } from '@renderer/store/tabs'
 import { useEnvironments } from '@renderer/store/environments'
@@ -21,6 +22,8 @@ import {
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { useCollections } from '@renderer/store/collections'
 import { trackDrag } from '@renderer/lib/drag'
+import { BuilderDockContext, FLOAT_MIN_H, FLOAT_MIN_W, oppositeEdge, PaneDockContext, useDockDrag, type DockEdge, type DockMode, type FloatRect } from '@renderer/lib/dock'
+import { dockResponse } from '@renderer/lib/dock-swap'
 import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
 import { kbdCombo } from '@renderer/lib/keymap'
@@ -52,10 +55,39 @@ function tabIdFromDrop(kind: DragKind, id: string): string | null {
 export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   const setRespPct = usePanes((s) => s.setRespPct)
   const toggleLeafLayout = usePanes((s) => s.toggleLeafLayout)
+  const setRespFloat = usePanes((s) => s.setRespFloat)
   const tabId = leaf.tabId
   const mode = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request.mode ?? 'http')
   const wsRef = useRef<HTMLDivElement>(null)
-  const horizontal = leaf.layout === 'split-h'
+  const dock = leaf.respDock
+  const horizontal = dock === 'right' || dock === 'left'
+
+  const setDock = (d: DockMode): void => dockResponse(leaf.id, d)
+
+  // The response panel is dragged by its status bar to an edge of this pane.
+  const { onGrabDown, overlay } = useDockDrag({
+    container: () => wsRef.current,
+    dock,
+    onDock: setDock,
+    edges: PANE_EDGES,
+    float: leaf.respFloat,
+    setFloat: (rect) => setRespFloat(leaf.id, rect),
+    coords: 'container'
+  })
+
+  // The request zone is dragged by the grip in its header; the response takes
+  // the opposite side. With a floating response the builder owns the pane, so
+  // there is nothing to move.
+  const builderEdge: DockMode = dock === 'float' ? 'float' : oppositeEdge(dock)
+  const builderDrag = useDockDrag({
+    container: () => wsRef.current,
+    dock: builderEdge,
+    onDock: (edge) => setDock(oppositeEdge(edge)),
+    edges: PANE_EDGES,
+    float: leaf.respFloat,
+    setFloat: () => undefined,
+    coords: 'container'
+  })
 
   if (!tabId) return <EmptyPane paneId={leaf.id} />
 
@@ -64,55 +96,129 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
       (ev) => {
         if (!wsRef.current) return
         const r = wsRef.current.getBoundingClientRect()
-        const pct = horizontal ? (1 - (ev.clientX - r.left) / r.width) * 100 : (1 - (ev.clientY - r.top) / r.height) * 100
-        setRespPct(leaf.id, pct)
+        const along = horizontal ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height
+        // Docked left or top, the response grows as the divider moves away from it.
+        setRespPct(leaf.id, (dock === 'left' || dock === 'top' ? along : 1 - along) * 100)
       },
       { cursor: horizontal ? 'col-resize' : 'row-resize' }
     )
   }
 
-  return (
-    <div className="workspace" ref={wsRef} style={horizontal ? { flexDirection: 'row' } : undefined}>
-      <div
-        style={
-          horizontal
-            ? { width: `${100 - leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: '1px solid var(--line)', overflow: 'auto' }
-            : { flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }
-        }
-      >
-        <RequestBuilder tabId={tabId} />
-      </div>
+  /** Pressing the response header (and only it) starts a re-dock drag. */
+  const grabFromHead = (e: ReactMouseEvent): void => {
+    // The status bar is the response panel's header in every protocol mode.
+    if ((e.target as HTMLElement).closest('.resp-statusbar')) onGrabDown(e)
+  }
 
-      <div
-        className="divider"
-        style={horizontal ? { width: 8, height: 'auto', cursor: 'col-resize' } : undefined}
-        onMouseDown={onDividerDown}
-        onDoubleClick={() => toggleLeafLayout(leaf.id)}
-        title={tr('Перетащите, чтобы изменить размер · двойной клик меняет ориентацию')}
-      >
-        <div className="grip" />
-      </div>
+  const response = (
+    <PaneDockContext.Provider value={{ dock, setDock, onGrabDown }}>
+      {mode === 'websocket' || mode === 'sse' || mode === 'socketio' || mode === 'mqtt' ? (
+        <Suspense fallback={null}>
+          <RealtimePanel key={tabId} tabId={tabId} kind={mode} />
+        </Suspense>
+      ) : mode === 'grpc' ? (
+        <Suspense fallback={null}>
+          <GrpcResponse key={tabId} tabId={tabId} />
+        </Suspense>
+      ) : (
+        <ResponsePanel key={tabId} tabId={tabId} onAskAI={() => askAiAboutResponse(tabId)} />
+      )}
+    </PaneDockContext.Provider>
+  )
 
-      <div
-        style={
-          horizontal
-            ? { width: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }
-            : { height: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
-        }
-      >
-        {mode === 'websocket' || mode === 'sse' || mode === 'socketio' || mode === 'mqtt' ? (
-          <Suspense fallback={null}>
-            <RealtimePanel key={tabId} tabId={tabId} kind={mode} />
-          </Suspense>
-        ) : mode === 'grpc' ? (
-          <Suspense fallback={null}>
-            <GrpcResponse key={tabId} tabId={tabId} />
-          </Suspense>
-        ) : (
-          <ResponsePanel key={tabId} tabId={tabId} onAskAI={() => askAiAboutResponse(tabId)} />
-        )}
+  const requestBuilder = (
+    <BuilderDockContext.Provider value={dock === 'float' ? null : builderDrag.onGrabDown}>
+      <RequestBuilder tabId={tabId} />
+    </BuilderDockContext.Provider>
+  )
+
+  // Floating: the builder owns the whole pane and the response rides above it.
+  if (dock === 'float') {
+    return (
+      <div className="workspace" ref={wsRef} style={{ position: 'relative' }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>{requestBuilder}</div>
+        <div
+          className="resp-float"
+          style={{ left: leaf.respFloat.x, top: leaf.respFloat.y, width: leaf.respFloat.w, height: leaf.respFloat.h }}
+          onMouseDownCapture={grabFromHead}
+        >
+          {response}
+          <div className="float-grip" onMouseDown={(e) => onFloatGrip(e, leaf, setRespFloat)} />
+        </div>
       </div>
+    )
+  }
+
+  const builder = (
+    <div
+      key="builder"
+      className="pane-builder"
+      style={
+        horizontal
+          ? { width: `${100 - leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto' }
+          : { flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }
+      }
+    >
+      {requestBuilder}
     </div>
+  )
+
+  const divider = (
+    <div
+      key="divider"
+      className={`divider${horizontal ? ' vertical' : ''}`}
+      style={horizontal ? { width: 8, height: 'auto', cursor: 'col-resize' } : undefined}
+      onMouseDown={onDividerDown}
+      onDoubleClick={() => toggleLeafLayout(leaf.id)}
+      title={tr('Перетащите, чтобы изменить размер · двойной клик меняет ориентацию')}
+    >
+      <div className="grip" />
+    </div>
+  )
+
+  const responseBox = (
+    <div
+      key="response"
+      className="pane-response"
+      onMouseDownCapture={grabFromHead}
+      style={
+        horizontal
+          ? { width: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minWidth: 0 }
+          : { height: `${leaf.respPct}%`, display: 'flex', flexDirection: 'column', minHeight: 0 }
+      }
+    >
+      {response}
+    </div>
+  )
+
+  const responseFirst = dock === 'left' || dock === 'top'
+  return (
+    <div className={`workspace resp-dock-${dock}`} ref={wsRef} style={horizontal ? { flexDirection: 'row' } : undefined}>
+      {responseFirst ? [responseBox, divider, builder] : [builder, divider, responseBox]}
+      {overlay}
+      {builderDrag.overlay}
+    </div>
+  )
+}
+
+/** Both the response and the request zone may take any edge of their pane. */
+const PANE_EDGES: readonly DockEdge[] = ['left', 'right', 'top', 'bottom']
+
+/** Resize a floating response panel from its bottom-right grip. */
+function onFloatGrip(e: ReactMouseEvent, leaf: PaneLeaf, setRespFloat: (paneId: string, rect: FloatRect) => void): void {
+  e.preventDefault()
+  e.stopPropagation()
+  const start = { x: e.clientX, y: e.clientY }
+  const orig = leaf.respFloat
+  trackDrag(
+    (ev) => {
+      setRespFloat(leaf.id, {
+        ...orig,
+        w: Math.max(FLOAT_MIN_W, orig.w + ev.clientX - start.x),
+        h: Math.max(FLOAT_MIN_H, orig.h + ev.clientY - start.y)
+      })
+    },
+    { cursor: 'nwse-resize' }
   )
 }
 
@@ -151,9 +257,7 @@ function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
         <button className="pane-tab-pick" title={tr('Какой запрос показывать в этой панели')}>
           {current ? (
             <>
-              <span className={`method-tag m-${current.request.method}`}>
-                {current.request.method === 'DELETE' ? 'DEL' : current.request.method}
-              </span>
+              <RequestTag request={current.request} />
               <span className="label">{tr(current.request.name || 'Без названия')}</span>
               {current.dirty && <span className="pane-dirty" title={tr('Несохранённые изменения')} />}
             </>
@@ -176,7 +280,7 @@ function PaneTabPicker({ leaf }: { leaf: PaneLeaf }) {
                 disabled={busy}
                 onSelect={() => usePanes.getState().setLeafTab(leaf.id, t.id)}
               >
-                <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
+                <RequestTag request={t.request} />
                 <span className="pane-pick-name">{tr(t.request.name || 'Без названия')}</span>
                 {inOther && <span className="pane-pick-note">{trf('панель {n}', { n: paneNumber.get(t.id) ?? '' })}</span>}
                 {inWindow && <span className="pane-pick-note">{tr('в окне')}</span>}

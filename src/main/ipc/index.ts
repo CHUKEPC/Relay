@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { IPC, type OpenFileOptions, type SaveFileOptions } from '@shared/ipc-contract'
@@ -16,12 +16,19 @@ import { registerGraphqlHandlers } from '../graphql'
 import { registerRealtimeHandlers } from '../realtime'
 import { registerGrpcHandlers } from '../grpc'
 import { registerSqliteHandlers } from '../sqlite'
+import { registerOAuthAuthorizeHandler } from '../auth/oauth-authorize'
 import { checkForUpdate } from '../update'
 import { FeatureRegistry, registerFeatureHandlers } from '../features'
 import { registerTerminalHandlers } from '../terminal'
 
-/** Max size of a user-picked text file the renderer may read (runner data files). */
-const MAX_READ_TEXT_BYTES = 25 * 1024 * 1024
+/**
+ * Max size of a user-picked file the renderer may read (runner data files,
+ * JSON/ZIP backups). It matches the SQLite import limit: a backup the app can
+ * write must also be one it can restore — at 25 MB a large history exported
+ * fine and then refused to come back.
+ */
+const MAX_READ_BYTES = 256 * 1024 * 1024
+const MAX_READ_LABEL = '256 MB'
 
 /**
  * Paths the user has explicitly picked via a native open dialog this session.
@@ -76,7 +83,10 @@ export function registerIpc(ctx: IpcContext): void {
   registerGrpcHandlers(ipcMain)
 
   // SQLite backup (optional, pure-WASM sql.js) — export/import a workspace.
-  registerSqliteHandlers(ipcMain)
+  registerSqliteHandlers(ipcMain, (path) => pickedPaths.has(path))
+  // Registered here, not next to the token endpoint: oauth.ts is also bundled
+  // into the script sandbox, which must never load electron.
+  registerOAuthAuthorizeHandler(ipcMain)
 
   // Multi-provider AI — secrets + provider config resolved from storage.
   registerAiHandlers(ipcMain, {
@@ -127,7 +137,16 @@ export function registerIpc(ctx: IpcContext): void {
       : await dialog.showSaveDialog({ defaultPath: opts.defaultName, filters: opts.filters })
     if (result.canceled || !result.filePath) return null
     const data = opts.base64 ? Buffer.from(opts.content, 'base64') : Buffer.from(opts.content, 'utf8')
-    await writeFile(result.filePath, data)
+    // Write next to the target and rename over it: overwriting an existing
+    // backup in place would destroy it if the write failed half way.
+    const tmp = `${result.filePath}.${process.pid}-${Date.now()}.tmp`
+    try {
+      await writeFile(tmp, data)
+      await rename(tmp, result.filePath)
+    } catch (err) {
+      await unlink(tmp).catch(() => undefined)
+      throw err
+    }
     return result.filePath
   })
 
@@ -143,7 +162,7 @@ export function registerIpc(ctx: IpcContext): void {
     } catch {
       throw new Error('File not found')
     }
-    if (size > MAX_READ_TEXT_BYTES) throw new Error('File is too large (max 25 MB)')
+    if (size > MAX_READ_BYTES) throw new Error(`File is too large (max ${MAX_READ_LABEL})`)
     return (await readFile(path)).toString('base64')
   })
 
@@ -158,7 +177,7 @@ export function registerIpc(ctx: IpcContext): void {
     } catch {
       throw new Error('File not found')
     }
-    if (size > MAX_READ_TEXT_BYTES) throw new Error('File is too large (max 25 MB)')
+    if (size > MAX_READ_BYTES) throw new Error(`File is too large (max ${MAX_READ_LABEL})`)
     return readFile(path, 'utf8')
   })
 

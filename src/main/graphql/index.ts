@@ -158,18 +158,19 @@ export async function introspectGraphql(
       if (h && h.key) reqHeaders[h.key] = h.value ?? ''
     }
 
-    // Only spin up a dedicated dispatcher when we must relax TLS — the common
-    // case stays on undici's shared global pool.
-    if (rejectUnauthorized === false) {
-      dispatcher = new Agent({ connect: { rejectUnauthorized: false } })
-    }
+    // Always dispatch through an Agent from the undici we bundle: the ambient
+    // global dispatcher may be a different undici build (Node ships its own)
+    // that rejects request options such as `maxRedirections`.
+    dispatcher = new Agent(rejectUnauthorized === false ? { connect: { rejectUnauthorized: false } } : {})
 
     const res = await undiciRequest(url, {
       method: 'POST',
       headers: reqHeaders,
       body: JSON.stringify({ query: INTROSPECTION_QUERY, operationName: 'IntrospectionQuery' }),
       dispatcher,
-      signal: ac.signal
+      signal: ac.signal,
+      // Endpoints commonly redirect (http -> https, /graphql -> /api/graphql).
+      maxRedirections: 5
     })
 
     const text = await res.body.text()

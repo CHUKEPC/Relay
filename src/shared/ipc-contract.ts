@@ -20,6 +20,8 @@ import type {
   HistoryDoc,
   ImportKind,
   ImportResult,
+  OAuthAuthorizeRequest,
+  OAuthAuthorizeResult,
   OAuthDeviceRequest,
   OAuthDeviceResult,
   ModelInfo,
@@ -49,7 +51,7 @@ import type {
   WsConnectSpec
 } from './types'
 import type { FeaturePluginInfo } from './features'
-import type { PackSnippet, PackTheme } from './pack-data'
+import type { PackSnippet, PackTheme, UserThemesDoc } from './pack-data'
 import type { TerminalOs, TerminalTool } from './terminal-command'
 
 /** Persisted enable/disable state of the bundled feature plugins (app-level). */
@@ -108,7 +110,9 @@ export const IPC = {
   },
   oauth: {
     token: 'oauth:token',
-    device: 'oauth:device'
+    device: 'oauth:device',
+    /** open the authorization URL in the browser and catch the loopback redirect */
+    authorize: 'oauth:authorize'
   },
   graphql: {
     introspect: 'graphql:introspect'
@@ -255,6 +259,7 @@ export interface StorageMap {
   cookies: CookiesDoc
   plugins: PluginsStateDoc
   features: FeaturePluginsDoc
+  userThemes: UserThemesDoc
 }
 
 export type StorageKey = keyof StorageMap
@@ -330,6 +335,7 @@ export interface RelayApi {
   oauthToken(payload: OAuthTokenRequest): Promise<OAuthTokenResult>
   /** Device Authorization Grant — step 1 (RFC 8628). */
   oauthDevice(payload: OAuthDeviceRequest): Promise<OAuthDeviceResult>
+  oauthAuthorize(payload: OAuthAuthorizeRequest): Promise<OAuthAuthorizeResult>
 
   /* ---- GraphQL ---- */
   /** Introspect a GraphQL endpoint's schema (for docs + autocomplete). */

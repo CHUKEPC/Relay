@@ -1,21 +1,40 @@
-# Relay — API Client with a built-in AI Assistant
+# Relay — an isolated desktop client for API testing
+
+*[Русская версия](README.ru.md)*
 
 A cross-platform desktop **API client** (a Postman analog) for **Windows, macOS, and Linux**, built
-with **Electron + React + TypeScript**. Its signature feature is a built-in **AI assistant** you
-connect to any LLM provider (OpenAI, Anthropic/Claude, OpenRouter, or any OpenAI-compatible
-endpoint) with your own API key — it understands the current request, response, and environment and
-helps you build, debug, and test APIs right inside the app.
+with **Electron + React + TypeScript**.
+
+**Isolated by design.** Everything lives on your machine: collections, environments, history and
+settings are JSON files in your own user directory, secrets go into the OS keychain, there is no
+account, no cloud, no telemetry and no background phone-home — the app opens no connection you did
+not ask for. The only traffic is the requests you send and, if you switch it on, the LLM provider
+you chose yourself.
+
+An **AI assistant** is available as an optional pack: connect any provider (OpenAI,
+Anthropic/Claude, OpenRouter, or any OpenAI-compatible endpoint, including a local model) with your
+own API key. Off by default, and the app is fully usable without it.
 
 > "Relay" is the product name (set in `package.json` → `productName` and `src/shared/constants.ts`
 > → `APP_NAME`). Rename in those two places.
 
 ## Highlights
 
+- **Isolated**: no account, no cloud, no telemetry, no automatic update check. The interface loads
+  nothing from the internet (enforced by a strict CSP), and every connection the app opens is one
+  you asked for.
 - **CORS-free HTTP engine** in the Electron main process: all methods, every body type
-  (raw/urlencoded/form-data/binary/GraphQL), auth (Bearer/Basic/API-key/OAuth2/Digest/inherit),
-  redirects with a recorded chain, timeout, TLS toggle, cancellation, timing & size metrics.
-- **Multi-provider AI assistant** with token-by-token streaming, secret-masked context injection,
-  "Apply to request" actions, and tool-calling (read/modify/send the request, with confirmation).
+  (raw/urlencoded/form-data/binary/GraphQL), auth (Bearer/Basic/API-key/OAuth 1.0/OAuth 2.0 with
+  browser sign-in and PKCE/Digest/AWS SigV4/Hawk/NTLM/JWT/ASAP/EdgeGrid/inherit), redirects with a
+  recorded chain, timeout, TLS toggle, cancellation, timing & size metrics.
+- **WebSocket, SSE, Socket.IO, MQTT, gRPC and GraphQL** alongside HTTP.
+- **Movable panels**: dock the sidebar and the response panel left, right, at the bottom or let them
+  float — by dragging their header or with one click.
+- **Low-power mode** for weak machines: no GPU, no animations, a light editor — same features.
+- **Your own themes** from a JSON file ([theme guide](docs/THEMES.md) · [по-русски](docs/THEMES.ru.md)),
+  plus a pack of 15 ready-made themes.
+- **Optional AI assistant** (a pack, off by default) with streaming, secret-masked context and
+  tool-calling with confirmation.
 - **Collections, environments & global variables** with `{{var}}` interpolation everywhere,
   hover-resolution, and unresolved flagging.
 - **Monaco-powered** request bodies and a Pretty/Raw/Preview response viewer.
@@ -35,7 +54,19 @@ helps you build, debug, and test APIs right inside the app.
 - **Find & replace across the workspace**: search collections, environments and variables by field
   group, then replace exactly the matches you confirm.
 - **Local-first**: everything persists as JSON in `userData`; API keys are encrypted via Electron
-  `safeStorage`. No telemetry; the only outbound traffic is your own API and AI calls.
+  `safeStorage`. No telemetry; the only outbound traffic is your own API and (if enabled) AI calls.
+
+## Documentation
+
+| | English | Русский |
+|---|---|---|
+| Features and status | [docs/FEATURES.md](docs/FEATURES.md) | [docs/FEATURES.ru.md](docs/FEATURES.ru.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [docs/ARCHITECTURE.ru.md](docs/ARCHITECTURE.ru.md) |
+| Plugin system | [docs/PLUGINS.md](docs/PLUGINS.md) | [docs/PLUGINS.ru.md](docs/PLUGINS.ru.md) |
+| Writing plugins | [docs/plugin-guide/README.md](docs/plugin-guide/README.md) | [docs/plugin-guide/README.ru.md](docs/plugin-guide/README.ru.md) |
+| Writing themes | [docs/THEMES.md](docs/THEMES.md) | [docs/THEMES.ru.md](docs/THEMES.ru.md) |
+| AI assistant | [docs/AI_ASSISTANT.md](docs/AI_ASSISTANT.md) | [docs/AI_ASSISTANT.ru.md](docs/AI_ASSISTANT.ru.md) |
+| Bundled feature packs | [plugins/README.md](plugins/README.md) | [plugins/README.ru.md](plugins/README.ru.md) |
 
 ## Run it
 
@@ -107,9 +138,4 @@ For local models (Ollama/LM Studio), add a custom provider with base URL e.g.
 - Renderer UI: [`src/renderer`](src/renderer) (features, components, Zustand stores)
 - Design source of truth: [`design/`](design)
 
-## Documentation
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — processes, IPC, data flow, storage, security.
-- [`docs/FEATURES.md`](docs/FEATURES.md) — the Postman-parity feature checklist (current status).
-- [`docs/AI_ASSISTANT.md`](docs/AI_ASSISTANT.md) — the multi-provider AI assistant spec.
-- [`CLAUDE.md`](CLAUDE.md) — project constitution and locked technical decisions.
+See the [Documentation](#documentation) table above for every guide in English and Russian.

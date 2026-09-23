@@ -1,5 +1,7 @@
 # Feature packs
 
+*[Русская версия](README.ru.md)*
+
 This folder ships next to the app and decides what Relay can do beyond its base:
 HTTP requests, the six common auth schemes, Russian and English, and up to four
 panes.

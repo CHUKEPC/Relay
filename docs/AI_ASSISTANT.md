@@ -1,6 +1,8 @@
 # AI_ASSISTANT.md — the built-in multi-provider AI assistant
 
-This is the product's signature differentiator. The user connects **their own** API key for any
+*[Русская версия](AI_ASSISTANT.ru.md)*
+
+This is an optional feature pack (`ai-assistant`), off by default — Relay is complete without it. The user connects **their own** API key for any
 supported provider and gets an assistant **inside** the app that understands the current request,
 response, and environment, and can help build and debug APIs.
 

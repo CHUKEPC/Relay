@@ -1,5 +1,7 @@
 # Relay Plugin System
 
+*[Русская версия](PLUGINS.ru.md)*
+
 > Writing a plugin? Start with the step-by-step guide and examples in
 > [`docs/plugin-guide`](plugin-guide/README.md) ([по-русски](plugin-guide/README.ru.md)). This
 > document describes the architecture and the security model behind it.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { PaneDockControls } from '@renderer/lib/dock'
 import { useGrpc, type GrpcStatus } from '@renderer/store/grpc'
 
 import { tr, trf } from '@renderer/lib/i18n'
@@ -80,6 +81,7 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
           <span>{trf('ответов: {n}', { n: inCount })}</span>
         </div>
         <div className="resp-actions">
+          <PaneDockControls />
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
             <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>

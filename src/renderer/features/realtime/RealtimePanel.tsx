@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MessageTemplate, RealtimeMessage, RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { PaneDockControls } from '@renderer/lib/dock'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/realtime'
@@ -164,6 +165,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           </span>
         </div>
         <div className="resp-actions">
+          <PaneDockControls />
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
             <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>
@@ -216,6 +218,62 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
             <input type="checkbox" checked={lwt?.retain === true} onChange={(e) => patchLwt({ retain: e.target.checked })} />
             retain
           </label>
+          {/* Broker login: without it a secured broker refuses the connection. */}
+          <div className="rt-config-row">
+            <span className="rt-config-label">{tr('Брокер')}</span>
+            <input
+              className="input mono"
+              placeholder={tr('логин')}
+              value={mqttCfg?.username ?? ''}
+              onChange={(e) => patchMqtt({ username: e.target.value })}
+              style={{ width: 130, height: 28 }}
+              spellCheck={false}
+            />
+            <input
+              className="input mono"
+              type="password"
+              placeholder={tr('пароль')}
+              value={mqttCfg?.password ?? ''}
+              onChange={(e) => patchMqtt({ password: e.target.value })}
+              style={{ width: 130, height: 28 }}
+              autoComplete="off"
+            />
+            <input
+              className="input mono"
+              placeholder="client id"
+              value={mqttCfg?.clientId ?? ''}
+              onChange={(e) => patchMqtt({ clientId: e.target.value })}
+              style={{ width: 150, height: 28 }}
+              title={tr('Пусто — Relay подставит случайный')}
+              spellCheck={false}
+            />
+            <input
+              className="input mono"
+              placeholder={tr('подписаться при подключении: a/b, c/#')}
+              value={mqttCfg?.subscribeTopics ?? ''}
+              onChange={(e) => patchMqtt({ subscribeTopics: e.target.value })}
+              style={{ flex: '1 1 220px', minWidth: 180, height: 28 }}
+              spellCheck={false}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* WebSocket subprotocols and the Socket.IO event filter, persisted on the request. */}
+      {(kind === 'websocket' || kind === 'socketio') && (
+        <div className="rt-config-row rt-config-bar">
+          <span className="rt-config-label">{kind === 'websocket' ? tr('Подпротоколы') : tr('Слушать события')}</span>
+          <input
+            className="input mono"
+            placeholder={kind === 'websocket' ? 'graphql-ws, mqtt' : tr('пусто — все события')}
+            value={(kind === 'websocket' ? req?.realtime?.protocols : req?.realtime?.listenEvents) ?? ''}
+            onChange={(e) =>
+              patchReq({ realtime: { ...(req?.realtime ?? {}), [kind === 'websocket' ? 'protocols' : 'listenEvents']: e.target.value } })
+            }
+            style={{ flex: 1, minWidth: 160, height: 28 }}
+            spellCheck={false}
+            title={tr('Через запятую. Применяется при следующем подключении.')}
+          />
         </div>
       )}
 

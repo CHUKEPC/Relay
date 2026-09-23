@@ -1,55 +1,17 @@
 import { useRef, useState } from 'react'
-import type { CollectionNode, ImportKind } from '@shared/types'
+import type { ImportKind } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { Modal, Segmented } from '@renderer/components/primitives'
-import { useCollections } from '@renderer/store/collections'
-import { useEnvironments } from '@renderer/store/environments'
-import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
-import { mergeVariables } from '@shared/var-import'
+import { applyImportResults, cleanImportError, countRequests } from '@renderer/lib/import-apply'
 
 import { tr, trf } from '@renderer/lib/i18n'
-/** Strip Electron's IPC wrapper ("Error invoking remote method 'x': Error: …")
- *  so the user sees the clean, actionable message. */
-function cleanError(msg: string): string {
-  const cleaned = msg
-    .replace(/^Error invoking remote method '[^']*':\s*/i, '')
-    .replace(/^Error:\s*/i, '')
-    .trim()
-  return localizeError(cleaned)
-}
-
-/** The import engine in the main process throws English messages (artifacts are
- *  English by project convention) — translate the known shapes for the user.
- *  Format names (Postman, OpenAPI, HAR…) stay English on purpose. */
-function localizeError(msg: string): string {
-  if (msg.startsWith('Could not detect import format')) {
-    return tr(
-      'Не удалось распознать формат. Поддерживаются: команда cURL, коллекция Postman v2.1, OpenAPI 3 / Swagger 2.0 (JSON или YAML), HAR и экспорт Insomnia v4.'
-    )
-  }
-  const badJson = msg.match(/^This doesn't look like valid (.+) JSON\. Check the document\.$/)
-  if (badJson) return trf('Это не похоже на корректный JSON ({format}). Проверьте документ.', { format: badJson[1] })
-  const badDoc = msg.match(/^This doesn't look like a valid (.+) document \(JSON or YAML\)\.$/)
-  if (badDoc) return trf('Это не похоже на корректный документ {format} (JSON или YAML).', { format: badDoc[1] })
-  return msg
-}
-
-/** Count request leaves in a collection/folder subtree. */
-function countRequests(node: CollectionNode): number {
-  if (node.type === 'request') return 1
-  return node.children.reduce((n, c) => n + countRequests(c), 0)
-}
-
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const [kind, setKind] = useState<ImportKind>('auto')
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const addCollectionNode = useCollections((s) => s.addCollectionNode)
-  const addEnvironment = useEnvironments((s) => s.addEnvironment)
-  const openNew = useTabs((s) => s.openNew)
   const showToast = useUi((s) => s.showToast)
 
   const onFile = (file: File) => {
@@ -77,47 +39,22 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       }
       // A recognized-but-empty collection is almost always a wrong-file paste —
       // tell the user instead of silently adding an empty node.
+      // A recognized-but-empty collection is almost always a wrong-file paste —
+      // tell the user instead of silently adding an empty node.
       const totalReqs = results.reduce((n, r) => n + (r.collection ? countRequests(r.collection) : 0), 0)
       if (results.every((r) => r.kind === 'collection') && totalReqs === 0) {
         setError(tr('Файл распознан как коллекция, но в нём нет запросов. Проверьте, что выбрали правильный файл.'))
         return
       }
-      const warnings: string[] = []
-      let collections = 0
-      let requests = 0
-      let environments = 0
-      let globals = 0
-      for (const r of results) {
-        warnings.push(...r.warnings)
-        if (r.kind === 'collection' && r.collection) {
-          addCollectionNode(r.collection)
-          collections++
-        } else if (r.kind === 'environment' && r.environment) {
-          addEnvironment(r.environment)
-          environments++
-        } else if (r.kind === 'globals' && r.variables) {
-          const envStore = useEnvironments.getState()
-          envStore.setGlobalVars(mergeVariables(envStore.globals.variables, r.variables, 'merge').variables)
-          globals += r.variables.length
-        } else if (r.kind === 'request' && r.request) {
-          openNew(r.request)
-          requests++
-        }
-      }
-      const parts = [
-        collections && trf('коллекций: {n}', { n: collections }) + (totalReqs ? ` ${trf('(запросов: {n})', { n: totalReqs })}` : ''),
-        requests && trf('запросов: {n}', { n: requests }),
-        environments && trf('сред: {n}', { n: environments }),
-        globals && trf('глобальных переменных: {n}', { n: globals })
-      ].filter(Boolean)
+      const applied = applyImportResults(results)
       showToast(
-        trf('Импортировано ({what})', { what: parts.join(', ') || tr('данные') }) +
-          (warnings.length ? ` · ${trf('предупреждений: {n}', { n: warnings.length })}` : '')
+        trf('Импортировано ({what})', { what: applied.summary || tr('данные') }) +
+          (applied.warnings.length ? ` · ${trf('предупреждений: {n}', { n: applied.warnings.length })}` : '')
       )
       setText('')
       onOpenChange(false)
     } catch (err) {
-      setError(cleanError(err instanceof Error ? err.message : String(err)))
+      setError(cleanImportError(err instanceof Error ? err.message : String(err)))
     }
   }
 

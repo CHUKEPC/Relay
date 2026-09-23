@@ -9,6 +9,7 @@
  * This is an API client, so connecting to user-supplied ws(s)/http(s) URLs is by
  * design; we still restrict the URL scheme and honor the TLS-verification toggle.
  */
+import { StringDecoder } from 'node:string_decoder'
 import { Agent, request as undiciRequest, WebSocket } from 'undici'
 import type { Dispatcher } from 'undici'
 import { io } from 'socket.io-client'
@@ -24,6 +25,27 @@ import type {
   SseConnectSpec,
   WsConnectSpec
 } from '@shared/types'
+
+/**
+ * Give up on a WebSocket/Socket.IO handshake that never completes. undici's
+ * default headers timeout is 5 minutes, which leaves the panel stuck on
+ * "Connecting…" with no feedback.
+ */
+const WS_HANDSHAKE_TIMEOUT_MS = 30_000
+
+/** How long an SSE handshake may take before the attempt is failed. */
+const SSE_HEADERS_TIMEOUT_MS = 30_000
+
+/** How long to wait for the MQTT DISCONNECT packet before forcing the socket shut. */
+const MQTT_DISCONNECT_GRACE_MS = 1_000
+
+/**
+ * Internal knobs that are not part of the renderer-facing spec (the renderer
+ * never sets them); they exist so the engine can be driven with short timeouts
+ * in tests.
+ */
+type WsSpec = WsConnectSpec & { handshakeTimeoutMs?: number }
+type SocketIoSpec = SocketIoConnectSpec & { reconnectionAttempts?: number; reconnectionDelay?: number }
 
 interface LiveConn {
   kind: 'ws' | 'sse' | 'socketio' | 'mqtt'
@@ -72,7 +94,7 @@ function msg(dir: 'in' | 'out' | 'system', data: string, kind: string): Realtime
  * WebSocket
  * ============================================================ */
 
-function connectWebSocket(spec: WsConnectSpec, emit: (e: RealtimeEvent) => void): LiveConn {
+function connectWebSocket(spec: WsSpec, emit: (e: RealtimeEvent) => void): LiveConn {
   if (!/^wss?:\/\//i.test(spec.url)) {
     emit({ type: 'error', error: 'WebSocket URL must start with ws:// or wss://' })
     return { kind: 'ws', close: () => {} }
@@ -98,14 +120,43 @@ function connectWebSocket(spec: WsConnectSpec, emit: (e: RealtimeEvent) => void)
   ws.binaryType = 'arraybuffer'
 
   let closed = false
+  let handshake: NodeJS.Timeout | undefined
   const cleanup = (): void => {
+    if (handshake) {
+      clearTimeout(handshake)
+      handshake = undefined
+    }
     if (dispatcher) {
       void dispatcher.close().catch(() => {})
       dispatcher = undefined
     }
   }
 
-  ws.addEventListener('open', () => emit({ type: 'open', protocol: ws.protocol || undefined }))
+  // Fail a stalled handshake ourselves: a server that accepts the TCP
+  // connection but never answers the upgrade would otherwise hang the UI.
+  const handshakeMs = spec.handshakeTimeoutMs ?? WS_HANDSHAKE_TIMEOUT_MS
+  if (handshakeMs > 0) {
+    handshake = setTimeout(() => {
+      handshake = undefined
+      if (closed || ws.readyState !== 0 /* CONNECTING */) return
+      closed = true
+      emit({ type: 'error', error: `WebSocket handshake timed out after ${handshakeMs} ms` })
+      try {
+        ws.close()
+      } catch {
+        /* already failing */
+      }
+      cleanup()
+    }, handshakeMs)
+  }
+
+  ws.addEventListener('open', () => {
+    if (handshake) {
+      clearTimeout(handshake)
+      handshake = undefined
+    }
+    emit({ type: 'open', protocol: ws.protocol || undefined })
+  })
   ws.addEventListener('message', (ev) => {
     const data: unknown = ev.data
     if (typeof data === 'string') {
@@ -116,8 +167,13 @@ function connectWebSocket(spec: WsConnectSpec, emit: (e: RealtimeEvent) => void)
       emit(msg('in', String(data), 'text'))
     }
   })
-  ws.addEventListener('error', () => {
-    if (!closed) emit({ type: 'error', error: 'WebSocket connection error' })
+  ws.addEventListener('error', (ev) => {
+    // undici reports why the handshake failed (non-101 status, network error,
+    // bad Sec-WebSocket-Accept, …) on the ErrorEvent — surface it instead of a
+    // generic string the user cannot act on.
+    const detail = (ev as Partial<{ message: string; error: { message?: string } }>) ?? {}
+    const reason = detail.message || detail.error?.message || ''
+    if (!closed) emit({ type: 'error', error: reason ? `WebSocket error: ${reason}` : 'WebSocket connection error' })
     // A pre-handshake failure (DNS/TLS/refused) fires 'error' but NOT 'close',
     // so close the per-connection dispatcher here too or its Agent/sockets leak.
     cleanup()
@@ -170,10 +226,17 @@ function connectSse(spec: SseConnectSpec, emit: (e: RealtimeEvent) => void): Liv
   // tight loop from the other direction).
   const reconnectWait = (): number => Math.min(Math.max(retryMs, 1000), 30000)
 
-  let dispatcher: Dispatcher | undefined
-  if (spec.rejectUnauthorized === false) {
-    dispatcher = new Agent({ connect: { rejectUnauthorized: false } })
-  }
+  // Always dispatch through an Agent from the undici we bundle. Falling back to
+  // the ambient global dispatcher hands the request to whatever undici the host
+  // Node ships, and a newer one rejects options this request uses
+  // (`maxRedirections`) — which failed every SSE connection before the first
+  // byte. The agent also disables the body timeout (an idle event stream is
+  // normal) while keeping the handshake bounded.
+  let dispatcher: Dispatcher | undefined = new Agent({
+    headersTimeout: SSE_HEADERS_TIMEOUT_MS,
+    bodyTimeout: 0,
+    ...(spec.rejectUnauthorized === false ? { connect: { rejectUnauthorized: false } } : {})
+  })
 
   // Parse a complete SSE block (separated by a blank line) into one event.
   const dispatchBlock = (raw: string): void => {
@@ -222,9 +285,12 @@ function connectSse(spec: SseConnectSpec, emit: (e: RealtimeEvent) => void): Liv
         attempt = 0
         emit({ type: 'open' })
 
+        // A multi-byte character can straddle two network chunks; a plain
+        // per-chunk toString() would turn it into replacement characters.
+        const decoder = new StringDecoder('utf8')
         let buf = ''
         for await (const chunk of res.body) {
-          buf += chunk.toString('utf8')
+          buf += decoder.write(chunk as Buffer)
           // SSE events are separated by a blank line (\n\n or \r\n\r\n).
           let sep = findSeparator(buf)
           while (sep) {
@@ -240,6 +306,9 @@ function connectSse(spec: SseConnectSpec, emit: (e: RealtimeEvent) => void): Liv
         await delay(reconnectWait(), controller.signal)
       } catch (err) {
         if (aborted) break
+        // Say WHY the stream dropped — the panel used to show nothing but an
+        // endless "Reconnecting…" for a refused connection or a TLS failure.
+        emit({ type: 'error', error: err instanceof Error ? err.message : String(err) })
         attempt++
         emit({ type: 'reconnecting', attempt, delayMs: reconnectWait() })
         try {
@@ -247,7 +316,6 @@ function connectSse(spec: SseConnectSpec, emit: (e: RealtimeEvent) => void): Liv
         } catch {
           break
         }
-        void err
       }
     }
     if (dispatcher) {
@@ -318,7 +386,7 @@ function stringifyArgs(args: unknown[]): string {
   }
 }
 
-function connectSocketIo(spec: SocketIoConnectSpec, emit: (e: RealtimeEvent) => void): LiveConn {
+function connectSocketIo(spec: SocketIoSpec, emit: (e: RealtimeEvent) => void): LiveConn {
   if (!/^(https?|wss?):\/\//i.test(spec.url)) {
     emit({ type: 'error', error: 'Socket.IO URL must start with http(s):// or ws(s)://' })
     return { kind: 'socketio', close: () => {} }
@@ -331,7 +399,8 @@ function connectSocketIo(spec: SocketIoConnectSpec, emit: (e: RealtimeEvent) => 
       rejectUnauthorized: spec.rejectUnauthorized !== false,
       reconnection: true,
       // Bound the retries — socket.io defaults reconnectionAttempts to Infinity.
-      reconnectionAttempts: 10,
+      reconnectionAttempts: spec.reconnectionAttempts ?? 10,
+      reconnectionDelay: spec.reconnectionDelay ?? 1000,
       forceNew: true
     })
   } catch (err) {
@@ -343,6 +412,12 @@ function connectSocketIo(spec: SocketIoConnectSpec, emit: (e: RealtimeEvent) => 
   socket.on('disconnect', (reason: string) => emit({ type: 'close', reason }))
   socket.on('connect_error', (err: Error) => emit({ type: 'error', error: err?.message ?? 'connect_error' }))
   socket.io.on('reconnect_attempt', (attempt: number) => emit({ type: 'reconnecting', attempt, delayMs: 0 }))
+  // Once the retry budget is spent socket.io goes quiet: without a terminal
+  // event the panel would sit on "Reconnecting…" forever.
+  socket.io.on('reconnect_failed', () => {
+    emit({ type: 'error', error: 'Socket.IO: reconnection attempts exhausted' })
+    emit({ type: 'close', reason: 'reconnect failed' })
+  })
 
   const listen = spec.listenEvents?.filter(Boolean) ?? []
   if (listen.length) {
@@ -443,7 +518,18 @@ function connectMqtt(spec: MqttConnectSpec, emit: (e: RealtimeEvent) => void): L
     },
     close: () => {
       try {
-        client.end(true)
+        // Send a DISCONNECT packet (force = false): an intentional disconnect
+        // must NOT make the broker publish this client's Last Will. Fall back
+        // to a hard close if the packet cannot be flushed.
+        const force = setTimeout(() => {
+          try {
+            client.end(true)
+          } catch {
+            /* already gone */
+          }
+        }, MQTT_DISCONNECT_GRACE_MS)
+        force.unref?.()
+        client.end(false, undefined, () => clearTimeout(force))
       } catch {
         /* ignore */
       }

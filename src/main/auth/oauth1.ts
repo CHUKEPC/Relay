@@ -13,7 +13,7 @@
  * canonical "METHOD&base-url&params" string is HMAC-signed with the signing key
  * `enc(consumerSecret)&enc(tokenSecret)`. PLAINTEXT just uses the signing key.
  */
-import { createHmac } from 'node:crypto'
+import { createHmac, randomBytes } from 'node:crypto'
 
 export interface OAuth1Options {
   method: string
@@ -33,8 +33,13 @@ export interface OAuth1Options {
    * applies to non-form bodies. We expose the toggle for API completeness.
    */
   includeBodyHash?: boolean
-  /** form-encoded body parameters that participate in the signature base string */
-  bodyParams?: Record<string, string>
+  /**
+   * Form-encoded body parameters that participate in the signature base string.
+   * Prefer the pair-array form: an x-www-form-urlencoded body may legitimately
+   * repeat a key ("tag=a&tag=b") and every occurrence has to be signed, which a
+   * plain object cannot express.
+   */
+  bodyParams?: Record<string, string> | Array<[string, string]>
 }
 
 /**
@@ -127,13 +132,10 @@ function normalizeParams(pairs: Array<[string, string]>): string {
 }
 
 function generateNonce(): string {
-  // 32 hex chars of randomness is plenty for an OAuth nonce.
-  let out = ''
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  for (let i = 0; i < 32; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return out
+  // RFC 5849 §3.3: the nonce must be unique per (timestamp, consumer, token), and
+  // a server rejects a replay, so it has to come from a CSPRNG rather than from
+  // `Math.random()` — 16 random bytes as 32 hex chars is plenty.
+  return randomBytes(16).toString('hex')
 }
 
 /**
@@ -161,7 +163,10 @@ export function oauth1Header(opts: OAuth1Options): string {
   for (const [k, v] of Object.entries(oauthParams)) allParams.push([k, v])
   for (const pair of parseQueryParams(opts.url)) allParams.push(pair)
   if (opts.bodyParams) {
-    for (const [k, v] of Object.entries(opts.bodyParams)) allParams.push([k, v])
+    const bodyPairs = Array.isArray(opts.bodyParams)
+      ? opts.bodyParams
+      : Object.entries(opts.bodyParams)
+    for (const [k, v] of bodyPairs) allParams.push([k, v])
   }
 
   // 3. Build the signature base string.

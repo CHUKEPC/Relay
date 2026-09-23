@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '@renderer/components/Icon'
+import { RequestTag } from '@renderer/components/RequestTag'
 import { bootstrap } from '@renderer/store/bootstrap'
 
 // Same reason as in App: a language switch remounts this window's tree.
@@ -123,7 +124,7 @@ export function DetachedApp({ tabId }: { tabId: string }) {
         </div>
         {tab && (
           <div className="detached-title">
-            <span className={`method-tag m-${tab.request.method}`}>{tab.request.method === 'DELETE' ? 'DEL' : tab.request.method}</span>
+            <RequestTag request={tab.request} />
             <span className="detached-name">{tr(tab.request.name || 'Без названия')}</span>
             {tab.dirty && <span className="pane-dirty" title={tr('Несохранённые изменения')} />}
           </div>

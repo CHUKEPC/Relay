@@ -1,7 +1,10 @@
 # FEATURES.md — Postman-parity feature target
 
-The goal is **maximum Postman parity** plus the **AI assistant** differentiator. Features are
-tiered by priority. **P0 must work** in the first build. P1 should be attempted in the same build
+*[Русская версия](FEATURES.ru.md)*
+
+The goal is **maximum Postman parity** in an **isolated** desktop client: everything local, no
+account, no telemetry, no connection the user did not ask for. The AI assistant is an optional pack.
+Features are tiered by priority. **P0 must work** in the first build. P1 should be attempted in the same build
 and is expected to mostly work. P2 is best-effort / future. Anything requiring a hosted backend
 (team sync, cloud workspaces) is **out of scope** — this app is **local-first**.
 
@@ -76,7 +79,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       list is fetched live from the provider (`/models`, incl. Anthropic's paginated endpoint) with
       search, refresh and a free-text model id.
 
-### AI assistant (the differentiator) — see docs/AI_ASSISTANT.md
+### AI assistant (optional pack) — see docs/AI_ASSISTANT.md
 - [x] Dockable AI panel with a chat thread.
 - [x] Provider + model picker (OpenAI, Anthropic, OpenRouter, custom OpenAI-compatible).
 - [x] **Streaming** responses (token-by-token over IPC).
@@ -336,6 +339,68 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       linked at the bottom of Settings → Плагины.
 - [x] **Local release script** (1.2): `npm run release` builds for the current OS and creates or
       updates the GitHub release through the API — for when GitHub Actions is unavailable.
+
+## 1.3 — Isolation, layout, verification
+
+### Isolation
+- [x] **Positioning**: an isolated desktop client for API testing; the AI assistant is an optional pack.
+- [x] **No automatic update check**: the startup check and its setting are gone; «Проверить сейчас»
+      in About is the only way a version check happens.
+- [x] **Session hardening**: no DNS prefetch, spellchecker off (it downloads dictionaries), every
+      permission request (camera, location, notifications…) declined except the clipboard. The CSP
+      (verified to apply to the `file://` page) keeps external images/scripts/connections out,
+      including the HTML response preview.
+- [x] Main-window reload/crash closes the realtime and gRPC connections it owned.
+
+### Layout and look
+- [x] **Low-power mode** (Settings → General, replaces «Экономить видеопамять»; a 1.2 value
+      migrates): after a restart — no GPU, software compositing, Chromium low-end-device mode, no
+      animations/shadows/blur, and a plain textarea editor instead of Monaco (Monaco is never loaded)
+      with the same `{{` autocomplete. Every feature keeps working.
+- [x] **Dockable sidebar**: left / right / bottom / floating, by the four buttons in its header or
+      by dragging the header — edge zones dock, the middle floats. Size and position persist.
+- [x] **Dockable response panel** per pane: bottom / right / left / floating, same drag-to-dock
+      (from the status bar or the grip) and buttons; 1.2 layouts migrate.
+- [x] **Command palette**: actions are listed before requests.
+- [x] **User themes**: Settings → Appearance → My themes → Load theme… reads one JSON file (a theme,
+      a list, or a pack's `themes.json`), same colour allowlist as packs; stored app-level.
+      Authoring guide: `docs/THEMES.md` (EN) / `docs/THEMES.ru.md` (RU).
+
+### Protocols (verified with local servers, 61 tests)
+- [x] SSE works on hosts with undici 7 (bundled dispatcher) and reports why a retry happens;
+      multi-byte UTF-8 split across chunks decodes correctly.
+- [x] WebSocket: the real handshake failure is shown; a 30 s handshake timeout; subprotocols can be
+      set in the UI.
+- [x] MQTT: graceful DISCONNECT (no Last Will on a normal disconnect); login, password, client id and
+      subscribe-on-connect topics in the UI.
+- [x] Socket.IO: stops after the retry budget with a terminal event; event filter in the UI.
+- [x] gRPC reflection loads transitive dependencies; bad metadata is an error event, not a rejected call.
+- [x] GraphQL introspection follows redirects.
+
+### Authorization (verified against spec vectors, 51+ tests)
+- [x] AWS SigV4: `x-amz-content-sha256` for S3, single URI encoding for S3.
+- [x] Akamai EdgeGrid hashes POST bodies only; Digest honours `stale=true` and supports SHA-512-256;
+      NTLM Type 3 flags masked; OAuth 1.0 signs repeated form keys (engine and send-to-terminal).
+- [x] Request-bound signatures are recomputed on every redirect hop and never minted for another host.
+- [x] Cryptographic nonces for Hawk and OAuth 1.0.
+- [x] **OAuth 2.0 browser sign-in**: authorize URL with `state` and PKCE `code_challenge` (S256),
+      loopback redirect caught on `http://127.0.0.1:<port>` (RFC 8252), code exchanged automatically;
+      the code field also accepts a pasted redirect URL.
+- [x] A token refreshed on 401 is stored on the request (or the folder/collection it inherits from).
+- [x] An auth that cannot be built (bad JWT JSON, bad PEM…) stops the send with an `auth` error
+      instead of sending the request unauthenticated.
+- [x] Postman import/export maps AWS, Hawk, NTLM, OAuth 1.0, EdgeGrid, JWT and ASAP natively; an
+      unknown scheme imports as "no auth", never as "inherit".
+
+### Backups and data (verified, 46+ tests)
+- [x] A corrupt JSON document is moved aside instead of being overwritten by a seed; a corrupt
+      workspace list no longer orphans workspaces.
+- [x] SQLite backup: repeated ids, global variable ids, junk rows, corrupt files; import only from a
+      dialog-picked path.
+- [x] JSON/ZIP restore validates the shape like SQLite; «Добавить» re-ids colliding nodes.
+- [x] Backup files are written atomically; files up to 256 MB restore (was 25 MB).
+- [x] Postman round trip keeps descriptions, disabled collection variables and path variables.
+- [x] The Data screen says honestly what a backup contains (typed-in tokens are included).
 
 ## Out of scope (needs a hosted backend)
 

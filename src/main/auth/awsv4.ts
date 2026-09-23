@@ -65,15 +65,38 @@ function uriEncode(str: string): string {
   )
 }
 
+/** Percent-decode a path segment, leaving it untouched when it is malformed. */
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
 /**
- * Build the canonical URI: the URL path, percent-encoded segment-by-segment
- * (so "/" separators survive), normalized to "/" when empty.
+ * S3 is the one service that signs the path encoded exactly ONCE and that
+ * requires the x-amz-content-sha256 header on every SigV4 request.
  */
-function canonicalUri(pathname: string): string {
+function isS3(service: string): boolean {
+  const s = (service ?? '').trim().toLowerCase()
+  return s === 's3' || s.startsWith('s3-')
+}
+
+/**
+ * Build the canonical URI from `URL.pathname`, which is already percent-encoded
+ * once, percent-encoded segment-by-segment (so "/" separators survive) and
+ * normalized to "/" when empty.
+ *
+ * Every service except S3 requires the path to be URI-encoded TWICE, which is
+ * exactly what re-encoding the already-encoded `pathname` yields ("/%20" →
+ * "/%2520"). For S3 each segment is decoded first so it ends up encoded once.
+ */
+function canonicalUri(pathname: string, singleEncode: boolean): string {
   if (!pathname || pathname === '') return '/'
   return pathname
     .split('/')
-    .map((segment) => uriEncode(segment))
+    .map((segment) => uriEncode(singleEncode ? safeDecode(segment) : segment))
     .join('/')
 }
 
@@ -101,7 +124,8 @@ function canonicalQuery(searchParams: URLSearchParams): string {
  * `x-amz-date` we set here, and `x-amz-security-token` when present. We do NOT add
  * `x-amz-content-sha256` to the signed set by default (it is optional for many
  * services), so it is omitted from the returned headers unless the caller already
- * passed it in `headers` — in which case it is signed and echoed back.
+ * passed it in `headers` — in which case it is signed and echoed back. S3 is the
+ * exception: it REQUIRES the header, so we always add and sign it there.
  */
 export function signAwsV4(opts: AwsV4Options): Record<string, string> {
   const {
@@ -149,6 +173,11 @@ export function signAwsV4(opts: AwsV4Options): Record<string, string> {
   const payloadHash = opts.unsignedPayload ? 'UNSIGNED-PAYLOAD' : sha256Hex(body ?? '')
   if (opts.unsignedPayload) signing['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD'
 
+  // S3 rejects a SigV4 request that has no x-amz-content-sha256 header
+  // ("Missing required header for this request"), so always send and sign it.
+  const s3 = isS3(service)
+  if (s3) signing['x-amz-content-sha256'] = payloadHash
+
   // Sorted, lowercased header names form the SignedHeaders list.
   const sortedHeaderNames = Object.keys(signing).sort()
   const signedHeaders = sortedHeaderNames.join(';')
@@ -158,7 +187,7 @@ export function signAwsV4(opts: AwsV4Options): Record<string, string> {
 
   const canonicalRequest = [
     method.toUpperCase(),
-    canonicalUri(parsed.pathname),
+    canonicalUri(parsed.pathname, s3),
     canonicalQuery(parsed.searchParams),
     canonicalHeaders,
     signedHeaders,

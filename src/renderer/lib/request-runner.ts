@@ -1,4 +1,5 @@
 import type {
+  Auth,
   RequestModel,
   RequestSettings,
   RequestSpec,
@@ -188,6 +189,42 @@ function tabFor(tabId?: string): TabModel | null {
 }
 
 /** Run a tab's request end-to-end (pre-request script → send → tests → history); defaults to the active tab. */
+/**
+ * The engine refreshed an OAuth 2.0 token on a 401. Store it where the auth came
+ * from — the request itself, or the folder/collection it inherits from — so the
+ * next send uses it instead of refreshing again. A token field that holds a
+ * {{variable}} is left alone: overwriting the reference with a literal would
+ * quietly disconnect it from the environment.
+ */
+function keepRefreshedToken(tabId: string, savedRequestId: string | null, fresh: { accessToken: string; refreshToken?: string }): void {
+  const tab = useTabs.getState().doc.tabs.find((t) => t.id === tabId)
+  if (!tab) return
+  const patchOf = (a: Extract<Auth, { type: 'oauth2' }>): Extract<Auth, { type: 'oauth2' }> | null => {
+    if (a.accessToken.includes('{{') || (fresh.refreshToken && a.refreshToken?.includes('{{'))) return null
+    return { ...a, accessToken: fresh.accessToken, ...(fresh.refreshToken ? { refreshToken: fresh.refreshToken } : {}) }
+  }
+  const own = tab.request.auth
+  if (own.type === 'oauth2') {
+    const next = patchOf(own)
+    if (next) useTabs.getState().patchTab(tabId, { auth: next })
+    return
+  }
+  if (own.type !== 'inherit' || !savedRequestId) return
+  const collections = useCollections.getState()
+  const found = collections.locate(savedRequestId)
+  if (!found) return
+  for (let i = found.ancestors.length - 1; i >= 0; i--) {
+    const holder = found.ancestors[i]
+    const a = holder.auth
+    if (!a || a.type === 'inherit') continue
+    if (a.type === 'oauth2') {
+      const next = patchOf(a)
+      if (next) collections.updateFolderMeta(holder.id, { auth: next })
+    }
+    return
+  }
+}
+
 export async function sendActiveRequest(tabId?: string): Promise<void> {
   const tab = tabFor(tabId)
   if (!tab) return
@@ -303,6 +340,7 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
   })
 
   useResponse.getState().setResult(tab.id, requestId, result)
+  if (result.refreshedAuth) keepRefreshedToken(tab.id, tab.savedRequestId, result.refreshedAuth)
 
   // If a newer request superseded this tab while we awaited, stop here — don't add
   // a phantom history entry, mutate variables, or run tests for a hidden response.

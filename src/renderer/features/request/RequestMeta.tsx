@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RequestModel, TabModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { BuilderDockGrip } from '@renderer/lib/dock'
 import { useTabs } from '@renderer/store/tabs'
 import { debounce } from '@renderer/lib/debounce'
 import { tr } from '@renderer/lib/i18n'
@@ -90,6 +91,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
   return (
     <div className="reqmeta">
       <div className="reqmeta-row">
+        <BuilderDockGrip />
         {editing ? (
           <input
             className="reqmeta-input"

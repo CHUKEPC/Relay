@@ -6,6 +6,7 @@ import type {
   Auth,
   CollectionFolderNode,
   CollectionNode,
+  JwtAlg,
   KV,
   OAuth2Grant,
   RequestBody,
@@ -78,7 +79,7 @@ function urlToString(url: any): { raw: string; query: KV[]; pathVars: KV[] } {
   const pathVars: KV[] = (url.variable ?? []).map((v: any) => ({
     key: v.key ?? '',
     value: v.value ?? '',
-    enabled: true,
+    enabled: v.disabled !== true,
     description: v.description
   }))
   return { raw: base, query, pathVars }
@@ -87,6 +88,7 @@ function urlToString(url: any): { raw: string; query: KV[]; pathVars: KV[] } {
 function importAuth(a: any): Auth {
   if (!a || !a.type) return { type: 'inherit' }
   const pick = (arr: any[], key: string) => arr?.find((x) => x.key === key)?.value ?? ''
+  const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v))
   switch (a.type) {
     case 'bearer':
       return { type: 'bearer', token: pick(a.bearer ?? [], 'token') }
@@ -117,12 +119,100 @@ function importAuth(a: any): Auth {
         scope: pick(o, 'scope') || undefined
       }
     }
-    case 'digest':
-      return { type: 'digest', username: pick(a.digest ?? [], 'username'), password: pick(a.digest ?? [], 'password') }
+    case 'digest': {
+      const d = a.digest ?? []
+      const algo = pick(d, 'algorithm')
+      return {
+        type: 'digest',
+        username: pick(d, 'username'),
+        password: pick(d, 'password'),
+        // Carrying the challenge over keeps preemptive Digest working after an import.
+        realm: pick(d, 'realm') || undefined,
+        nonce: pick(d, 'nonce') || undefined,
+        opaque: pick(d, 'opaque') || undefined,
+        qop: pick(d, 'qop') === 'auth-int' ? 'auth-int' : pick(d, 'qop') === 'auth' ? 'auth' : undefined,
+        algorithm: algo === 'SHA-256' || algo === 'MD5-sess' || algo === 'SHA-256-sess' || algo === 'MD5' ? algo : undefined
+      }
+    }
+    case 'awsv4': {
+      const o = a.awsv4 ?? []
+      return {
+        type: 'aws',
+        accessKey: str(pick(o, 'accessKey')),
+        secretKey: str(pick(o, 'secretKey')),
+        region: str(pick(o, 'region')),
+        service: str(pick(o, 'service')),
+        sessionToken: str(pick(o, 'sessionToken')) || undefined
+      }
+    }
+    case 'hawk': {
+      const o = a.hawk ?? []
+      return {
+        type: 'hawk',
+        id: str(pick(o, 'authId')),
+        key: str(pick(o, 'authKey')),
+        algorithm: str(pick(o, 'algorithm')).toLowerCase() === 'sha1' ? 'sha1' : 'sha256',
+        ext: str(pick(o, 'extraData')) || undefined
+      }
+    }
+    case 'ntlm': {
+      const o = a.ntlm ?? []
+      return {
+        type: 'ntlm',
+        username: str(pick(o, 'username')),
+        password: str(pick(o, 'password')),
+        domain: str(pick(o, 'domain')) || undefined,
+        workstation: str(pick(o, 'workstation')) || undefined
+      }
+    }
+    case 'oauth1': {
+      const o = a.oauth1 ?? []
+      const method = str(pick(o, 'signatureMethod'))
+      return {
+        type: 'oauth1',
+        consumerKey: str(pick(o, 'consumerKey')),
+        consumerSecret: str(pick(o, 'consumerSecret')),
+        token: str(pick(o, 'token')) || undefined,
+        tokenSecret: str(pick(o, 'tokenSecret')) || undefined,
+        signatureMethod: method === 'HMAC-SHA256' || method === 'PLAINTEXT' ? method : 'HMAC-SHA1',
+        addTo: pick(o, 'addParamsToHeader') === false ? 'query' : 'header'
+      }
+    }
+    case 'edgegrid': {
+      const o = a.edgegrid ?? []
+      return { type: 'akamai', accessToken: str(pick(o, 'accessToken')), clientToken: str(pick(o, 'clientToken')), clientSecret: str(pick(o, 'clientSecret')) }
+    }
+    case 'jwt': {
+      const o = a.jwt ?? []
+      const alg = str(pick(o, 'algorithm')) as JwtAlg
+      return {
+        type: 'jwt',
+        algorithm: JWT_ALGS.includes(alg) ? alg : 'HS256',
+        secret: str(pick(o, 'secret')) || str(pick(o, 'privateKey')),
+        payload: str(pick(o, 'payload')) || '{}',
+        headerPrefix: str(pick(o, 'headerPrefix')) || 'Bearer',
+        addTo: pick(o, 'addTokenTo') === 'queryParam' ? 'query' : 'header',
+        queryParamName: str(pick(o, 'queryParamKey')) || undefined
+      }
+    }
+    case 'asap': {
+      const o = a.asap ?? []
+      return {
+        type: 'asap',
+        issuer: str(pick(o, 'iss')),
+        audience: str(pick(o, 'aud')),
+        keyId: str(pick(o, 'kid')),
+        privateKey: str(pick(o, 'privateKey')),
+        subject: str(pick(o, 'sub')) || undefined
+      }
+    }
     case 'noauth':
       return { type: 'none' }
     default:
-      return { type: 'inherit' }
+      // A scheme Relay cannot express must NOT become 'inherit': that would make
+      // the request silently borrow the parent's credentials. No auth is the
+      // honest import, and the warning list tells the user what was dropped.
+      return { type: 'none' }
   }
 }
 
@@ -137,7 +227,12 @@ function importBody(body: any): RequestBody {
     case 'urlencoded':
       return {
         type: 'urlencoded',
-        items: (body.urlencoded ?? []).map((p: any) => ({ key: p.key ?? '', value: p.value ?? '', enabled: p.disabled !== true }))
+        items: (body.urlencoded ?? []).map((p: any) => ({
+          key: p.key ?? '',
+          value: p.value ?? '',
+          enabled: p.disabled !== true,
+          description: typeof p.description === 'string' ? p.description : undefined
+        }))
       }
     case 'formdata':
       return {
@@ -147,7 +242,9 @@ function importBody(body: any): RequestBody {
           type: p.type === 'file' ? 'file' : 'text',
           value: p.type === 'file' ? '' : p.value ?? '',
           filePath: p.type === 'file' ? (Array.isArray(p.src) ? p.src[0] : p.src) : undefined,
-          enabled: p.disabled !== true
+          contentType: typeof p.contentType === 'string' ? p.contentType : undefined,
+          enabled: p.disabled !== true,
+          description: typeof p.description === 'string' ? p.description : undefined
         }))
       }
     case 'graphql':
@@ -224,6 +321,12 @@ function scriptFromEvents(events: any[], listen: string): string | undefined {
   return typeof exec === 'string' ? exec : undefined
 }
 
+/** `item[]` of a collection/folder — hand-edited files carry nulls and non-objects. */
+function itemsOf(items: any): CollectionNode[] {
+  if (!Array.isArray(items)) return []
+  return items.filter((i) => i && typeof i === 'object').map(importItem)
+}
+
 function importItem(item: any): CollectionNode {
   if (item.item) {
     // folder
@@ -235,7 +338,7 @@ function importItem(item: any): CollectionNode {
       description: typeof item.description === 'string' ? item.description : undefined,
       preRequestScript: scriptFromEvents(item.event, 'prerequest'),
       testScript: scriptFromEvents(item.event, 'test'),
-      children: item.item.map(importItem)
+      children: itemsOf(item.item)
     }
     return folder
   }
@@ -266,10 +369,17 @@ export function importPostmanCollection(obj: any): CollectionFolderNode {
     name: obj.info?.name ?? 'Imported collection',
     auth: obj.auth ? importAuth(obj.auth) : undefined,
     description: typeof obj.info?.description === 'string' ? obj.info.description : undefined,
-    variables: (obj.variable ?? []).map((v: any) => ({ key: v.key ?? '', value: v.value ?? '', enabled: true })),
+    variables: (Array.isArray(obj.variable) ? obj.variable : []).map((v: any) => ({
+      key: v.key ?? '',
+      value: v.value ?? '',
+      // Postman disables a variable with `disabled: true` and marks a masked one
+      // with `type: "secret"`; both were dropped before (everything came back enabled).
+      enabled: v.disabled !== true,
+      secret: v.type === 'secret' || v.secret === true ? true : undefined
+    })),
     preRequestScript: scriptFromEvents(obj.event, 'prerequest'),
     testScript: scriptFromEvents(obj.event, 'test'),
-    children: (obj.item ?? []).map(importItem)
+    children: itemsOf(obj.item)
   }
   return collection
 }
@@ -320,12 +430,91 @@ function exportAuth(auth?: Auth): any {
           { key: 'password', value: auth.password, type: 'string' }
         ]
       }
+    case 'aws':
+      return {
+        type: 'awsv4',
+        awsv4: [
+          { key: 'accessKey', value: auth.accessKey, type: 'string' },
+          { key: 'secretKey', value: auth.secretKey, type: 'string' },
+          { key: 'region', value: auth.region, type: 'string' },
+          { key: 'service', value: auth.service, type: 'string' },
+          { key: 'sessionToken', value: auth.sessionToken ?? '', type: 'string' }
+        ]
+      }
+    case 'hawk':
+      return {
+        type: 'hawk',
+        hawk: [
+          { key: 'authId', value: auth.id, type: 'string' },
+          { key: 'authKey', value: auth.key, type: 'string' },
+          { key: 'algorithm', value: auth.algorithm, type: 'string' },
+          { key: 'extraData', value: auth.ext ?? '', type: 'string' }
+        ]
+      }
+    case 'ntlm':
+      return {
+        type: 'ntlm',
+        ntlm: [
+          { key: 'username', value: auth.username, type: 'string' },
+          { key: 'password', value: auth.password, type: 'string' },
+          { key: 'domain', value: auth.domain ?? '', type: 'string' },
+          { key: 'workstation', value: auth.workstation ?? '', type: 'string' }
+        ]
+      }
+    case 'oauth1':
+      return {
+        type: 'oauth1',
+        oauth1: [
+          { key: 'consumerKey', value: auth.consumerKey, type: 'string' },
+          { key: 'consumerSecret', value: auth.consumerSecret, type: 'string' },
+          { key: 'token', value: auth.token ?? '', type: 'string' },
+          { key: 'tokenSecret', value: auth.tokenSecret ?? '', type: 'string' },
+          { key: 'signatureMethod', value: auth.signatureMethod, type: 'string' },
+          { key: 'addParamsToHeader', value: auth.addTo !== 'query', type: 'boolean' }
+        ]
+      }
+    case 'akamai':
+      return {
+        type: 'edgegrid',
+        edgegrid: [
+          { key: 'accessToken', value: auth.accessToken, type: 'string' },
+          { key: 'clientToken', value: auth.clientToken, type: 'string' },
+          { key: 'clientSecret', value: auth.clientSecret, type: 'string' }
+        ]
+      }
+    case 'jwt':
+      return {
+        type: 'jwt',
+        jwt: [
+          { key: 'algorithm', value: auth.algorithm, type: 'string' },
+          { key: 'secret', value: auth.secret, type: 'string' },
+          { key: 'payload', value: auth.payload, type: 'string' },
+          { key: 'headerPrefix', value: auth.headerPrefix, type: 'string' },
+          { key: 'addTokenTo', value: auth.addTo === 'query' ? 'queryParam' : 'header', type: 'string' },
+          { key: 'queryParamKey', value: auth.queryParamName ?? 'token', type: 'string' }
+        ]
+      }
+    case 'asap':
+      return {
+        type: 'asap',
+        asap: [
+          { key: 'iss', value: auth.issuer, type: 'string' },
+          { key: 'aud', value: auth.audience, type: 'string' },
+          { key: 'kid', value: auth.keyId, type: 'string' },
+          { key: 'privateKey', value: auth.privateKey, type: 'string' },
+          { key: 'sub', value: auth.subject ?? '', type: 'string' }
+        ]
+      }
     case 'none':
       return { type: 'noauth' }
     default:
-      return undefined
+      // Never leave auth out for a request that has some: an absent block reads
+      // back as "inherit", which would hand the parent's credentials to it.
+      return { type: 'noauth' }
   }
 }
+
+const JWT_ALGS: JwtAlg[] = ['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512']
 
 function exportBody(body: RequestBody): any {
   switch (body.type) {
@@ -334,7 +523,10 @@ function exportBody(body: RequestBody): any {
     case 'raw':
       return { mode: 'raw', raw: body.text, options: { raw: { language: body.language } } }
     case 'urlencoded':
-      return { mode: 'urlencoded', urlencoded: body.items.map((i) => ({ key: i.key, value: i.value, disabled: !i.enabled })) }
+      return {
+        mode: 'urlencoded',
+        urlencoded: body.items.map((i) => ({ key: i.key, value: i.value, disabled: !i.enabled, description: i.description }))
+      }
     case 'formdata':
       return {
         mode: 'formdata',
@@ -343,7 +535,9 @@ function exportBody(body: RequestBody): any {
           type: i.type,
           value: i.type === 'text' ? i.value : undefined,
           src: i.type === 'file' ? i.filePath : undefined,
-          disabled: !i.enabled
+          contentType: i.contentType,
+          disabled: !i.enabled,
+          description: i.description
         }))
       }
     case 'graphql':
@@ -366,11 +560,11 @@ function exportRequest(r: RequestModel): any {
     event: exportEvents(r.preRequestScript, r.testScript),
     request: {
       method: r.method,
-      header: r.headers.map((h) => ({ key: h.key, value: h.value, disabled: !h.enabled })),
+      header: r.headers.map((h) => ({ key: h.key, value: h.value, disabled: !h.enabled, description: h.description })),
       url: {
         raw: r.url,
-        query: r.query.map((q) => ({ key: q.key, value: q.value, disabled: !q.enabled })),
-        variable: r.pathVariables.map((p) => ({ key: p.key, value: p.value }))
+        query: r.query.map((q) => ({ key: q.key, value: q.value, disabled: !q.enabled, description: q.description })),
+        variable: r.pathVariables.map((p) => ({ key: p.key, value: p.value, disabled: !p.enabled, description: p.description }))
       },
       auth: exportAuth(r.auth),
       body: exportBody(r.body),
@@ -384,6 +578,7 @@ function exportNode(node: CollectionNode): any {
   if (node.type === 'request') return exportRequest(node.request)
   return {
     name: node.name,
+    description: node.description,
     auth: exportAuth(node.auth),
     event: exportEvents(node.preRequestScript, node.testScript),
     item: node.children.map(exportNode)
@@ -395,11 +590,17 @@ export function exportPostmanCollection(node: CollectionFolderNode): any {
     info: {
       _postman_id: node.id,
       name: node.name,
+      description: node.description,
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'
     },
     auth: exportAuth(node.auth),
     event: exportEvents(node.preRequestScript, node.testScript),
-    variable: (node.variables ?? []).map((v) => ({ key: v.key, value: v.value })),
+    variable: (node.variables ?? []).map((v) => ({
+      key: v.key,
+      value: v.value,
+      type: v.secret ? 'secret' : undefined,
+      disabled: v.enabled ? undefined : true
+    })),
     item: node.children.map(exportNode)
   }
 }

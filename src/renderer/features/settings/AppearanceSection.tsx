@@ -5,8 +5,10 @@ import { useSettings } from '@renderer/store/settings'
 import { useCap, useFeatures } from '@renderer/store/features'
 import { useUi } from '@renderer/store/ui'
 import { themeVariant, type PackTheme } from '@shared/pack-data'
+import { THEME_GUIDE_URL } from '@shared/constants'
+import { useUserThemes } from '@renderer/store/user-themes'
 
-import { tr, trf } from '@renderer/lib/i18n'
+import { tr, trf, useI18n } from '@renderer/lib/i18n'
 type ThemeChoice = SettingsDoc['theme']
 
 interface ThemeSwatchDef {
@@ -197,6 +199,36 @@ export function AppearanceSection(): JSX.Element {
   const packTheme = useSettings((s) => s.settings.packTheme)
   const hasThemePack = useCap('themes.extra')
   const packThemes = useFeatures((s) => s.themes)
+  const userThemes = useUserThemes((s) => s.themes)
+
+  /** Pick a JSON theme file, validate it, and add what it holds. */
+  const loadThemeFile = async (): Promise<void> => {
+    const picked = await window.api.openFile({ filters: [{ name: 'JSON', extensions: ['json'] }] })
+    const file = picked?.[0]
+    if (!file) return
+    const toast = useUi.getState().showToast
+    try {
+      const text = await window.api.readTextFile(file.filePath)
+      const fallbackName = file.fileName.replace(/.json$/i, '')
+      const res = useUserThemes.getState().addFromText(text, fallbackName)
+      if (res.error) {
+        const why: Record<string, string> = {
+          'too-large': tr('Файл слишком большой для темы'),
+          'not-json': tr('Это не JSON-файл'),
+          'no-themes': tr('В файле нет ни одной темы в понятном формате — смотрите руководство по темам')
+        }
+        toast(why[res.error] ?? tr('Не удалось прочитать тему'), 'error')
+        return
+      }
+      toast(
+        res.replaced
+          ? trf('Добавлено тем: {added}, обновлено: {replaced}', { added: res.added, replaced: res.replaced })
+          : trf('Добавлено тем: {added}', { added: res.added })
+      )
+    } catch (err) {
+      toast(trf('Не удалось прочитать файл: {message}', { message: err instanceof Error ? err.message : String(err) }), 'error')
+    }
+  }
 
   const [draft, setDraft] = useState<CustomTheme | null>(null)
 
@@ -321,6 +353,44 @@ export function AppearanceSection(): JSX.Element {
               {tr('Открыть «Плагины»')}
             </button>
           </span>
+        </div>
+      )}
+
+      <div className="set-group-label">{tr('Мои темы')}</div>
+      <div className="user-theme-head">
+        <span className="d">
+          {tr('Темы из файла: один JSON с цветами. Формат и пример — в руководстве по темам.')}{' '}
+          <button className="link-btn" onClick={() => void window.api.openExternal(useI18n.getState().lang === 'ru' ? THEME_GUIDE_URL.ru : THEME_GUIDE_URL.en)}>
+            {tr('Открыть руководство')}
+          </button>
+        </span>
+        <button className="btn" onClick={() => void loadThemeFile()}>
+          <Icon name="download" size={14} /> {tr('Загрузить тему…')}
+        </button>
+      </div>
+      {userThemes.length > 0 && (
+        <div className="theme-swatch-row brand-theme-row pack-theme-row">
+          {userThemes.map((t) => (
+            <div key={t.id} className="user-theme-cell">
+              <PackThemeCard
+                theme={t}
+                mode={previewMode(theme)}
+                on={themePreset === 'pack' && packTheme === t.id}
+                card={selectCard(() => setPackTheme(t))}
+              />
+              <button
+                className="icon-btn user-theme-del"
+                title={tr('Удалить тему')}
+                onClick={() => {
+                  useUserThemes.getState().remove(t.id)
+                  // The active theme must not vanish from under the user.
+                  if (themePreset === 'pack' && packTheme === t.id) setThemePreset('relay')
+                }}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

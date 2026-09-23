@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import type { CollectionNode } from '@shared/types'
+import { makeId } from '@shared/id'
+import { reidNode } from '@shared/backup-shape'
 import { Icon } from '@renderer/components/Icon'
 import { useCollections } from '@renderer/store/collections'
 import { useEnvironments } from '@renderer/store/environments'
@@ -32,13 +35,35 @@ function gatherSnapshot(): WorkspaceSnapshot {
   }
 }
 
-/** Add a backup's contents to what is already here; nothing is overwritten. */
+/** Every node id in a tree, requests included. */
+function collectIds(nodes: CollectionNode[], out = new Set<string>()): Set<string> {
+  for (const n of nodes) {
+    out.add(n.id)
+    if (n.type !== 'request') collectIds(n.children, out)
+  }
+  return out
+}
+
+/**
+ * Add a backup's contents to what is already here; nothing is overwritten.
+ * Restoring the same backup twice (or next to the workspace it came from) used
+ * to create a second node with the same id, and edits then landed on whichever
+ * came first — a collection that shares any id with the workspace gets fresh
+ * ids instead.
+ */
 function mergeSnapshot(snapshot: WorkspaceSnapshot): void {
   const cols = useCollections.getState()
-  for (const c of snapshot.collections) cols.addCollectionNode(c)
+  const taken = collectIds(cols.doc.collections)
+  for (const c of snapshot.collections) {
+    const clash = [...collectIds([c])].some((id) => taken.has(id))
+    const node = clash ? reidNode(c, makeId) : c
+    for (const id of collectIds([node])) taken.add(id)
+    cols.addCollectionNode(node)
+  }
 
   const env = useEnvironments.getState()
-  for (const e of snapshot.environments) env.addEnvironment(e)
+  const envIds = new Set(env.env.environments.map((e) => e.id))
+  for (const e of snapshot.environments) env.addEnvironment(envIds.has(e.id) ? { ...e, id: makeId('env') } : e)
 
   if (snapshot.globals.length) {
     const existing = env.globals.variables
@@ -163,7 +188,7 @@ export function DataSection(): JSX.Element {
       <div className="set-h">{tr('Данные')}</div>
       <div className="set-sub" style={{ maxWidth: 620 }}>
         {tr(
-          'Резервная копия текущего рабочего пространства: коллекции, окружения, глобальные переменные и история. Ключи и токены в копию не попадают — они хранятся в защищённом хранилище операционной системы.'
+          'Резервная копия текущего рабочего пространства: коллекции, окружения, глобальные переменные и история. Ключи AI-провайдеров и плагинов в копию не попадают — они лежат в защищённом хранилище системы. А вот всё, что введено в самих запросах и переменных (токены, пароли, секретные переменные), в копию входит — храните файл так же бережно, как рабочую папку.'
         )}
       </div>
 

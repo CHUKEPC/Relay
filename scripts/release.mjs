@@ -7,6 +7,9 @@
  *   npm run release -- --dry-run       build and list what would be uploaded, touch nothing on GitHub
  *   npm run release -- --draft         create the release as a draft
  *   npm run release -- --linux-tar     also build a portable Linux tar.gz (from Windows/macOS)
+ *   npm run release -- --arm64         also build for ARM64: Windows on ARM installer and, with
+ *                                      --linux-tar, a Linux ARM64 tar.gz (Electron needs no
+ *                                      native rebuild, so both cross-build from an x64 machine)
  *   npm run release -- --version 1.1.1 --dir ../old/release --skip-build
  *
  * Run it once on Windows, once on macOS and once on Linux: every run adds its
@@ -122,16 +125,24 @@ function ensureUnpackedFree() {
 if (!flag('skip-build')) {
   ensureUnpackedFree()
   run('npm', ['run', 'build'])
-  const archArgs = platform === 'mac' ? ['--x64', '--arm64'] : ['--x64']
+  // ARM64 first: every build rewrites latest*.yml, and the x64 one should win.
+  if (flag('arm64') && platform === 'win') {
+    // A separate installer rather than one that carries both architectures —
+    // that would double the download for everybody on x64.
+    run('npx', ['--no-install', 'electron-builder', '--win', '--arm64', '--publish', 'never', '-c.win.artifactName=${productName}-${version}-arm64-Setup.${ext}'])
+  }
+  const archArgs = platform === 'mac' ? ['--x64', '--arm64'] : platform === 'linux' && flag('arm64') ? ['--x64', '--arm64'] : ['--x64']
   run('npx', ['--no-install', 'electron-builder', `--${platform}`, ...archArgs, '--publish', 'never'])
   // From Windows, Linux can still get a portable tar.gz (AppImage/deb need Linux or a CI runner).
   if (flag('linux-tar') && platform !== 'linux') {
-    run('npx', ['--no-install', 'electron-builder', '--linux', 'tar.gz', '--x64', '--publish', 'never'])
+    run('npx', ['--no-install', 'electron-builder', '--linux', 'tar.gz', '--x64', ...(flag('arm64') ? ['--arm64'] : []), '--publish', 'never'])
   }
 }
 if (flag('linux-tar')) {
-  const tarball = join(outDir, `${pkg.name}-${version}.tar.gz`)
-  if (existsSync(tarball)) fixLinuxTarModes(tarball)
+  // relay-api-client-<v>.tar.gz and, with --arm64, relay-api-client-<v>-arm64.tar.gz
+  for (const name of readdirSync(outDir)) {
+    if (name.startsWith(`${pkg.name}-${version}`) && name.endsWith('.tar.gz')) fixLinuxTarModes(join(outDir, name))
+  }
 }
 
 /* -------------------------------------------------------------- artifacts */

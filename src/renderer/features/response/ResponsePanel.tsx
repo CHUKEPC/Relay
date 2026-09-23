@@ -10,6 +10,7 @@ import { Icon } from '@renderer/components/Icon'
 import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
+import { PaneDockControls } from '@renderer/lib/dock'
 import { disableSslVerification, isCertificateError } from '@renderer/lib/tls-hint'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { kbd } from '@renderer/lib/platform'
@@ -64,6 +65,7 @@ const ERROR_KIND_LABEL: Record<HttpErrorKind, string> = {
   timeout: 'Превышено время ожидания',
   abort: 'Запрос отменён',
   protocol: 'Ошибка протокола',
+  auth: 'Ошибка авторизации — запрос не отправлен',
   unknown: 'Ошибка сети'
 }
 
@@ -455,6 +457,7 @@ function StatusBar({
         <span>{result.headers.length} headers</span>
       </div>
       <div className="resp-actions">
+        <PaneDockControls />
         {/* The status bar is a no-wrap row (and split view halves it), so at
             most 3 plugin buttons render inline; the rest go into a ⋯ menu. */}
         {pluginButtons.slice(0, 3).map(({ pluginId, pluginName, button }) => {
@@ -671,6 +674,13 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
   if (r.status === 'empty') {
     return (
       <div className="response" style={{ flex: 1 }}>
+        {/* An empty response still carries the status bar, so the panel can be
+            moved before the first request is ever sent. */}
+        <div className="resp-statusbar resp-statusbar-bare">
+          <div className="resp-actions">
+            <PaneDockControls />
+          </div>
+        </div>
         <div className="empty">
           <div className="empty-card">
             <div className="empty-ico">
@@ -692,6 +702,9 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         <div className="resp-statusbar">
           <div className="resp-meta">
             <Icon name="refresh" size={14} className="spin" /> {tr('Отправка запроса…')} </div>
+          <div className="resp-actions">
+            <PaneDockControls />
+          </div>
         </div>
         <div className="resp-body">
           <RespLoading />

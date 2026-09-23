@@ -14,6 +14,7 @@ import { useSettings } from './store/settings'
 import { Titlebar } from './app/Titlebar'
 import { TabStrip } from './app/TabStrip'
 import { Workspace } from './app/Workspace'
+import { FileDropZone } from './app/FileDropZone'
 import { Sidebar } from './features/sidebar/Sidebar'
 import { SaveDialog } from './features/collections/SaveDialog'
 import { Tour, shouldShowTour, startTour } from './features/onboarding/Tour'
@@ -48,6 +49,7 @@ export function App() {
   const [ready, setReady] = useState(booted)
 
   const aiOpen = useUi((s) => s.aiOpen)
+  const sidebarDock = useUi((s) => s.sidebarDock)
   const hasAi = useCap('ai')
   const settingsOpen = useUi((s) => s.settingsOpen)
   const paletteOpen = useUi((s) => s.paletteOpen)
@@ -179,7 +181,7 @@ export function App() {
     <div className="app">
       <Titlebar />
       <TabStrip />
-      <div className="body">
+      <div className={`body side-dock-${sidebarDock}`}>
         <Sidebar />
         <Workspace />
         {hasAi && aiOpen && (
@@ -211,6 +213,7 @@ export function App() {
       />
 
       <Tour />
+      <FileDropZone />
 
       {toast && (
         <div className="toast-host">

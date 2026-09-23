@@ -12,7 +12,7 @@
  *   1. auth header WITHOUT the signature, terminated with ';':
  *        "EG1-HMAC-SHA256 client_token=..;access_token=..;timestamp=..;nonce=..;"
  *   2. signing key  = base64( HMAC-SHA256(clientSecret, timestamp) )
- *   3. content hash = base64( SHA-256(body) ) for POST/PUT (body truncated to
+ *   3. content hash = base64( SHA-256(body) ) for POST only (body truncated to
  *      maxBody, default 131072 bytes), otherwise the empty string
  *   4. data-to-sign = join with '\t' (tab) of, each followed by a trailing '\n':
  *        METHOD (uppercase)
@@ -38,7 +38,7 @@ export interface EdgeGridOptions {
   headersToSign?: string[]
   /** Request headers, used together with `headersToSign`. */
   headers?: Record<string, string>
-  /** Request body (only signed for POST/PUT). */
+  /** Request body (only signed for POST). */
   body?: string
   /** Max body bytes to hash; bodies are truncated to this length. Default 131072. */
   maxBody?: number
@@ -108,13 +108,15 @@ function canonicalizeHeaders(
 }
 
 /**
- * Compute the content hash for the request body. Only POST and PUT bodies are
- * hashed; the body is truncated to `maxBody` bytes first. Returns '' when there
- * is nothing to hash.
+ * Compute the content hash for the request body. Per Akamai's spec (and both of
+ * their reference client libraries) ONLY a POST body is hashed — for every other
+ * method, including PUT, the field stays empty. Hashing a PUT body would make the
+ * signature disagree with the one the edge server computes, so the request would
+ * be rejected with a 401. The body is truncated to `maxBody` bytes first.
  */
 function contentHash(method: string, body: string | undefined, maxBody: number): string {
   const m = method.toUpperCase()
-  if (m !== 'POST' && m !== 'PUT') return ''
+  if (m !== 'POST') return ''
   if (!body) return ''
 
   // Truncate by BYTES (not characters): Akamai limits the hashed body length in

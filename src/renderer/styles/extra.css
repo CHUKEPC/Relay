@@ -1222,3 +1222,70 @@
 
 /* ---------- «Код»: hint for the extra-languages pack ---------- */
 .codegen-more { font-size: 12px; line-height: 1.5; color: var(--tx-2); margin: -6px 0 12px; }
+
+/* Realtime connection options (MQTT broker login, WS subprotocols, Socket.IO events). */
+.rt-config-row {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rt-config-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.rt-config-label {
+  font-size: 12px;
+  color: var(--tx-3);
+  flex: none;
+}
+
+/* Protocol label (WS, SSE, SIO, MQTT, gRPC) where an HTTP method would sit. */
+.m-proto { color: var(--accent); }
+
+/* The environment pill never wraps: a narrow window used to break
+   «Без окружения» onto two lines and push the titlebar out of shape. */
+.env-pill { white-space: nowrap; flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.env-pill[data-tour='env'] { min-width: 118px; }
+.env-pill:not([data-tour='env']) { min-width: 96px; }
+.env-pill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* In a narrow window the search pill gives up its width first — the brand,
+   the workspace switcher and the environment keep theirs. */
+.titlebar > *:not(.global-search):not(.grow):not(.env-pill) { flex-shrink: 0; }
+.titlebar .global-search { flex: 0 1 420px; min-width: 120px; }
+.titlebar .global-search .ph { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1000px) {
+  .titlebar .global-search .kbd { display: none; }
+  /* The mark alone still says «Relay». */
+  .titlebar .brand { font-size: 0; gap: 0; }
+}
+
+/* Files dragged in from the OS (app/FileDropZone.tsx). */
+.file-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--bg-0) 70%, transparent);
+  border: 2px dashed var(--accent);
+  border-radius: 10px;
+}
+.file-drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 460px;
+  padding: 22px 26px;
+  text-align: center;
+  color: var(--accent);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 12px);
+}
+.file-drop-title { font-size: 15px; font-weight: 600; color: var(--tx-0); }
+.file-drop-sub { font-size: 12px; line-height: 1.5; color: var(--tx-2); }

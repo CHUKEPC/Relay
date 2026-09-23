@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
-import { themeVariant, type PackTheme } from '@shared/pack-data'
+import { themeVariant, USER_THEME_PACK, type PackTheme } from '@shared/pack-data'
 import { defaultSettingsDoc } from './defaults'
 import { persist } from './persist'
 import { onPackThemes } from './features'
@@ -21,6 +21,21 @@ interface SettingsState {
   setPackTheme: (theme: PackTheme) => void
   setCustomTheme: (theme: CustomTheme | null) => void
   update: (patch: Partial<SettingsDoc>) => void
+}
+
+/**
+ * Low-power mode is a whole-document switch: the stylesheet keys off this
+ * attribute, and so does the editor (plain instead of Monaco). It is applied
+ * once at hydrate — flipping the setting only takes effect after a restart,
+ * because the GPU decision is made before the window exists.
+ */
+function applyLowPower(on: boolean): void {
+  document.documentElement.toggleAttribute('data-low-power', on)
+}
+
+/** True when this window started in low-power mode. */
+export function lowPowerActive(): boolean {
+  return document.documentElement.hasAttribute('data-low-power')
 }
 
 function systemPrefersDark(): boolean {
@@ -110,6 +125,10 @@ export const useSettings = create<SettingsState>((set, get) => ({
     // Merge over defaults so a settings.json from an older version that lacks newer
     // keys doesn't yield `undefined` (which flips controlled inputs to uncontrolled).
     const merged = { ...defaultSettingsDoc(), ...doc, version: STORAGE_VERSION }
+    // 1.2 called it «Экономить видеопамять»; 1.3 turns that into low-power mode.
+    if (doc.lowPowerMode === undefined && doc.disableHardwareAcceleration === true) merged.lowPowerMode = true
+    delete merged.disableHardwareAcceleration
+    applyLowPower(merged.lowPowerMode)
     const resolved = applyAppearance(merged)
     set({ settings: merged, resolvedTheme: resolved })
   },
@@ -192,6 +211,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
 onPackThemes((themes) => {
   const { settings } = useSettings.getState()
   if (settings.themePreset !== 'pack') return
+  // A theme the user loaded from a file lives in its own store and is not
+  // affected by which packs are enabled.
+  if (settings.packTheme?.startsWith(`${USER_THEME_PACK}/`)) return
   const theme = themes.find((t) => t.id === settings.packTheme)
   if (!theme) {
     useSettings.getState().update({ themePreset: 'relay', packTheme: null, packThemeData: null, accentColor: null })

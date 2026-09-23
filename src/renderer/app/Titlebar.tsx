@@ -87,7 +87,7 @@ export function Titlebar() {
         <DropdownMenu.Trigger asChild>
           <div className="env-pill nodrag" data-tour="env">
             <span className="dot" />
-            {activeEnv ? tr(activeEnv.name) : tr('Без окружения')}
+            <span className="env-pill-name">{activeEnv ? tr(activeEnv.name) : tr('Без окружения')}</span>
             <Icon name="chevDsm" size={13} style={{ color: 'var(--tx-3)' }} />
           </div>
         </DropdownMenu.Trigger>

@@ -187,6 +187,9 @@ function parseCsv(text: string): VarImportResult {
   const first = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
   const delim = first.includes('\t') ? '\t' : first.split(';').length > first.split(',').length ? ';' : ','
   let rows = csvRecords(text, delim).filter((r) => !(r[0] ?? '').startsWith('#'))
+  // A file made only of delimiters/comments has no rows at all — say so instead
+  // of failing later with a TypeError the user cannot act on.
+  if (!rows.length) throw new Error('No variables found: the table has no rows with a key.')
   const head = rows[0].map((h) => h.toLowerCase())
   const col = (...names: string[]) => head.findIndex((h) => names.includes(h))
   let keyCol = col('key', 'name', 'variable', 'ключ', 'имя', 'переменная')

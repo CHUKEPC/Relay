@@ -418,13 +418,36 @@ function generateCodeVerifier(): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** PKCE S256 challenge (RFC 7636 §4.2): base64url(SHA-256(verifier)). */
+async function codeChallengeOf(verifier: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
+  let binary = ''
+  for (const b of digest) binary += String.fromCharCode(b)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/**
+ * The code field also accepts the whole redirect URL the browser landed on —
+ * copying the address bar is easier than finding `code=` in it.
+ */
+function codeFromInput(text: string): string {
+  const trimmed = text.trim()
+  if (!/^https?:\/\//i.test(trimmed)) return trimmed
+  try {
+    const u = new URL(trimmed)
+    return u.searchParams.get('code') ?? trimmed
+  } catch {
+    return trimmed
+  }
+}
+
 function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' }>; setAuth: (a: Auth) => void }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
   const pkceOn = auth.codeVerifier !== undefined
 
-  const getToken = async () => {
+  const getToken = async (codeOverride?: string) => {
     if (!auth.tokenUrl) {
       setMsg(tr('Укажите Token URL'))
       return
@@ -439,7 +462,7 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       scope: auth.scope,
       username: auth.username,
       password: auth.password,
-      code: auth.code,
+      code: codeOverride ?? auth.code,
       redirectUri: auth.redirectUri,
       codeVerifier: auth.codeVerifier,
       refreshToken: auth.refreshToken,
@@ -448,7 +471,12 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
     setBusy(false)
     if (res.ok && res.accessToken) {
       // Persist the new access token (and a rotated refresh token, if returned).
-      setAuth({ ...auth, accessToken: res.accessToken, ...(res.refreshToken ? { refreshToken: res.refreshToken } : {}) })
+      setAuth({
+        ...auth,
+        ...(codeOverride ? { code: codeOverride } : {}),
+        accessToken: res.accessToken,
+        ...(res.refreshToken ? { refreshToken: res.refreshToken } : {})
+      })
       setMsg(tr('Токен получен'))
     } else {
       setMsg(res.error ?? tr('Не удалось получить токен'))
@@ -475,6 +503,45 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       setMsg(trf('Откройте {url} и введите код: {code}', { url: where, code: res.userCode ?? '' }))
     } else {
       setMsg(res.error ?? tr('Не удалось получить device code'))
+    }
+  }
+
+  /**
+   * Open the provider's sign-in page. A loopback redirect URI is caught by
+   * Relay and the code goes straight to the token endpoint; any other redirect
+   * leaves the user to paste the code (or the whole URL) back here.
+   */
+  const signInWithBrowser = async () => {
+    if (!auth.authUrl) {
+      setMsg(tr('Укажите Auth URL'))
+      return
+    }
+    if (!auth.clientId) {
+      setMsg(tr('Укажите Client ID'))
+      return
+    }
+    setBusy(true)
+    setMsg(tr('Ожидаем вход в браузере…'))
+    const codeChallenge = auth.codeVerifier ? await codeChallengeOf(auth.codeVerifier) : undefined
+    const res = await window.api.oauthAuthorize({
+      authUrl: auth.authUrl,
+      clientId: auth.clientId,
+      redirectUri: auth.redirectUri,
+      scope: auth.scope,
+      codeChallenge
+    })
+    setBusy(false)
+    if (!res.ok) {
+      setMsg(res.error ?? tr('Вход не удался'))
+      return
+    }
+    if (res.manual) {
+      setMsg(tr('Браузер открыт. После входа вставьте код — или весь адрес страницы, куда вас перенаправило, — в поле Authorization Code.'))
+      return
+    }
+    if (res.code) {
+      setAuth({ ...auth, code: res.code })
+      await getToken(res.code)
     }
   }
 
@@ -528,16 +595,27 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       )}
       {auth.grant === 'authorization_code' && (
         <>
-          <Field label="Authorization Code">
-            <input className="input mono" value={auth.code ?? ''} onChange={(e) => setAuth({ ...auth, code: e.target.value })} placeholder={tr('код, полученный после редиректа')} />
+          <Field label="Auth URL">
+            <input className="input mono" value={auth.authUrl ?? ''} onChange={(e) => setAuth({ ...auth, authUrl: e.target.value })} placeholder="https://auth.example.com/oauth/authorize" />
           </Field>
-          <Field label="Redirect URI">
-            <input className="input mono" value={auth.redirectUri ?? ''} onChange={(e) => setAuth({ ...auth, redirectUri: e.target.value })} placeholder="https://app.example.com/callback" />
+          <Field
+            label="Redirect URI"
+            hint={tr('http://127.0.0.1:порт/… — Relay сам поймает код после входа; другой адрес — код нужно будет вставить вручную')}
+          >
+            <input className="input mono" value={auth.redirectUri ?? ''} onChange={(e) => setAuth({ ...auth, redirectUri: e.target.value })} placeholder="http://127.0.0.1:53682/callback" />
+          </Field>
+          <Field label="Authorization Code">
+            <input
+              className="input mono"
+              value={auth.code ?? ''}
+              onChange={(e) => setAuth({ ...auth, code: codeFromInput(e.target.value) })}
+              placeholder={tr('код или весь адрес после редиректа')}
+            />
           </Field>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 8px' }}>
             <input type="checkbox" checked={pkceOn} onChange={(e) => togglePkce(e.target.checked)} /> {tr('Использовать PKCE')} </label>
           {pkceOn && (
-            <Field label="Code Verifier" hint={tr('отправляется при обмене кода на токен')}>
+            <Field label="Code Verifier" hint={tr('его хэш (S256) уходит на страницу входа, сам verifier — при обмене кода на токен')}>
               <input className="input mono" value={auth.codeVerifier ?? ''} readOnly />
             </Field>
           )}
@@ -564,8 +642,13 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--tx-1)', margin: '4px 0 10px' }}>
         <input type="checkbox" checked={auth.autoRefresh ?? false} onChange={(e) => setAuth({ ...auth, autoRefresh: e.target.checked })} /> {tr('Авто-обновление токена при 401 (нужны Refresh Token и Token URL)')} </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button className="btn primary" onClick={getToken} disabled={busy}>
-          {busy ? tr('Запрос…') : tr('Получить токен')}
+        {auth.grant === 'authorization_code' && (
+          <button className="btn primary" onClick={() => void signInWithBrowser()} disabled={busy}>
+            {tr('Войти через браузер')}
+          </button>
+        )}
+        <button className={auth.grant === 'authorization_code' ? 'btn' : 'btn primary'} onClick={() => void getToken()} disabled={busy}>
+          {busy ? tr('Запрос…') : auth.grant === 'authorization_code' ? tr('Обменять код на токен') : tr('Получить токен')}
         </button>
         {auth.grant === 'device_code' && (
           <button className="btn" onClick={requestDeviceCode} disabled={busy}> {tr('Запросить device code')} </button>

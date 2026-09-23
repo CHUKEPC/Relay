@@ -5,7 +5,7 @@
 export const APP_NAME = 'Relay'
 export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.2.0'
+export const APP_VERSION = '1.3.0'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'
@@ -20,6 +20,12 @@ export const UPDATE_REPO = 'CHUKEPC/Relay'
 export const PLUGIN_GUIDE_URL = {
   ru: `https://github.com/${UPDATE_REPO}/blob/main/docs/plugin-guide/README.ru.md`,
   en: `https://github.com/${UPDATE_REPO}/blob/main/docs/plugin-guide/README.md`
+}
+
+/** The theme authoring guide on GitHub (docs/themes), per UI language. */
+export const THEME_GUIDE_URL = {
+  ru: `https://github.com/${UPDATE_REPO}/blob/main/docs/THEMES.ru.md`,
+  en: `https://github.com/${UPDATE_REPO}/blob/main/docs/THEMES.md`
 }
 
 export const STORAGE_VERSION = 1

@@ -34,7 +34,7 @@
  *
  * Reference: https://github.com/hueniverse/hawk
  */
-import { createHash, createHmac } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 
 export interface HawkOptions {
   /** HTTP method, e.g. "GET" (case-insensitive; normalized to upper-case). */
@@ -216,14 +216,11 @@ export function hawkHeader(opts: HawkOptions): string {
 
 /**
  * Generate a short, URL-safe random nonce. Used only when the caller does not
- * supply an explicit nonce. Uses `node:crypto` to stay within the pure-module
- * dependency budget.
+ * supply an explicit nonce. A Hawk server rejects a (timestamp, nonce) pair it
+ * has already seen, so the nonce must come from a CSPRNG — `Math.random()` is
+ * both predictable and prone to repeats inside the same second.
  */
 function randomNonce(): string {
-  // 6 base64url characters of randomness, matching Hawk's default nonce length.
-  return createHash('sha256')
-    .update(`${Date.now()}:${Math.random()}`)
-    .digest('base64')
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .slice(0, 6)
+  // 8 base64url characters of randomness (48 bits); Hawk's own default is 6.
+  return randomBytes(6).toString('base64url')
 }

@@ -10,12 +10,15 @@
  *  - **SQLite** (`.sqlite`): a real database, for opening in SQL tooling.
  *
  * ZIP and SQLite come from the «Дополнительные форматы резервных копий» pack;
- * JSON is always available. Secrets are NOT included: API keys live in the OS
- * keychain and never travel inside a backup file.
+ * JSON is always available. What is NOT included: keys kept in the OS keychain
+ * (AI providers, plugin secrets). What IS included, as in any export: values
+ * typed into requests and variables — tokens, passwords, secret variables —
+ * because they are part of the workspace documents themselves.
  */
 import { strToU8, strFromU8, zipSync, unzipSync } from 'fflate'
 import type { CollectionNode, SqliteSnapshot } from '@shared/types'
 import { APP_NAME, APP_VERSION } from '@shared/constants'
+import { acceptSnapshot } from '@shared/backup-shape'
 import { tr } from './i18n'
 
 /** What a backup file carries; `SqliteSnapshot` predates the other formats. */
@@ -108,15 +111,13 @@ export function fromZip(bytes: Uint8Array): WorkspaceSnapshot {
   })
 }
 
-/** Fill in anything an older or partial file left out. */
+/**
+ * Fill in anything an older or partial file left out, and drop what the app
+ * could not render — the same checks the SQLite restore applies, so «Заменить»
+ * never swaps the workspace for junk from a foreign or hand-edited file.
+ */
 function normalize(data: Partial<WorkspaceSnapshot>): WorkspaceSnapshot {
-  return {
-    collections: Array.isArray(data.collections) ? data.collections : [],
-    environments: Array.isArray(data.environments) ? data.environments : [],
-    activeEnvironmentId: typeof data.activeEnvironmentId === 'string' ? data.activeEnvironmentId : null,
-    globals: Array.isArray(data.globals) ? data.globals : [],
-    history: Array.isArray(data.history) ? data.history : []
-  }
+  return acceptSnapshot(data)
 }
 
 /** Short human summary of what a snapshot contains. */

@@ -35,7 +35,8 @@ jobs:
             args: --x64
           - os: ubuntu-latest
             platform: linux
-            args: --x64
+            # Electron needs no native rebuild, so ARM64 packages cross-build here.
+            args: --x64 --arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout

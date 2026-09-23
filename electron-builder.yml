@@ -64,7 +64,9 @@ mac:
   gatekeeperAssess: false
 
 dmg:
-  artifactName: ${productName}-${version}.${ext}
+  # The arch is part of the name: x64 and arm64 are built in one run and would
+  # otherwise overwrite each other.
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 linux:
   target:
@@ -72,4 +74,4 @@ linux:
     - deb
   category: Development
   maintainer: Relay
-  synopsis: API client with a built-in multi-provider AI assistant
+  synopsis: Isolated desktop client for API testing

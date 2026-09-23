@@ -1,5 +1,7 @@
 # ARCHITECTURE.md
 
+*[Русская версия](ARCHITECTURE.ru.md)*
+
 ## Process model (Electron)
 
 Three contexts, strict separation:
@@ -93,16 +95,23 @@ API keys are read from `safeStorage` inside main only. They are **never** sent t
 
 Local-first, **no native modules**:
 
-- `electron-store` for `settings.json` (theme, defaults, provider configs *without* secrets).
-- A small **repository layer** writing JSON documents under `app.getPath('userData')`:
-  - `collections.json`, `environments.json`, `globals.json`, `history.json`, `tabs.json`.
-  - In-memory model + **debounced** atomic writes (write to temp, rename) to avoid corruption.
+- The in-house **`JsonStore`** (`src/main/storage/json-store.ts`) writes one JSON document per key
+  under `app.getPath('userData')/relay-data`:
+  - app-level: `settings`, `providers`, `plugins`, `features`, `userThemes`;
+  - per workspace (`ws/<id>/`): `collections`, `environments`, `globals`, `history`, `tabs`, `cookies`.
+  - In-memory model + **debounced** atomic writes (write to temp, rename). A document that fails to
+    parse is moved aside as `<key>.json.corrupt-<ts>` before anything is written over it, and every
+    workspace folder keeps a `workspace.json` so a damaged workspace list can be rebuilt.
 - **Secrets** (AI keys, request auth secrets) via Electron `safeStorage` → encrypted blobs keyed by
   a stable ref id; only ciphertext touches disk.
 - Schema/versioning: each document carries a `version`; include a forward-compatible migration hook.
 
-> SQLite (`better-sqlite3`) is a documented future upgrade. It is intentionally **not** used now
-> because native module rebuilds reduce one-shot build reliability.
+> SQLite exists only as a backup/export format, through pure-WASM `sql.js` (`src/main/sqlite`).
+> Native modules such as `better-sqlite3` stay off-limits: rebuilds reduce build reliability.
+>
+> Every restore path (JSON, ZIP, SQLite) passes what it read through the acceptors in
+> `src/shared/backup-shape.ts`, so a foreign or hand-edited file can never replace the workspace
+> with objects the UI cannot render.
 
 ## Renderer state (`src/renderer/store`, Zustand)
 
@@ -116,7 +125,7 @@ One table (`KEY_ACTIONS`) owns every action, its label and its default combo; us
 `SettingsDoc.keybindings` (`''` disables an action). Combos resolve from the PHYSICAL key (`e.code`)
 so they survive a non-Latin layout, and both windows listen in the **capture phase** — Monaco, Radix
 dialogs and plain inputs all stop keydown before it reaches `window`, which otherwise made a
-shortcut work only while focus happened to sit on the page background. Two consequences worth
+shortcut work only while focus happened to sit on the page background. Three consequences worth
 keeping in mind:
 
 - The Shortcuts screen sets `setRecordingShortcut(true)` while it records, or the app would run the
@@ -163,6 +172,39 @@ A child that finishes a run cleanly is kept **warm** for the next script (`keepW
 forking Electron-as-Node costs a few hundred milliseconds of CPU and a collection run pays it twice
 per request. A child is retired instead of reused when its run timed out, crashed, or left async
 work in flight.
+
+## Isolation
+
+Relay opens no connection the user did not ask for. What enforces it:
+
+- **No background network work.** There is no automatic update check (`src/main/update` runs only
+  from the About button), no telemetry, no crash reporter.
+- **CSP** on every response of the default session (`contentSecurityPolicy()` in `src/main/index.ts`):
+  `img-src 'self' data: blob:`, `connect-src 'self'` and so on. It is applied to the `file://`
+  page too (verified), so neither the UI nor the HTML response preview can load a remote resource.
+- **Session hardening** (`isolateSession()`): spellchecker off (it would download dictionaries),
+  every permission request declined except clipboard read/write, and `--dns-prefetch-disable`.
+- **Outbound traffic has an owner**: the HTTP engine, realtime/gRPC clients, the OAuth token and
+  browser sign-in (a loopback listener that exists only while the user signs in), the AI client
+  (only with the AI pack) and plugins holding the `net` permission.
+
+## Dockable panels (`src/renderer/lib/dock.tsx`)
+
+The sidebar, the response panel and the request console share one dock model: `left | right |
+bottom | float`. `useDockDrag` turns a press on a panel header into a drag session: edge zones of
+the container dock the panel, the middle makes it float, and a floating panel follows the cursor.
+The sidebar's position lives in the UI store (localStorage); the response panel's is per pane
+(`PaneLeaf.respDock` / `respFloat`, migrated from the 1.2 `layout` field). Panels that render a
+status bar get their controls through `PaneDockContext` instead of props.
+
+## Low-power mode
+
+`SettingsDoc.lowPowerMode` is read by main before the app is ready (`lowPowerRequested()`), because
+the GPU decision cannot change later: hardware acceleration off, software compositing, Chromium's
+low-end-device mode, no smooth scrolling. The renderer marks `<html data-low-power>` at hydrate;
+`styles/low-power.css` drops animation, blur and shadows, and `CodeEditor` renders
+`CodeEditorPlain` (a textarea with the same `{{` autocomplete from `lib/var-suggest.ts`), so the
+Monaco chunk and its workers are never loaded.
 
 ## Theming
 

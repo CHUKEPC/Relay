@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { clamp } from '@renderer/lib/math'
+import type { DockMode, FloatRect } from '@renderer/lib/dock'
 
 export type SideTab = 'collections' | 'history' | 'env'
 export type SettingsSection =
@@ -12,14 +13,11 @@ export type SettingsSection =
   | 'shortcuts'
   | 'help'
   | 'about'
-export type ConsoleDock = 'bottom' | 'left' | 'right' | 'float'
+/** Positions the console and the sidebar can take (no top). */
+export type SideDock = Exclude<DockMode, 'top'>
+export type ConsoleDock = SideDock
 
-export interface ConsoleFloatRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
+export interface ConsoleFloatRect extends FloatRect {}
 
 /** A one-click fix a toast can offer (e.g. «Отключить проверку SSL»). */
 export interface ToastAction {
@@ -38,6 +36,10 @@ interface UiState {
   saveDialogOpen: boolean
   toast: { id: number; message: string; kind: 'ok' | 'error'; action?: ToastAction } | null
   sidebarWidth: number
+  /** height of the sidebar when it is docked at the bottom */
+  sidebarHeight: number
+  sidebarDock: SideDock
+  sidebarFloat: FloatRect
   aiWidth: number
   consoleDock: ConsoleDock
   consoleSize: number
@@ -58,6 +60,9 @@ interface UiState {
   showToast: (message: string, kind?: 'ok' | 'error', action?: ToastAction) => void
   dismissToast: () => void
   setSidebarWidth: (px: number) => void
+  setSidebarHeight: (px: number) => void
+  setSidebarDock: (d: SideDock) => void
+  setSidebarFloat: (rect: FloatRect) => void
   setAiWidth: (px: number) => void
   setConsoleDock: (d: ConsoleDock) => void
   setConsoleSize: (px: number) => void
@@ -73,6 +78,9 @@ const UI_PREFS_KEY = 'relay.uiPrefs'
 
 interface UiPrefs {
   sidebarWidth: number
+  sidebarHeight: number
+  sidebarDock: SideDock
+  sidebarFloat: FloatRect
   aiWidth: number
   consoleDock: ConsoleDock
   consoleSize: number
@@ -96,6 +104,9 @@ function saveUiPrefs(s: UiState): void {
   try {
     const prefs: UiPrefs = {
       sidebarWidth: s.sidebarWidth,
+      sidebarHeight: s.sidebarHeight,
+      sidebarDock: s.sidebarDock,
+      sidebarFloat: s.sidebarFloat,
       aiWidth: s.aiWidth,
       consoleDock: s.consoleDock,
       consoleSize: s.consoleSize,
@@ -110,16 +121,15 @@ function saveUiPrefs(s: UiState): void {
 const prefs = loadUiPrefs()
 const DOCKS: ConsoleDock[] = ['bottom', 'left', 'right', 'float']
 
-function initialFloat(): ConsoleFloatRect {
-  const f = prefs.consoleFloat
+function initialFloat(f: FloatRect | undefined, fallback: FloatRect): FloatRect {
   if (f && typeof f.x === 'number' && typeof f.y === 'number' && typeof f.w === 'number' && typeof f.h === 'number') {
     // Re-clamp persisted coords: a rect saved on a larger monitor (or corrupted
     // by hand) must not strand the window off-screen — keep the header grabbable
     // (same 120px/38px margins the float drag handler enforces).
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
     const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-    const w = clamp(f.w, 380, Math.max(380, vw))
-    const h = clamp(f.h, 240, Math.max(240, vh))
+    const w = clamp(f.w, 300, Math.max(300, vw))
+    const h = clamp(f.h, 200, Math.max(200, vh))
     return {
       x: clamp(f.x, 120 - w, Math.max(0, vw - 120)),
       y: clamp(f.y, 0, Math.max(0, vh - 38)),
@@ -127,7 +137,7 @@ function initialFloat(): ConsoleFloatRect {
       h
     }
   }
-  return { x: 80, y: 80, w: 720, h: 420 }
+  return fallback
 }
 
 export const useUi = create<UiState>((set, get) => {
@@ -152,10 +162,13 @@ export const useUi = create<UiState>((set, get) => {
     saveDialogOpen: false,
     toast: null,
     sidebarWidth: typeof prefs.sidebarWidth === 'number' ? clamp(prefs.sidebarWidth, 200, 460) : 270,
+    sidebarHeight: typeof prefs.sidebarHeight === 'number' ? clamp(prefs.sidebarHeight, 140, 600) : 260,
+    sidebarDock: prefs.sidebarDock && DOCKS.includes(prefs.sidebarDock) ? prefs.sidebarDock : 'left',
+    sidebarFloat: initialFloat(prefs.sidebarFloat, { x: 60, y: 90, w: 320, h: 520 }),
     aiWidth: typeof prefs.aiWidth === 'number' ? clamp(prefs.aiWidth, 300, 640) : 384,
     consoleDock: prefs.consoleDock && DOCKS.includes(prefs.consoleDock) ? prefs.consoleDock : 'bottom',
     consoleSize: typeof prefs.consoleSize === 'number' ? clamp(prefs.consoleSize, 160, 800) : 340,
-    consoleFloat: initialFloat(),
+    consoleFloat: initialFloat(prefs.consoleFloat, { x: 80, y: 80, w: 720, h: 420 }),
     importOpen: false,
     setSideTab: (t) => set({ sideTab: t }),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -181,6 +194,18 @@ export const useUi = create<UiState>((set, get) => {
     dismissToast: () => set({ toast: null }),
     setSidebarWidth: (px) => {
       set({ sidebarWidth: clamp(px, 200, 460) })
+      persistPrefs()
+    },
+    setSidebarHeight: (px) => {
+      set({ sidebarHeight: clamp(px, 140, 600) })
+      persistPrefs()
+    },
+    setSidebarDock: (d) => {
+      set({ sidebarDock: d })
+      persistPrefs()
+    },
+    setSidebarFloat: (rect) => {
+      set({ sidebarFloat: rect })
       persistPrefs()
     },
     setAiWidth: (px) => {

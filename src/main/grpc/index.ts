@@ -257,6 +257,9 @@ interface ReflectPkg {
 
 const REFLECT_TIMEOUT_MS = 15_000
 
+/** Upper bound on descriptor files pulled for one discovery (runaway guard). */
+const MAX_REFLECTION_FILES = 500
+
 /**
  * Discover a server's full descriptor set via Server Reflection and return it as
  * a proto-loader PackageDefinition.
@@ -305,10 +308,13 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
       return
     }
 
-    // De-dupe duplicate FileDescriptorProto bytes across symbol responses.
-    const seenFiles = new Set<string>()
-    const fileProtos: Buffer[] = []
-    let pendingSymbols = 0
+    // Decoded FileDescriptorProtos by file name — de-dupes the same file
+    // arriving from several symbol/dependency responses.
+    const fileProtos = new Map<string, object>()
+    /** Files already pulled with file_by_filename, so each is asked for once. */
+    const requestedFiles = new Set<string>()
+    /** Outstanding reflection requests (symbols + dependencies). */
+    let pendingRequests = 0
     let listed = false
     let settled = false
 
@@ -335,12 +341,12 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
     }
 
     const buildResult = (): void => {
-      if (fileProtos.length === 0) {
+      if (fileProtos.size === 0) {
         finish({ error: 'Сервер не вернул дескрипторы' })
         return
       }
       try {
-        const fileSet = { file: fileProtos.map((buf) => rt().descriptor.FileDescriptorProto.decode(buf)) }
+        const fileSet = { file: [...fileProtos.values()] }
         const pkgDef = rt().protoLoader.loadFileDescriptorSetFromObject(
           fileSet as Parameters<typeof protoLoader.loadFileDescriptorSetFromObject>[0],
           LOAD_OPTS
@@ -352,13 +358,20 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
     }
 
     const maybeDone = (): void => {
-      if (listed && pendingSymbols === 0) buildResult()
+      if (listed && pendingRequests === 0) buildResult()
     }
 
     stream.on('data', (resp: ReflectionListResponse) => {
       if (settled) return
       if (resp.error_response && resp.error_response.error_code) {
-        finish({ error: resp.error_response.error_message || 'Ошибка reflection' })
+        // Fatal only while we have nothing: a dependency the server cannot
+        // supply must not sink a discovery that already collected descriptors.
+        if (fileProtos.size === 0) {
+          finish({ error: resp.error_response.error_message || 'Ошибка reflection' })
+          return
+        }
+        if (pendingRequests > 0) pendingRequests -= 1
+        maybeDone()
         return
       }
       if (resp.list_services_response) {
@@ -370,20 +383,36 @@ function reflectPackageDef(spec: TlsSpec & { address: string; metadata: KV[] }):
           finish({ error: 'Сервер не объявил ни одного service' })
           return
         }
-        pendingSymbols = names.length
+        pendingRequests = names.length
         for (const name of names) stream.write({ file_containing_symbol: name })
         return
       }
       if (resp.file_descriptor_response) {
+        const deps: string[] = []
         for (const buf of resp.file_descriptor_response.file_descriptor_proto ?? []) {
           const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
-          const key = b.toString('base64')
-          if (!seenFiles.has(key)) {
-            seenFiles.add(key)
-            fileProtos.push(b)
+          let decoded: { name?: string; dependency?: string[] }
+          try {
+            decoded = rt().descriptor.FileDescriptorProto.decode(b) as unknown as { name?: string; dependency?: string[] }
+          } catch {
+            continue // unparsable descriptor — skip it rather than fail everything
           }
+          const name = decoded.name || b.toString('base64')
+          if (fileProtos.has(name)) continue
+          fileProtos.set(name, decoded as object)
+          for (const dep of decoded.dependency ?? []) deps.push(dep)
         }
-        if (pendingSymbols > 0) pendingSymbols -= 1
+        if (pendingRequests > 0) pendingRequests -= 1
+        // Most servers answer with ONLY the file that holds the symbol, so its
+        // imports (including the well-known types) have to be pulled in turn —
+        // without them proto-loader fails with "no such type".
+        for (const dep of deps) {
+          if (fileProtos.has(dep) || requestedFiles.has(dep)) continue
+          if (requestedFiles.size >= MAX_REFLECTION_FILES) break
+          requestedFiles.add(dep)
+          pendingRequests += 1
+          stream.write({ file_by_filename: dep })
+        }
         maybeDone()
       }
     })
@@ -493,6 +522,17 @@ function invoke(
     return { cancel: () => {} }
   }
 
+  // Build the metadata first: grpc-js rejects illegal keys (and `-bin` keys
+  // with a string value) by throwing, which used to escape the IPC handler as a
+  // rejected promise and leave the freshly created channel behind.
+  let md: grpc.Metadata
+  try {
+    md = metadataFromKV(spec.metadata)
+  } catch (err) {
+    emit({ type: 'error', error: `Некорректные метаданные: ${err instanceof Error ? err.message : String(err)}` })
+    return { cancel: () => {} }
+  }
+
   let client: grpc.Client
   try {
     client = new Ctor(spec.address, credentials(spec))
@@ -502,7 +542,6 @@ function invoke(
   }
   clients.set(spec.connId, client)
 
-  const md = metadataFromKV(spec.metadata)
   // Per-call deadline: an absolute Date `deadlineMs` from now (grpc-js accepts a
   // Date or absolute ms). Omitted when <= 0 so calls run without a timeout.
   const callOpts: grpc.CallOptions =
@@ -513,6 +552,12 @@ function invoke(
   const raw = (client as unknown as Record<string, ((...a: unknown[]) => unknown) | undefined>)[spec.method]
   if (typeof raw !== 'function') {
     emit({ type: 'error', error: `Метод недоступен на клиенте: ${spec.method}` })
+    try {
+      client.close()
+    } catch {
+      /* ignore */
+    }
+    clients.delete(spec.connId)
     return { cancel: () => {} }
   }
   const fn = raw.bind(client)

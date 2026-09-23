@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { BrowserWindow, ipcMain, nativeTheme, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { APP_NAME } from '@shared/constants'
 import { IPC } from '@shared/ipc-contract'
@@ -65,7 +66,10 @@ export function createAppWindow(opts: AppWindowOptions): BrowserWindow {
   win.webContents.on('will-navigate', (e, url) => {
     const rendererUrl = process.env['ELECTRON_RENDERER_URL']
     if (rendererUrl && url.startsWith(rendererUrl)) return
-    if (url.startsWith('file://')) return
+    // Only the app's own page: a file dropped onto the window is a file:// URL
+    // too, and letting that through replaced the whole app with the file.
+    const own = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+    if (url.split('#')[0].split('?')[0] === own) return
     e.preventDefault()
   })
 

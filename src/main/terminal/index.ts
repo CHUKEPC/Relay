@@ -96,6 +96,8 @@ export function toTerminalRequest(spec: RequestSpec, extraNotes: string[] = []):
     const simple = buildAuthHeaders(auth)
     for (const [k, v] of Object.entries(simple.headers)) headers[k] = v
     const token = buildTokenAuth(auth)
+    // Same rule as the engine: an auth that cannot be produced stops the run.
+    if (token?.error) throw new Error(token.error)
     if (token) for (const [k, v] of Object.entries(token.headers)) headers[k] = v
     const queryAuth = simple.query ?? token?.query
     if (queryAuth) {
@@ -153,8 +155,13 @@ export function toTerminalRequest(spec: RequestSpec, extraNotes: string[] = []):
         // unreadable: the tool will report the missing file itself
       }
     }
-    const urlencodedParams =
-      b?.type === 'urlencoded' ? Object.fromEntries(b.items.filter((i) => i.enabled && i.key).map((i) => [i.key, i.value ?? ''])) : undefined
+    // Must mirror the engine: every occurrence of a repeated key, and the same
+    // enabled rule, or an OAuth 1.0 signature would cover different parameters
+    // than the command actually sends.
+    const urlencodedParams: Array<[string, string]> | undefined =
+      b?.type === 'urlencoded'
+        ? (b.items ?? []).filter((i) => i && i.enabled !== false && i.key).map((i) => [i.key, i.value ?? ''] as [string, string])
+        : undefined
     const signed = signRequest(auth, {
       method: (spec.method || 'GET').toUpperCase(),
       url,
@@ -164,6 +171,7 @@ export function toTerminalRequest(spec: RequestSpec, extraNotes: string[] = []):
       urlencodedParams,
       unsignedBody: body.kind === 'form'
     })
+    if (signed?.error) throw new Error(signed.error)
     if (signed) for (const [k, v] of Object.entries(signed.headers)) headers[k] = v
   }
 

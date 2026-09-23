@@ -164,6 +164,13 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
     }
   }
 
+  /** `a, b\nc` → ['a', 'b', 'c'] — the list fields accept commas or new lines. */
+  const splitList = (text: string): string[] =>
+    text
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
   const connectRealtime = () => {
     if (!isRealtimeMode(mode)) return
     const url = interpolate(displayUrl, scope)
@@ -175,8 +182,20 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
       url,
       headers,
       rejectUnauthorized: useSettings.getState().settings.rejectUnauthorized,
-      // MQTT-only: carry the per-request QoS + Last-Will config into the connection.
-      ...(mode === 'mqtt' ? { qos: req.mqtt?.qos, lwt: req.mqtt?.lwt } : {})
+      // Per-protocol options live on the request; variables resolve here, at
+      // connect time, exactly like the URL and headers above.
+      ...(mode === 'mqtt'
+        ? {
+            qos: req.mqtt?.qos,
+            lwt: req.mqtt?.lwt,
+            username: interpolate(req.mqtt?.username ?? '', scope),
+            password: interpolate(req.mqtt?.password ?? '', scope),
+            clientId: interpolate(req.mqtt?.clientId ?? '', scope),
+            subscribeTopics: splitList(interpolate(req.mqtt?.subscribeTopics ?? '', scope))
+          }
+        : {}),
+      ...(mode === 'websocket' ? { protocols: splitList(interpolate(req.realtime?.protocols ?? '', scope)) } : {}),
+      ...(mode === 'socketio' ? { listenEvents: splitList(interpolate(req.realtime?.listenEvents ?? '', scope)) } : {})
     })
   }
 

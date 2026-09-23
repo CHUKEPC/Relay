@@ -31,6 +31,16 @@ export interface ConnectOpts {
   qos?: 0 | 1 | 2
   /** MQTT only: Last-Will-and-Testament. */
   lwt?: { topic: string; payload: string; qos?: 0 | 1 | 2; retain?: boolean }
+  /** MQTT only: broker credentials and client id (already interpolated). */
+  username?: string
+  password?: string
+  clientId?: string
+  /** MQTT only: topics to subscribe to on connect. */
+  subscribeTopics?: string[]
+  /** WebSocket only: subprotocols offered in the handshake. */
+  protocols?: string[]
+  /** Socket.IO only: events to listen for; empty = all. */
+  listenEvents?: string[]
 }
 
 interface RealtimeState {
@@ -111,18 +121,32 @@ export const useRealtime = create<RealtimeState>((set, get) => {
       const guard = (p: Promise<void>): void => void p.catch((err) => fail(tabId, err))
       switch (opts.kind) {
         case 'websocket':
-          guard(window.api.wsConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
+          guard(window.api.wsConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru, protocols: opts.protocols?.length ? opts.protocols : undefined }))
           break
         case 'sse':
           guard(window.api.sseConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
           break
         case 'socketio':
-          guard(window.api.socketioConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru }))
+          guard(
+            window.api.socketioConnect({ connId, url: opts.url, headers: opts.headers, rejectUnauthorized: ru, listenEvents: opts.listenEvents?.length ? opts.listenEvents : undefined })
+          )
           break
         case 'mqtt':
           // QoS + Last-Will travel in the connect spec; the main engine applies
           // the configured QoS to every publish/subscribe on this connection.
-          guard(window.api.mqttConnect({ connId, url: opts.url, rejectUnauthorized: ru, qos: opts.qos, lwt: opts.lwt }))
+          guard(
+            window.api.mqttConnect({
+              connId,
+              url: opts.url,
+              rejectUnauthorized: ru,
+              qos: opts.qos,
+              lwt: opts.lwt,
+              username: opts.username || undefined,
+              password: opts.password || undefined,
+              clientId: opts.clientId || undefined,
+              subscribeTopics: opts.subscribeTopics?.length ? opts.subscribeTopics : undefined
+            })
+          )
           break
       }
     },

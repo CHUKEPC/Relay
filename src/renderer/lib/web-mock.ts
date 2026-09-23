@@ -200,6 +200,7 @@ if (!window.api) {
     grpcReflect: async () => ({ services: [], error: tr('gRPC недоступен в web-режиме') }),
     onGrpc: () => () => {},
     oauthDevice: async () => ({ ok: false, error: tr('Недоступно в web-режиме') }),
+    oauthAuthorize: async () => ({ ok: false, error: tr('Недоступно в web-режиме') }),
     graphqlIntrospect: async () => ({ ok: false, error: tr('Недоступно в web-режиме') }),
     sqliteExport: async () => '',
     sqliteImport: async () => ({

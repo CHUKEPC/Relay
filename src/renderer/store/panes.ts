@@ -5,6 +5,7 @@ import { clamp } from '@renderer/lib/math'
 import { setActiveTabFallback, useTabs } from './tabs'
 import { useResponse, type TabResponse } from './response'
 import { useUi } from './ui'
+import type { DockMode, FloatRect } from '@renderer/lib/dock'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /* ============================================================
@@ -14,7 +15,7 @@ import { tr, trf } from '@renderer/lib/i18n'
 /** `row` places children side by side, `col` stacks them. */
 export type SplitDir = 'row' | 'col'
 export type Direction = 'left' | 'right' | 'up' | 'down'
-/** Builder/response arrangement inside one pane. */
+/** Builder/response arrangement inside one pane (the 1.2 field, still read). */
 export type PaneLayout = 'split-v' | 'split-h'
 export type DropZone = 'center' | Direction
 
@@ -25,6 +26,14 @@ export interface PaneLeaf {
   /** response share of the pane, percent */
   respPct: number
   layout: PaneLayout
+  /**
+   * Where the response sits inside the pane. 'bottom' and 'right' are what
+   * `layout` used to express; 'left' mirrors 'right', and 'float' lifts the
+   * response into a movable card over the builder.
+   */
+  respDock: DockMode
+  /** Float geometry, relative to the pane box (px). */
+  respFloat: FloatRect
 }
 
 export interface PaneSplit {
@@ -54,7 +63,7 @@ export const PANE_COUNT_LABEL: Record<number, string> = {
 }
 export type PanePreset = (typeof PANE_PRESETS)[number]
 
-interface Rect {
+export interface Rect {
   x: number
   y: number
   w: number
@@ -73,7 +82,7 @@ const RATIO_MIN = 0.1
 const LAYOUT_KEY = 'relay.panes.v1'
 
 export function newLeaf(tabId: string | null = null): PaneLeaf {
-  return { kind: 'leaf', id: makeId('pane'), tabId, respPct: 46, layout: 'split-v' }
+  return { kind: 'leaf', id: makeId('pane'), tabId, respPct: 46, layout: 'split-v', respDock: 'bottom', respFloat: { x: 40, y: 60, w: 560, h: 360 } }
 }
 
 function split(dir: SplitDir, a: PaneNode, b: PaneNode, ratio = 0.5): PaneSplit {
@@ -239,6 +248,8 @@ interface PanesState {
   setRatio: (splitId: string, ratio: number) => void
   setRespPct: (paneId: string, pct: number) => void
   toggleLeafLayout: (paneId: string) => void
+  setRespDock: (paneId: string, dock: DockMode) => void
+  setRespFloat: (paneId: string, rect: FloatRect) => void
   toggleMaximize: (id?: string) => void
   detachTab: (tabId: string) => Promise<void>
   initDetached: (tabId: string) => void
@@ -395,8 +406,8 @@ export const usePanes = create<PanesState>((set, get) => {
       const a = findLeaf(s.root, aId)
       const b = findLeaf(s.root, bId)
       if (!a || !b || a.id === b.id) return
-      let root = replaceNode(s.root, a.id, { ...a, tabId: b.tabId, respPct: b.respPct, layout: b.layout })
-      root = replaceNode(root, b.id, { ...b, tabId: a.tabId, respPct: a.respPct, layout: a.layout })
+      let root = replaceNode(s.root, a.id, { ...a, tabId: b.tabId, respPct: b.respPct, layout: b.layout, respDock: b.respDock, respFloat: b.respFloat })
+      root = replaceNode(root, b.id, { ...b, tabId: a.tabId, respPct: a.respPct, layout: a.layout, respDock: a.respDock, respFloat: a.respFloat })
       // Focus follows the content that moved.
       const activeId = s.activeId === a.id ? b.id : s.activeId === b.id ? a.id : s.activeId
       const maximizedId = s.maximizedId === a.id ? b.id : s.maximizedId === b.id ? a.id : s.maximizedId
@@ -529,7 +540,32 @@ export const usePanes = create<PanesState>((set, get) => {
     toggleLeafLayout: (paneId) => {
       const leaf = findLeaf(get().root, paneId)
       if (!leaf) return
-      set({ root: updateLeaf(get().root, paneId, { layout: leaf.layout === 'split-v' ? 'split-h' : 'split-v' }) })
+      // The shortcut keeps its old meaning: flip between below and beside.
+      const next: DockMode = leaf.respDock === 'bottom' || leaf.respDock === 'top' ? 'right' : 'bottom'
+      get().setRespDock(paneId, next)
+      return
+      scheduleSave()
+    },
+
+    setRespDock: (paneId, dock) => {
+      const leaf = findLeaf(get().root, paneId)
+      if (!leaf) return
+      // The share is a height when docked at the bottom and a width at the sides:
+      // carried across, a comfortable 30 % of the height became a 100 px column.
+      const vertical = (d: DockMode): boolean => d === 'bottom' || d === 'top'
+      const across = vertical(leaf.respDock) !== vertical(dock) && dock !== 'float' && leaf.respDock !== 'float'
+      set({
+        root: updateLeaf(get().root, paneId, {
+          respDock: dock,
+          layout: vertical(dock) ? 'split-v' : 'split-h',
+          ...(across ? { respPct: 46 } : {})
+        })
+      })
+      scheduleSave()
+    },
+
+    setRespFloat: (paneId, rect) => {
+      set({ root: updateLeaf(get().root, paneId, { respFloat: rect }) })
       scheduleSave()
     },
 
@@ -589,10 +625,26 @@ function loadLayout(): { root: PaneNode; activeId: string } | null {
       return node.kind === 'split' && (node.dir === 'row' || node.dir === 'col') && valid(node.a) && valid(node.b)
     }
     if (!valid(parsed.root)) return null
-    return { root: parsed.root, activeId: parsed.activeId ?? '' }
+    return { root: migrateLeaves(parsed.root), activeId: parsed.activeId ?? '' }
   } catch {
     return null
   }
+}
+
+/**
+ * A layout saved by 1.2 has no dock fields: derive them from `layout` so an
+ * upgrade keeps the arrangement the user had.
+ */
+function migrateLeaves(node: PaneNode): PaneNode {
+  if (node.kind === 'leaf') {
+    const base = newLeaf(node.tabId)
+    return {
+      ...node,
+      respDock: node.respDock ?? (node.layout === 'split-h' ? 'right' : 'bottom'),
+      respFloat: node.respFloat ?? base.respFloat
+    }
+  }
+  return { ...node, a: migrateLeaves(node.a), b: migrateLeaves(node.b) }
 }
 
 /** Drop pane references to tabs that no longer exist (closed, or another workspace). */

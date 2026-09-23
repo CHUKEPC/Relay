@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ProviderConfig, WorkspaceMeta, WorkspacesDoc } from '@shared/types'
@@ -18,7 +18,8 @@ import {
   defaultPlugins,
   defaultProviders,
   defaultSettings,
-  defaultTabs
+  defaultTabs,
+  defaultUserThemes
 } from './defaults'
 
 const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
@@ -31,7 +32,8 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   providers: defaultProviders,
   cookies: defaultCookies,
   plugins: defaultPlugins,
-  features: defaultFeatures
+  features: defaultFeatures,
+  userThemes: defaultUserThemes
 }
 
 /**
@@ -39,7 +41,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
  * settings, AI provider config (+ their safeStorage secrets). Everything else is
  * isolated per workspace.
  */
-const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features'])
+const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features', 'userThemes'])
 /** Per-workspace document keys (the isolated working data set). */
 const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies'] as const
 
@@ -86,6 +88,7 @@ export class StorageManager {
     this.secrets = new SecretStore(this.rootDir)
     this.appStore = new JsonStore(this.rootDir)
     this.workspaces = this.loadOrInitWorkspaces()
+    this.backfillWorkspaceNames()
     this.activeWorkspaceId = this.workspaces.activeWorkspaceId
     this.wsStore = new JsonStore(this.wsDir(this.activeWorkspaceId))
   }
@@ -143,8 +146,58 @@ export class StorageManager {
       workspaces: [{ id: defaultId, name: 'Личное' }],
       activeWorkspaceId: defaultId
     }
+    // A lost/corrupt meta file must not orphan workspaces whose data is still on
+    // disk: every `ws/<id>` directory is re-registered, named from the copy of
+    // the meta kept beside its documents.
+    for (const id of this.discoverWorkspaceDirs()) {
+      if (id === defaultId) continue
+      doc.workspaces.push({ id, name: this.readWorkspaceName(id) ?? id })
+    }
     this.writeMeta(doc)
     return doc
+  }
+
+  /**
+   * Workspaces created before the per-workspace name file existed get one now,
+   * so rebuilding a lost meta can still show their real names.
+   */
+  private backfillWorkspaceNames(): void {
+    for (const w of this.workspaces.workspaces) {
+      if (existsSync(this.wsDir(w.id)) && !existsSync(this.wsMetaFile(w.id))) this.writeWorkspaceName(w)
+    }
+  }
+
+  /** Ids of every workspace directory that exists under `ws/`. */
+  private discoverWorkspaceDirs(): string[] {
+    try {
+      return readdirSync(join(this.rootDir, 'ws'), { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+    } catch {
+      return []
+    }
+  }
+
+  private wsMetaFile(id: string): string {
+    return join(this.wsDir(id), 'workspace.json')
+  }
+
+  /** Per-workspace copy of its name, so a rebuilt meta keeps readable names. */
+  private writeWorkspaceName(meta: WorkspaceMeta): void {
+    try {
+      writeFileSync(this.wsMetaFile(meta.id), JSON.stringify(meta, null, 2), 'utf8')
+    } catch (err) {
+      console.error('[storage] failed to write workspace name:', (err as Error).message)
+    }
+  }
+
+  private readWorkspaceName(id: string): string | null {
+    try {
+      const raw = JSON.parse(readFileSync(this.wsMetaFile(id), 'utf8')) as Partial<WorkspaceMeta>
+      return typeof raw.name === 'string' && raw.name ? raw.name : null
+    } catch {
+      return null
+    }
   }
 
   private writeMeta(doc: WorkspacesDoc): void {
@@ -255,6 +308,7 @@ export class StorageManager {
     }
     const meta: WorkspaceMeta = { id, name: name.trim() || 'Workspace' }
     this.workspaces.workspaces.push(meta)
+    this.writeWorkspaceName(meta)
     this.writeMeta(this.workspaces)
     return meta
   }
@@ -263,6 +317,7 @@ export class StorageManager {
     const w = this.workspaces.workspaces.find((x) => x.id === id)
     if (!w) return
     w.name = name.trim() || w.name
+    this.writeWorkspaceName(w)
     this.writeMeta(this.workspaces)
   }
 

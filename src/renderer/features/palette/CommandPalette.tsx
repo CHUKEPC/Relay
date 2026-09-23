@@ -101,9 +101,11 @@ export function CommandPalette() {
       icon: command.icon ?? 'bolt',
       run: () => void usePlugins.getState().invokeCommandFromActiveTab(pluginId, command.id)
     }))
+    // Actions first: they are what the palette is opened for most of the time,
+    // and a long request list must not push them below the fold.
     return [
-      { label: 'Запросы', items: requests },
       { label: 'Действия', items: actions },
+      { label: 'Запросы', items: requests },
       { label: 'Плагины', items: pluginCmds },
       { label: 'Среды', items: envs }
       // (group labels go through tr() at render)

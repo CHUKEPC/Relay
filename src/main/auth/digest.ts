@@ -8,7 +8,7 @@
  *   3. `buildDigestAuthHeader` and replay the request with `Authorization`
  *
  * We implement qop="auth" (and legacy no-qop RFC 2069) plus qop="auth-int".
- * Supported algorithms: MD5, SHA-256, and their -sess variants.
+ * Supported algorithms: MD5, SHA-256, SHA-512-256, and their -sess variants.
  */
 import { createHash, randomBytes } from 'node:crypto'
 
@@ -17,7 +17,7 @@ export interface DigestChallenge {
   nonce: string
   qop?: string // e.g. "auth" or "auth,auth-int" — we only honor "auth"/"auth-int"
   opaque?: string
-  algorithm?: string // "MD5" | "SHA-256" | "MD5-sess" | "SHA-256-sess" (default MD5)
+  algorithm?: string // "MD5" | "SHA-256" | "SHA-512-256" (+ "-sess") — default MD5
   domain?: string
   stale?: boolean
 }
@@ -120,33 +120,34 @@ export function parseDigestChallenge(headerValue: string): DigestChallenge | nul
   return challenge
 }
 
+type DigestHash = 'md5' | 'sha256' | 'sha512-256'
+
 /** Map a Digest `algorithm` token to the crypto hash name and -sess flag. */
 function resolveAlgorithm(algorithm?: string): {
-  hashName: 'md5' | 'sha256'
+  hashName: DigestHash
   sess: boolean
   /** Canonical token to echo back in the Authorization header. */
-  token: 'MD5' | 'SHA-256' | 'MD5-sess' | 'SHA-256-sess'
+  token: string
 } {
   const raw = (algorithm ?? 'MD5').trim()
   const sess = /-sess$/i.test(raw)
   const base = raw.replace(/-sess$/i, '').toUpperCase()
 
-  // RFC 7616 registers SHA-256 and SHA-512-256; we support MD5 and SHA-256.
-  // SHA-512-256 maps to Node's 'sha512-256' if/when needed, but per scope we
-  // restrict to MD5 / SHA-256 and fall back to MD5 for anything unrecognized.
-  let hashName: 'md5' | 'sha256' = 'md5'
-  let canonicalBase: 'MD5' | 'SHA-256' = 'MD5'
+  // RFC 7616 registers SHA-256 and SHA-512-256 alongside RFC 2617's MD5. We
+  // support all three; anything unrecognized falls back to MD5, and the token we
+  // echo back always matches the hash we actually computed — never the
+  // unsupported name the server asked for.
+  let hashName: DigestHash = 'md5'
+  let canonicalBase = 'MD5'
   if (base === 'SHA-256' || base === 'SHA256') {
     hashName = 'sha256'
     canonicalBase = 'SHA-256'
+  } else if (base === 'SHA-512-256' || base === 'SHA512-256') {
+    hashName = 'sha512-256'
+    canonicalBase = 'SHA-512-256'
   }
 
-  const token = (sess ? `${canonicalBase}-sess` : canonicalBase) as
-    | 'MD5'
-    | 'SHA-256'
-    | 'MD5-sess'
-    | 'SHA-256-sess'
-  return { hashName, sess, token }
+  return { hashName, sess, token: sess ? `${canonicalBase}-sess` : canonicalBase }
 }
 
 /** Format the nonce count as 8 lowercase hex digits, e.g. 1 → "00000001". */

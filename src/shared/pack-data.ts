@@ -36,6 +36,19 @@ export interface PackTheme {
   variants: Partial<Record<ThemeMode, Record<string, string>>>
 }
 
+/**
+ * Themes the user loaded from a file themselves (Settings → Appearance →
+ * «Мои темы»). Same shape a theme pack ships, stored app-level so every
+ * workspace sees them; their ids are prefixed with `user/`.
+ */
+export interface UserThemesDoc {
+  version: number
+  themes: PackTheme[]
+}
+
+/** Id prefix of a theme loaded from a file rather than from a pack. */
+export const USER_THEME_PACK = 'user'
+
 export const SNIPPETS_FILE = 'snippets.json'
 export const THEMES_FILE = 'themes.json'
 export const PACK_DATA_MAX_BYTES = 1024 * 1024
@@ -133,4 +146,31 @@ export function themeVariant(theme: PackTheme, mode: ThemeMode): { mode: ThemeMo
   if (own) return { mode, vars: own }
   const other: ThemeMode = mode === 'dark' ? 'light' : 'dark'
   return { mode: other, vars: theme.variants[other] ?? {} }
+}
+
+/** Why a theme file produced nothing. */
+export type ThemeFileError = 'too-large' | 'not-json' | 'no-themes'
+
+/** A theme file bigger than this is not a theme file. */
+export const THEME_FILE_MAX_BYTES = 512 * 1024
+
+/**
+ * Read a theme file the user picked: one theme, a list of themes, or the
+ * `{ "themes": [...] }` wrapper a pack uses — all three are accepted, and every
+ * value goes through the same allowlist bundled packs do. A theme without a
+ * name borrows `fallbackName` (the file's own name) instead of being dropped.
+ */
+export function parseThemeFile(text: string, fallbackName: string): { themes: PackTheme[]; error?: ThemeFileError } {
+  if (text.length > THEME_FILE_MAX_BYTES) return { themes: [], error: 'too-large' }
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return { themes: [], error: 'not-json' }
+  }
+  const single = isRecord(raw) && !Array.isArray(raw) && !('themes' in raw)
+  const list: unknown[] = single ? [raw] : Array.isArray(raw) ? raw : isRecord(raw) && Array.isArray(raw.themes) ? raw.themes : []
+  const named = list.map((item) => (isRecord(item) && !item.name ? { ...item, name: fallbackName } : item))
+  const themes = parseThemes(named, USER_THEME_PACK)
+  return themes.length ? { themes } : { themes: [], error: 'no-themes' }
 }

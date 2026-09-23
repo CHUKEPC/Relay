@@ -11,6 +11,7 @@ import type {
   TabsDoc
 } from '@shared/types'
 import type { FeaturePluginsDoc } from '@shared/ipc-contract'
+import type { UserThemesDoc } from '@shared/pack-data'
 
 /**
  * First-run seed data. The app starts CLEAN — no demo collections, environments,
@@ -53,9 +54,8 @@ export function defaultSettings(): SettingsDoc {
     themePreset: 'relay',
     customTheme: null,
     keybindings: {},
-    updateCheckEnabled: true,
     language: 'ru',
-    disableHardwareAcceleration: false,
+    lowPowerMode: false,
     onboardingDone: false,
     onboardingVersion: '',
     requestTimeoutMs: 30000,
@@ -86,4 +86,8 @@ export function defaultFeatures(): FeaturePluginsDoc {
   // Empty map = every pack is off; the installer (or Settings) switches on
   // what the user actually wants.
   return { version: STORAGE_VERSION, enabled: {} }
+}
+
+export function defaultUserThemes(): UserThemesDoc {
+  return { version: STORAGE_VERSION, themes: [] }
 }

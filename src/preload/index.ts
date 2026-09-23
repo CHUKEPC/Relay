@@ -88,6 +88,7 @@ const api: RelayApi = {
   /* ---- oauth ---- */
   oauthToken: (payload: OAuthTokenRequest) => ipcRenderer.invoke(IPC.oauth.token, payload),
   oauthDevice: (payload) => ipcRenderer.invoke(IPC.oauth.device, payload),
+  oauthAuthorize: (payload) => ipcRenderer.invoke(IPC.oauth.authorize, payload),
 
   /* ---- GraphQL ---- */
   graphqlIntrospect: (url: string, headers, rejectUnauthorized: boolean) =>

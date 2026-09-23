@@ -214,6 +214,9 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  /* Without a colour, Chromium draws the standard (light) track — a white bar
+     across a dark theme. */
+  scrollbar-color: var(--line-2) transparent;
 }
 .req-bar > *, .req-tabs > *, .resp-tabs > *, .resp-statusbar > *, .subbar > * { flex: none; }
 /* The URL is the one field worth giving the leftover width to. */

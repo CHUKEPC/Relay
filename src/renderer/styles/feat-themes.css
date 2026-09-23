@@ -74,3 +74,40 @@
   max-width: 560px; font-size: 12px; line-height: 1.5; color: var(--tx-2);
 }
 .pack-theme-hint > svg { flex: none; margin-top: 3px; color: var(--tx-3); }
+
+/* ---- themes the user loaded from a file (Settings → Appearance → My themes) */
+
+.user-theme-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 12px;
+}
+
+.user-theme-head .d {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-2);
+}
+
+/* The delete button rides on the swatch and only shows on hover/focus, so the
+   row still reads as a row of themes rather than a row of controls. */
+.user-theme-cell {
+  position: relative;
+}
+
+.user-theme-cell .user-theme-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+  background: var(--bg-1);
+}
+
+.user-theme-cell:hover .user-theme-del,
+.user-theme-cell .user-theme-del:focus-visible {
+  opacity: 1;
+}

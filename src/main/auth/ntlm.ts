@@ -21,6 +21,33 @@ const NEGOTIATE_NTLM = 0x00000200
 const NEGOTIATE_ALWAYS_SIGN = 0x00008000
 const NEGOTIATE_EXTENDED_SESSIONSECURITY = 0x00080000
 
+// Flags we must never echo back in the Type 3 message. We emit neither a Version
+// field (our AUTHENTICATE header is the 64-byte form) nor an encrypted session
+// key, and we never sign or seal the payload, so advertising these would promise
+// data the message does not carry — which strict servers (SSPI) reject.
+const NEGOTIATE_LM_KEY = 0x00000080
+const NEGOTIATE_DATAGRAM = 0x00000040
+const NEGOTIATE_SEAL = 0x00000020
+const NEGOTIATE_SIGN = 0x00000010
+const NEGOTIATE_VERSION = 0x02000000
+const NEGOTIATE_KEY_EXCH = 0x40000000
+const TYPE3_FLAG_MASK = ~(
+  NEGOTIATE_LM_KEY |
+  NEGOTIATE_DATAGRAM |
+  NEGOTIATE_SEAL |
+  NEGOTIATE_SIGN |
+  NEGOTIATE_VERSION |
+  NEGOTIATE_KEY_EXCH
+)
+
+/**
+ * The flags to put in the Type 3 message: the server's negotiated set minus the
+ * capabilities we cannot honor. Returned as an unsigned 32-bit value.
+ */
+export function type3Flags(serverFlags: number): number {
+  return (serverFlags & TYPE3_FLAG_MASK) >>> 0
+}
+
 // Default Type 1 flag set (0xe208 in the low 16 bits + extended session security).
 const TYPE1_FLAGS =
   NEGOTIATE_UNICODE |
@@ -215,8 +242,9 @@ export function createType3Message(
   writeSecBuf(buf, 44, wsBuf.length, wsOffset)
   writeSecBuf(buf, 52, sessionKey.length, sessionOffset)
 
-  // Echo negotiated flags from the Type 2 message.
-  buf.writeUInt32LE(type2.flags, 60)
+  // Echo the negotiated flags from the Type 2 message, minus the capabilities
+  // this message does not actually provide (version, key exchange, sign/seal).
+  buf.writeUInt32LE(type3Flags(type2.flags), 60)
 
   lmResponse.copy(buf, lmOffset)
   ntResponse.copy(buf, ntOffset)

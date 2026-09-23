@@ -247,28 +247,38 @@ export function importInsomnia(doc: any): InsomniaImportResult {
     }
   }
   const roots: InsoNode[] = []
+  let orphans = 0
   for (const res of resources) {
     if (!res || typeof res._id !== 'string') continue
     const node = byOriginalId.get(res._id)
     if (!node) continue
     const parent = node.parentId ? byOriginalId.get(node.parentId) : undefined
     if (parent) parent.children.push(node)
-    else if (node.type === 'workspace') roots.push(node)
-    else if (!node.parentId) roots.push(node)
+    else {
+      // A partial export can point at a parent that is not in the file. Such an
+      // item used to be dropped without a trace; keep it at the top level.
+      if (node.parentId && node.type !== 'workspace') orphans++
+      roots.push(node)
+    }
   }
+  if (orphans) warnings.push(`${orphans} item(s) referenced a missing parent and were placed at the top level.`)
 
   // If no workspace exists, synthesize a single root collection holding all
   // top-level groups/requests so nothing is dropped.
   let workspaceRoots = roots.filter((r) => r.type === 'workspace')
+  const loose = roots.filter((r) => r.type !== 'workspace')
   if (workspaceRoots.length === 0) {
     const synthetic: InsoNode = {
       id: makeId('col'),
       parentId: null,
       resource: { name: 'Imported (Insomnia)' },
       type: 'workspace',
-      children: roots
+      children: loose
     }
     workspaceRoots = [synthetic]
+  } else if (loose.length) {
+    // Parentless groups/requests belong somewhere: the first workspace.
+    workspaceRoots[0].children.push(...loose)
   }
 
   const collections = workspaceRoots.map((root) => nodeToCollection(root, true) as CollectionFolderNode)

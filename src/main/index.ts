@@ -38,25 +38,55 @@ function contentSecurityPolicy(): string {
 }
 
 /**
- * Hardware acceleration must be decided before the app is ready, long before
- * the storage layer is up — so the one setting that needs it is read straight
- * from its JSON file. A missing or unreadable file simply means "leave the GPU
- * on", which is the default.
+ * Low-power mode must be decided before the app is ready, long before the
+ * storage layer is up — so the one setting that needs it is read straight from
+ * its JSON file. A missing or unreadable file simply means "full power", which
+ * is the default. `disableHardwareAcceleration` is the 1.2 name of the setting.
  */
-function applyGpuPreference(): void {
+export function lowPowerRequested(): boolean {
   try {
     const file = join(app.getPath('userData'), 'relay-data', 'settings.json')
-    if (!existsSync(file)) return
-    const doc = JSON.parse(readFileSync(file, 'utf8')) as { disableHardwareAcceleration?: unknown }
-    if (doc.disableHardwareAcceleration === true) {
-      app.disableHardwareAcceleration()
-      // Without a GPU process there is nothing to composite on the GPU; this
-      // keeps Chromium from allocating video memory for layers it cannot use.
-      app.commandLine.appendSwitch('disable-gpu-compositing')
-    }
+    if (!existsSync(file)) return false
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as { lowPowerMode?: unknown; disableHardwareAcceleration?: unknown }
+    return doc.lowPowerMode === true || (doc.lowPowerMode === undefined && doc.disableHardwareAcceleration === true)
   } catch {
     // Corrupt settings must never stop the app from starting.
+    return false
   }
+}
+
+/**
+ * Everything that makes Chromium cheaper to run, applied only in low-power
+ * mode. No feature depends on any of it: the GPU switches move compositing to
+ * the CPU, the rest shrink caches and background work.
+ */
+function applyLowPowerPreference(): void {
+  if (!lowPowerRequested()) return
+  app.disableHardwareAcceleration()
+  // Without a GPU process there is nothing to composite on the GPU; this keeps
+  // Chromium from allocating video memory for layers it cannot use.
+  app.commandLine.appendSwitch('disable-gpu-compositing')
+  app.commandLine.appendSwitch('disable-software-rasterizer')
+  // Chromium's own profile for weak machines: smaller caches, fewer tiles.
+  app.commandLine.appendSwitch('enable-low-end-device-mode')
+  app.commandLine.appendSwitch('disable-smooth-scrolling')
+  // Nothing here renders 3D or plays media; dropping these frees their memory.
+  app.commandLine.appendSwitch('disable-features', 'WebGL,WebGL2,MediaFoundationVideoCapture')
+  app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+}
+
+/**
+ * Isolation: Chromium features that would reach the network (or the user's
+ * hardware) without the user asking. The spellchecker downloads dictionaries
+ * from Google's servers; permission prompts (camera, location, notifications…)
+ * have no use in an API client. Only the clipboard stays — copy buttons use it.
+ */
+function isolateSession(): void {
+  const ses = session.defaultSession
+  ses.setSpellCheckerEnabled(false)
+  const allowed = new Set(['clipboard-read', 'clipboard-sanitized-write'])
+  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(allowed.has(permission)))
+  ses.setPermissionCheckHandler((_wc, permission) => allowed.has(permission))
 }
 
 function createWindow(): void {
@@ -72,6 +102,20 @@ function createWindow(): void {
     closeAllPaneWindows()
     mainWindow = null
   })
+
+  // A reload (F5 in development, a renderer crash) replaces the page that owned
+  // every live socket. Without this the connections kept reconnecting in main
+  // for a renderer that no longer listens to them.
+  const wc = mainWindow.webContents
+  const wcId = wc.id
+  const dropLive = (): void => {
+    abortRealtimeFor(wcId)
+    abortGrpcFor(wcId)
+  }
+  wc.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) dropLive()
+  })
+  wc.on('render-process-gone', dropLive)
 }
 
 if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
@@ -82,7 +126,10 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
   // Re-forked as the isolated plugin sandbox (docs/PLUGINS.md) — same model.
   startPluginSandboxHost()
 } else {
-  applyGpuPreference()
+  // No speculative DNS lookups for links in the UI: every lookup the app makes
+  // should belong to a request the user sent.
+  app.commandLine.appendSwitch('dns-prefetch-disable')
+  applyLowPowerPreference()
   app.whenReady().then(async () => {
   // Relay drives everything from its own titlebar and in-app shortcuts. The
   // default Electron menu is invisible with a frameless window, yet its
@@ -99,6 +146,7 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
       }
     })
   })
+  isolateSession()
 
   const storage = new StorageManager()
   await storage.init()

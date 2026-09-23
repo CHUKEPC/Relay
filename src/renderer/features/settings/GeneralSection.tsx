@@ -109,17 +109,17 @@ export function GeneralSection(): JSX.Element {
 
       <div className="set-row">
         <div className="label">
-          <div className="t">{tr('Экономить видеопамять')}</div>
+          <div className="t">{tr('Режим для слабых ПК')}</div>
           <div className="d">
             {tr(
-              'Рисовать интерфейс без графического ускорителя. Заметно снижает расход видеопамяти, прокрутка становится чуть менее плавной. Изменение вступает в силу после перезапуска.'
+              'Рисовать интерфейс без графического ускорителя и без анимаций, теней и размытия, а вместо тяжёлого редактора кода использовать лёгкий (подсказки {{переменных}} остаются, подсветки синтаксиса нет). Все возможности работают как обычно. Изменение вступает в силу после перезапуска.'
             )}
           </div>
         </div>
         <Toggle
-          checked={settings.disableHardwareAcceleration}
+          checked={settings.lowPowerMode}
           onChange={(v) => {
-            update({ disableHardwareAcceleration: v })
+            update({ lowPowerMode: v })
             useUi.getState().showToast(tr('Настройка применится после перезапуска Relay'))
           }}
         />

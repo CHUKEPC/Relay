@@ -9,9 +9,9 @@ import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useRunner } from './runner'
 import { usePlugins } from './plugins'
+import { useUserThemes } from './user-themes'
 import { useFeatures, wireFeatures } from './features'
 import { applyLanguage } from '../lib/i18n'
-import { useUi } from './ui'
 import { flushPersist, persist } from './persist'
 import { LEGACY_PRESET_IDS } from '../lib/provider-templates'
 import {
@@ -24,7 +24,6 @@ import {
   emptyTabs
 } from './defaults'
 
-import { trf } from '@renderer/lib/i18n'
 let unloadWired = false
 
 /**
@@ -54,7 +53,7 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
 
   // Feature packs decide which UI even exists (protocols, AI, auth, languages),
   // so they are loaded with the documents, before the first render.
-  const [collections, environments, globals, history, tabs, settings, providers, features] = await Promise.all([
+  const [collections, environments, globals, history, tabs, settings, providers, userThemes, features] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
     window.api.storageLoad('globals'),
@@ -62,10 +61,13 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
     window.api.storageLoad('tabs'),
     window.api.storageLoad('settings'),
     window.api.storageLoad('providers'),
+    window.api.storageLoad('userThemes'),
     window.api.featuresList().catch(() => [])
   ])
 
   useFeatures.getState().setPlugins(features)
+  // Before the settings hydrate: a user theme may be the active one.
+  useUserThemes.getState().hydrate(userThemes)
   useSettings.getState().hydrate(settings ?? defaultSettingsDoc())
   // Language depends on the packs above (a plugin language needs its pack on).
   await applyLanguage(useSettings.getState().settings.language || 'ru')
@@ -97,28 +99,6 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
 
   wireFeatures()
   watchSystemTheme()
-  scheduleUpdateCheck()
-}
-
-/**
- * Fire-and-forget version check against GitHub Releases, a few seconds after
- * launch so it never competes with startup work. Failures are silently ignored
- * — this must never block or break bootstrap.
- */
-function scheduleUpdateCheck(): void {
-  if (!useSettings.getState().settings.updateCheckEnabled) return
-  window.setTimeout(() => {
-    void window.api
-      .checkUpdates()
-      .then((res) => {
-        if (res.ok && res.updateAvailable) {
-          useUi.getState().showToast(trf('Доступна новая версия {version} — Настройки → О приложении', { version: res.latestVersion }))
-        }
-      })
-      .catch(() => {
-        /* ignore — opportunistic check only */
-      })
-  }, 3500)
 }
 
 /**

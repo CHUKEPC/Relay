@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { isSafeCssValue, parseSnippets, parseThemes, themeVariant } from './pack-data'
+import { isSafeCssValue, parseSnippets, parseThemeFile, parseThemes, themeVariant, THEME_FILE_MAX_BYTES } from './pack-data'
 
 const repo = join(__dirname, '..', '..')
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(join(repo, rel), 'utf8'))
@@ -119,5 +119,49 @@ describe('bundled theme-pack', () => {
         }
       }
     }
+  })
+})
+
+describe('parseThemeFile', () => {
+  const theme = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'midnight',
+    name: 'Midnight',
+    variants: { dark: { '--bg-0': '#0f1016', '--tx-0': '#e6e8f0' } },
+    ...over
+  })
+
+  it('reads a single theme object', () => {
+    const { themes, error } = parseThemeFile(JSON.stringify(theme()), 'file')
+    expect(error).toBeUndefined()
+    expect(themes).toHaveLength(1)
+    expect(themes[0].id).toBe('user/midnight')
+    expect(themes[0].variants.dark?.['--bg-0']).toBe('#0f1016')
+  })
+
+  it('reads a bare list and the pack wrapper alike', () => {
+    const list = parseThemeFile(JSON.stringify([theme(), theme({ id: 'noon', name: 'Noon' })]), 'file')
+    const wrapped = parseThemeFile(JSON.stringify({ themes: [theme(), theme({ id: 'noon', name: 'Noon' })] }), 'file')
+    expect(list.themes.map((t) => t.id)).toEqual(['user/midnight', 'user/noon'])
+    expect(wrapped.themes.map((t) => t.id)).toEqual(list.themes.map((t) => t.id))
+  })
+
+  it('names a theme after its file when the file does not', () => {
+    const { themes } = parseThemeFile(JSON.stringify(theme({ name: undefined })), 'my-colours')
+    expect(themes[0].name).toBe('my-colours')
+  })
+
+  it('drops unsafe values but keeps the rest of the theme', () => {
+    const { themes } = parseThemeFile(
+      JSON.stringify(theme({ variants: { dark: { '--bg-0': '#101014', '--evil': 'url(https://x/y.png)', '--tx-0': 'javascript:alert(1)' } } })),
+      'file'
+    )
+    expect(themes[0].variants.dark).toEqual({ '--bg-0': '#101014' })
+  })
+
+  it('reports why nothing was read', () => {
+    expect(parseThemeFile('{ nope', 'f').error).toBe('not-json')
+    expect(parseThemeFile(JSON.stringify({ id: 'x', name: 'X' }), 'f').error).toBe('no-themes')
+    expect(parseThemeFile(JSON.stringify(theme({ id: 'Not A Slug' })), 'f').error).toBe('no-themes')
+    expect(parseThemeFile('x'.repeat(THEME_FILE_MAX_BYTES + 1), 'f').error).toBe('too-large')
   })
 })

@@ -21,7 +21,9 @@ const EN: Record<string, string> = {
   'Системный прокси не передаётся — задайте его переменными окружения терминала.':
     'The system proxy is not passed on — set it with the terminal environment variables.',
   'Клиентские сертификаты не передаются.': 'Client certificates are not passed on.',
-  'Не найден эмулятор терминала (gnome-terminal, konsole, xterm…).': 'No terminal emulator found (gnome-terminal, konsole, xterm…).'
+  'Не найден эмулятор терминала (gnome-terminal, konsole, xterm…).': 'No terminal emulator found (gnome-terminal, konsole, xterm…).',
+  'Готово — вернитесь в Relay. Вкладку можно закрыть.': 'Done — go back to Relay. You can close this tab.',
+  'Вход не завершён: {error}': 'Sign-in was not completed: {error}'
 }
 
 let lang = 'ru'

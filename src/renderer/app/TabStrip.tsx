@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { Icon } from '@renderer/components/Icon'
+import { RequestTag } from '@renderer/components/RequestTag'
 import { useTabs } from '@renderer/store/tabs'
 import { leavesOf, usePanes } from '@renderer/store/panes'
 import { MOD } from '@renderer/lib/platform'
@@ -73,7 +74,7 @@ export function TabStrip() {
                   }
                 }}
               >
-                <span className={`method-tag m-${t.request.method}`}>{t.request.method === 'DELETE' ? 'DEL' : t.request.method}</span>
+                <RequestTag request={t.request} />
                 <span className="label">{tr(t.request.name || 'Без названия')}</span>
                 {detached.includes(t.id) && <Icon name="floatWin" size={12} className="tab-window" />}
                 {/* Dirty dot shows when there are unsaved changes; on hover it is

@@ -1,5 +1,7 @@
 # design/ — Drop your Claude Design output here
 
+*[Русская версия](README.ru.md)*
+
 This folder is the **source of truth for look & feel**. The build reads everything here and
 reconciles it with the functional spec in [`../docs/FEATURES.md`](../docs/FEATURES.md).
 
@@ -44,7 +46,7 @@ default design system for anything missing.
   Pre-request/Tests, Settings.
 - Response viewer: status/time/size, tabs for Body (pretty/raw/preview), Headers, Cookies, Tests.
 - Collections & environments sidebar; environment/variable manager; history list.
-- **AI assistant panel** (the differentiator): chat thread, provider/model picker, an input box,
+- **AI assistant panel** (optional pack): chat thread, provider/model picker, an input box,
   and message actions (e.g. "apply to request").
 - Settings: providers & API keys, theme, request defaults.
 

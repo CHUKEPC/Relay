@@ -11,12 +11,9 @@ import { useRunner } from '@renderer/store/runner'
 import { ImportDialog } from '@renderer/features/data/ImportDialog'
 import { REQUEST_MIME } from '@renderer/lib/dnd'
 import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
+import { RequestTag } from '@renderer/components/RequestTag'
 
 import { tr, trf } from '@renderer/lib/i18n'
-function MethodTag({ m }: { m: string }) {
-  return <span className={`method-tag mtag m-${m}`}>{m === 'DELETE' ? 'DEL' : m}</span>
-}
-
 /** Where a dragged node will land relative to the row it is hovering. */
 type DropIntent = 'before' | 'after' | 'into'
 
@@ -358,7 +355,7 @@ function TreeNode({
         ) : (
           <span className="name">{node.request.name}</span>
         )}
-        <MethodTag m={node.request.method} />
+        <RequestTag request={node.request} className="mtag" />
       </div>
     ) : (
       <div

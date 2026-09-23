@@ -1,0 +1,274 @@
+/*
+ * Dockable panels: the sidebar, the response panel and the request zone (the
+ * request console has carried its own four positions since 1.0). A panel is
+ * dragged by its header; the landing zones say which edge it will take.
+ */
+
+/* One height for every panel header that can end up side by side — the request
+   header (.reqmeta, 42 px + its border), the sidebar head and the response
+   status bar — so their bottom lines meet in one straight line. */
+:root {
+  --panel-head-h: 43px;
+}
+
+.dock-zones {
+  z-index: 60;
+}
+
+.dock-zone {
+  position: absolute;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in oklab, var(--accent) 45%, transparent);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  transition: background 90ms var(--ease, ease);
+}
+
+.dock-zone.on {
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* ---- the position buttons in a panel header ---- */
+
+.dock-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.dock-btn {
+  width: 22px;
+  height: 22px;
+  color: var(--tx-3);
+}
+
+.dock-btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---- grips ---- */
+
+.dock-grip {
+  cursor: grab;
+  user-select: none;
+}
+
+.dock-grip:active {
+  cursor: grabbing;
+}
+
+.resp-dock-grab,
+.builder-dock-grab {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 22px;
+  color: var(--tx-3);
+  border-radius: 4px;
+}
+
+.resp-dock-grab:hover,
+.builder-dock-grab:hover {
+  color: var(--tx-1);
+  background: var(--bg-2);
+}
+
+.builder-dock-grab {
+  margin-left: -8px;
+}
+
+/* ============================ sidebar ============================ */
+
+.sidebar {
+  position: relative;
+}
+
+/* Left is the default: the flex row already puts the sidebar first. */
+.body.side-dock-right {
+  flex-direction: row-reverse;
+}
+
+/* The reverse direction puts the sidebar under the workspace while it stays
+   first in the DOM. */
+.body.side-dock-bottom {
+  flex-direction: column-reverse;
+}
+
+.sidebar.dock-right {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+/* The header strip that carries the grip and the position buttons. */
+.panel-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--panel-head-h);
+  box-sizing: border-box;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  flex: none;
+}
+
+.panel-dock-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tx-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Everything below the head: tabs + search, the list, the actions. */
+.side-main,
+.side-top,
+.side-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.side-main {
+  flex: 1;
+}
+
+.side-top {
+  flex: none;
+}
+
+.side-content {
+  flex: 1;
+}
+
+/* Docked at the bottom the panel becomes a wide strip of three columns: tabs
+   and search on the left, the list in the middle, the actions on the right. */
+.sidebar.dock-bottom {
+  width: 100% !important;
+  border-right: 0;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar.dock-bottom .side-main {
+  flex-direction: row;
+}
+
+.sidebar.dock-bottom .side-top {
+  width: 250px;
+  border-right: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.sidebar.dock-bottom .side-content {
+  border-right: 1px solid var(--line);
+}
+
+.sidebar.dock-bottom .side-foot {
+  margin-top: 0 !important;
+  border-top: 0 !important;
+  width: 220px;
+  flex: none;
+  overflow: auto;
+}
+
+/* Floating: a card over the workspace, moved by its header, resized by the grip. */
+.sidebar.dock-float {
+  position: fixed;
+  z-index: 55;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-3, 0 18px 50px rgb(0 0 0 / 0.35));
+  overflow: hidden;
+  background: var(--bg-1);
+}
+
+.float-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--line) 50%, var(--line) 62%, transparent 62%, transparent 74%, var(--line) 74%, var(--line) 86%, transparent 86%);
+}
+
+/* A sidebar docked at the bottom is resized by its top edge. */
+.wall-handle.top {
+  top: -3px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 6px;
+  cursor: row-resize;
+}
+
+body.wall-resizing .wall-handle.top {
+  cursor: row-resize !important;
+}
+
+/* ============================ response ============================ */
+
+/* The status bar is the response panel's header: same height as the request
+   header next to it, whatever it currently shows. */
+.resp-statusbar {
+  min-height: var(--panel-head-h);
+  box-sizing: border-box;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* The status bar of an empty response holds nothing but the dock controls. */
+.resp-statusbar-bare {
+  justify-content: flex-end;
+}
+
+.resp-dock-ctl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
+}
+
+/* Beside the builder the divider is a vertical line; it used to draw its
+   horizontal 1 px rule across an 8 px width, so the seam simply vanished. */
+.divider.vertical::after {
+  width: 1px;
+  height: 100%;
+}
+
+.divider.vertical .grip {
+  width: 4px;
+  height: 36px;
+}
+
+.divider.vertical:hover::after,
+.divider.vertical.drag::after {
+  width: 2px;
+  height: 100%;
+}
+
+.resp-float {
+  position: absolute;
+  z-index: 40;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-3, 0 18px 50px rgb(0 0 0 / 0.35));
+  overflow: hidden;
+  background: var(--bg-0);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Never outgrow the pane — a rect saved in a large pane stays usable after a split. */
+  max-width: calc(100% - 8px);
+  max-height: calc(100% - 8px);
+}

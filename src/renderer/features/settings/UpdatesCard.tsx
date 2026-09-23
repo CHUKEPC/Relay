@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { APP_VERSION, UPDATE_REPO } from '@shared/constants'
 import type { UpdateCheckResult } from '@shared/ipc-contract'
-import { Toggle } from '@renderer/components/primitives'
-import { useSettings } from '@renderer/store/settings'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /** Built per call: tr() must run while rendering, not when the module loads. */
@@ -26,10 +24,12 @@ function describe(result: UpdateCheckResult): string {
   return trf('У вас актуальная версия {version}', { version: result.currentVersion }) + from
 }
 
-/** Settings group: opt-out toggle + manual "check now" against GitHub. */
+/**
+ * Settings group: a manual "check now" against GitHub and nothing else.
+ * Relay never reaches the network on its own — the button is the only way a
+ * version check happens.
+ */
 export function UpdatesCard(): JSX.Element {
-  const settings = useSettings((s) => s.settings)
-  const update = useSettings((s) => s.update)
   const [checking, setChecking] = useState(false)
   const [result, setResult] = useState<UpdateCheckResult | null>(null)
 
@@ -53,17 +53,6 @@ export function UpdatesCard(): JSX.Element {
   return (
     <>
       <div className="set-group-label">{tr('Обновления')}</div>
-
-      <div className="set-row">
-        <div className="label">
-          <div className="t">{tr('Сообщать о новых версиях')}</div>
-          <div className="d">{tr('Relay проверяет страницу релизов на GitHub. Никаких своих серверов.')}</div>
-        </div>
-        <Toggle
-          checked={settings.updateCheckEnabled}
-          onChange={(v) => update({ updateCheckEnabled: v })}
-        />
-      </div>
 
       <div className="set-row">
         <div className="label">

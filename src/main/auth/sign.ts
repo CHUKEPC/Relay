@@ -9,8 +9,9 @@
  *    encoded (`signRequest`).
  *
  * Each algorithm lives in its own pure, unit-tested module; this file only wires
- * them to the engine's request context. Failures degrade to "no header added"
- * rather than throwing, so a misconfigured auth never crashes a send.
+ * them to the engine's request context. A failure never throws: it comes back
+ * as `error`, and the engine refuses to send rather than letting the request go
+ * out unauthenticated and come back as an unexplained 401.
  */
 import type { Auth } from '@shared/types'
 import { generateJwt } from './jwt'
@@ -23,7 +24,11 @@ import { edgeGridHeader } from './akamai'
 export interface AuthHeaderResult {
   headers: Record<string, string>
   query?: { key: string; value: string }
+  /** why the auth could not be produced; nothing else is set then */
+  error?: string
 }
+
+const reason = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 /** Token-style auth that needs no request binding (JWT Bearer, Atlassian ASAP). */
 export function buildTokenAuth(auth: Auth | undefined): AuthHeaderResult | null {
@@ -33,15 +38,15 @@ export function buildTokenAuth(auth: Auth | undefined): AuthHeaderResult | null 
     if (auth.payload && auth.payload.trim()) {
       try {
         payload = JSON.parse(auth.payload)
-      } catch {
-        return { headers: {} } // invalid payload JSON → attach nothing
+      } catch (err) {
+        return { headers: {}, error: `JWT: the payload is not valid JSON (${reason(err)})` }
       }
     }
     let token: string
     try {
       token = generateJwt({ algorithm: auth.algorithm, secret: auth.secret, payload })
-    } catch {
-      return { headers: {} }
+    } catch (err) {
+      return { headers: {}, error: `JWT: could not sign the token (${reason(err)})` }
     }
     if (auth.addTo === 'query') {
       return { headers: {}, query: { key: auth.queryParamName?.trim() || 'token', value: token } }
@@ -59,8 +64,8 @@ export function buildTokenAuth(auth: Auth | undefined): AuthHeaderResult | null 
         privateKeyPem: auth.privateKey,
         subject: auth.subject || undefined
       })
-    } catch {
-      return { headers: {} }
+    } catch (err) {
+      return { headers: {}, error: `ASAP: could not sign the token (${reason(err)})` }
     }
     return { headers: { Authorization: `Bearer ${token}` } }
   }
@@ -76,8 +81,12 @@ export interface SignContext {
   /** encoded body, when available as text/bytes */
   body?: string | Buffer
   contentType?: string
-  /** form fields for OAuth1 body signing (x-www-form-urlencoded) */
-  urlencodedParams?: Record<string, string>
+  /**
+   * Form fields for OAuth1 body signing (x-www-form-urlencoded). Prefer the pair
+   * array: it keeps the wire order and, unlike an object, preserves repeated
+   * keys — every occurrence has to appear in the signature base string.
+   */
+  urlencodedParams?: Array<[string, string]> | Record<string, string>
   /** true when the body bytes can't be hashed (multipart/form-data) → AWS UNSIGNED-PAYLOAD */
   unsignedBody?: boolean
 }
@@ -145,7 +154,8 @@ export function signRequest(auth: Auth | undefined, ctx: SignContext): AuthHeade
       default:
         return null
     }
-  } catch {
-    return { headers: {} } // never crash a send because of an auth-signing error
+  } catch (err) {
+    // Never crash a send — but never send it unsigned either.
+    return { headers: {}, error: `${auth.type}: could not sign the request (${reason(err)})` }
   }
 }
