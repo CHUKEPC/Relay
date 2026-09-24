@@ -96,7 +96,7 @@ function QuickstartTopic(): JSX.Element {
         <Icon name="refresh" size={14} /> {tr('Показать тур по интерфейсу')} </button>
       <div className="help-topic-title">{tr('Быстрый старт')}</div>
       <Card title={tr('Что такое Relay')}>
-        <p>{tr('Relay — API-клиент для тестирования API: HTTP, GraphQL, WebSocket, Server-Sent Events, Socket.IO, MQTT и gRPC, коллекции и окружения, скрипты и тесты, раннер коллекций. Данные хранятся в папке приложения на этом компьютере.')}</p>
+        <p>{tr('Relay — десктопный клиент для тестирования API: HTTP, GraphQL, WebSocket, Server-Sent Events, Socket.IO, MQTT и gRPC, коллекции и окружения, скрипты и тесты, раннер коллекций. Данные хранятся в папке приложения на этом компьютере.')}</p>
       </Card>
       <Card title={tr('Первый запрос')}>
         <ul>

@@ -1,13 +1,10 @@
-# Relay — API client for API testing
+# Relay — desktop client for API testing
 
 *[Русская версия](README.ru.md)*
 
-A cross-platform desktop API client for **Windows, macOS, and Linux**, built with
+A cross-platform desktop client for API testing on **Windows, macOS, and Linux**, built with
 **Electron + React + TypeScript**. Data is stored locally as JSON in the user directory; secrets
 are encrypted with the OS keychain.
-
-> "Relay" is the product name (set in `package.json` → `productName` and `src/shared/constants.ts`
-> → `APP_NAME`). Rename in those two places.
 
 ## Highlights
 

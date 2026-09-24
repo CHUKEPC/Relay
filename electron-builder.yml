@@ -74,4 +74,4 @@ linux:
     - deb
   category: Development
   maintainer: Relay
-  synopsis: API client for API testing
+  synopsis: Desktop client for API testing
