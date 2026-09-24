@@ -189,7 +189,7 @@ relay.on('button:hello', () => {
 | `phase` | `pre` (Pre-request), `test` (Post-response) или `both` |
 | `code` | до 20 000 символов; вставляется в конец скрипта |
 
-Сниппеты выполняются в песочнице скриптов Relay, которая реализует API Postman `pm.*`: `pm.test`,
+Сниппеты выполняются в песочнице скриптов Relay, которая предоставляет скриптовый API `pm.*`: `pm.test`,
 `pm.expect`, `pm.response` (`code`, `status`, `json()`, `text()`, `headers.get()`,
 `responseTime`, `to.have.status()`, `to.have.header()`), `pm.request` (`url`, `method`,
 `headers`), `pm.environment`, `pm.globals`, `pm.collectionVariables`, `pm.variables`,

@@ -188,7 +188,7 @@ good reference.
 | `phase` | `pre` (Pre-request), `test` (Post-response) or `both` |
 | `code` | up to 20 000 characters; inserted at the end of the script |
 
-Snippets run in Relay's script sandbox, which implements the Postman `pm.*` API: `pm.test`,
+Snippets run in Relay's script sandbox, which provides the `pm.*` scripting API: `pm.test`,
 `pm.expect`, `pm.response` (`code`, `status`, `json()`, `text()`, `headers.get()`,
 `responseTime`, `to.have.status()`, `to.have.header()`), `pm.request` (`url`, `method`,
 `headers`), `pm.environment`, `pm.globals`, `pm.collectionVariables`, `pm.variables`,

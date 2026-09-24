@@ -17,7 +17,7 @@ const commitDescription = debounce((tabId: string, description: string) => {
 }, 400)
 
 /**
- * Postman-style request meta row: inline-editable request name (with dirty dot)
+ * Request meta row: inline-editable request name (with dirty dot)
  * on the left, a «Описание» toggle on the right revealing an autosizing
  * description textarea. Rendered as the first row of the request builder.
  */

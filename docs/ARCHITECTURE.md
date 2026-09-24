@@ -173,9 +173,9 @@ forking Electron-as-Node costs a few hundred milliseconds of CPU and a collectio
 per request. A child is retired instead of reused when its run timed out, crashed, or left async
 work in flight.
 
-## Isolation
+## Network behaviour
 
-Relay opens no connection the user did not ask for. What enforces it:
+Outbound connections happen as part of user actions. The parts involved:
 
 - **No background network work.** There is no automatic update check (`src/main/update` runs only
   from the About button), no telemetry, no crash reporter.
@@ -191,11 +191,20 @@ Relay opens no connection the user did not ask for. What enforces it:
 ## Dockable panels (`src/renderer/lib/dock.tsx`)
 
 The sidebar, the response panel and the request console share one dock model: `left | right |
-bottom | float`. `useDockDrag` turns a press on a panel header into a drag session: edge zones of
-the container dock the panel, the middle makes it float, and a floating panel follows the cursor.
-The sidebar's position lives in the UI store (localStorage); the response panel's is per pane
-(`PaneLeaf.respDock` / `respFloat`, migrated from the 1.2 `layout` field). Panels that render a
-status bar get their controls through `PaneDockContext` instead of props.
+bottom | top | float` (the sidebar and the console take no top). `useDockDrag` turns a press on a
+panel header into a drag session: the allowed edges of the container light up and a drop there docks
+the panel; a drop anywhere else cancels. Floating is a button only, and a floating panel dragged by
+its header just moves. The request zone is dragged too (`BuilderDockContext`, the grip in the request
+header) and puts the response on the opposite edge. `lib/dock-swap.ts` makes the sidebar and a
+response that touches the same window edge trade places instead of stacking. The sidebar's position
+lives in the UI store (localStorage); the response panel's is per pane (`PaneLeaf.respDock` /
+`respFloat`, migrated from the 1.2 `layout` field). Panels that render a status bar get their
+controls through `PaneDockContext` instead of props. `--panel-head-h` keeps every panel header the
+same height so their bottom lines meet.
+
+Files dropped from the OS are handled by `app/FileDropZone.tsx` → `lib/file-drop.ts` (routing per
+file, then the same `lib/import-apply.ts` the Import dialog uses); main refuses any `file://`
+navigation other than the app's own page.
 
 ## Low-power mode
 

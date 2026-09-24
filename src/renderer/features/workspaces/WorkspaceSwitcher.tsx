@@ -66,7 +66,7 @@ function CreateModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
   }
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={tr('Новое рабочее пространство')} width={420}>
-      <Field label={tr('Название')} hint={tr('Изолированный набор коллекций, сред, истории и вкладок.')}>
+      <Field label={tr('Название')} hint={tr('Отдельный набор коллекций, сред, истории и вкладок.')}>
         <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commit()} placeholder="Personal" />
       </Field>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>

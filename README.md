@@ -1,40 +1,30 @@
-# Relay — an isolated desktop client for API testing
+# Relay — API client for API testing
 
 *[Русская версия](README.ru.md)*
 
-A cross-platform desktop **API client** (a Postman analog) for **Windows, macOS, and Linux**, built
-with **Electron + React + TypeScript**.
-
-**Isolated by design.** Everything lives on your machine: collections, environments, history and
-settings are JSON files in your own user directory, secrets go into the OS keychain, there is no
-account, no cloud, no telemetry and no background phone-home — the app opens no connection you did
-not ask for. The only traffic is the requests you send and, if you switch it on, the LLM provider
-you chose yourself.
-
-An **AI assistant** is available as an optional pack: connect any provider (OpenAI,
-Anthropic/Claude, OpenRouter, or any OpenAI-compatible endpoint, including a local model) with your
-own API key. Off by default, and the app is fully usable without it.
+A cross-platform desktop API client for **Windows, macOS, and Linux**, built with
+**Electron + React + TypeScript**. Data is stored locally as JSON in the user directory; secrets
+are encrypted with the OS keychain.
 
 > "Relay" is the product name (set in `package.json` → `productName` and `src/shared/constants.ts`
 > → `APP_NAME`). Rename in those two places.
 
 ## Highlights
 
-- **Isolated**: no account, no cloud, no telemetry, no automatic update check. The interface loads
-  nothing from the internet (enforced by a strict CSP), and every connection the app opens is one
-  you asked for.
 - **CORS-free HTTP engine** in the Electron main process: all methods, every body type
   (raw/urlencoded/form-data/binary/GraphQL), auth (Bearer/Basic/API-key/OAuth 1.0/OAuth 2.0 with
   browser sign-in and PKCE/Digest/AWS SigV4/Hawk/NTLM/JWT/ASAP/EdgeGrid/inherit), redirects with a
   recorded chain, timeout, TLS toggle, cancellation, timing & size metrics.
 - **WebSocket, SSE, Socket.IO, MQTT, gRPC and GraphQL** alongside HTTP.
-- **Movable panels**: dock the sidebar and the response panel left, right, at the bottom or let them
-  float — by dragging their header or with one click.
+- **Movable panels**: drag the navigation to any side of the window and the request or the response to
+  any side of its pane; panels swap places instead of pushing each other, and float with one click.
+- **Drop files to import**: collections, OpenAPI/HAR/cURL, environments, `.env`/CSV and themes
+  dragged from the file manager are recognized on their own.
 - **Low-power mode** for weak machines: no GPU, no animations, a light editor — same features.
 - **Your own themes** from a JSON file ([theme guide](docs/THEMES.md) · [по-русски](docs/THEMES.ru.md)),
   plus a pack of 15 ready-made themes.
-- **Optional AI assistant** (a pack, off by default) with streaming, secret-masked context and
-  tool-calling with confirmation.
+- **AI assistant** (feature pack): OpenAI, Anthropic, OpenRouter or any OpenAI-compatible endpoint
+  with your own key; streaming, secret-masked context, tool-calling with confirmation.
 - **Collections, environments & global variables** with `{{var}}` interpolation everywhere,
   hover-resolution, and unresolved flagging.
 - **Monaco-powered** request bodies and a Pretty/Raw/Preview response viewer.
@@ -53,8 +43,8 @@ own API key. Off by default, and the app is fully usable without it.
   see the [plugin guide](docs/plugin-guide/README.md) ([по-русски](docs/plugin-guide/README.ru.md)).
 - **Find & replace across the workspace**: search collections, environments and variables by field
   group, then replace exactly the matches you confirm.
-- **Local-first**: everything persists as JSON in `userData`; API keys are encrypted via Electron
-  `safeStorage`. No telemetry; the only outbound traffic is your own API and (if enabled) AI calls.
+- **Local storage**: everything persists as JSON in `userData`; API keys are encrypted via Electron
+  `safeStorage`.
 
 ## Documentation
 

@@ -87,7 +87,7 @@ export function AboutSection(): JSX.Element {
         </div>
       </div>
 
-      <div className="about-tagline">{tr('Изолированный десктопный клиент для тестирования API.')}</div>
+      <div className="about-tagline">{tr('API-клиент для тестирования API.')}</div>
 
       <div className="set-row">
         <div className="label">

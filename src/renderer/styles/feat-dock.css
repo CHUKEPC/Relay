@@ -87,15 +87,29 @@
   position: relative;
 }
 
-/* Left is the default: the flex row already puts the sidebar first. */
-.body.side-dock-right {
-  flex-direction: row-reverse;
+/* Left is the default: the flex row already puts the sidebar first. On the
+   right it goes after the AI panel too — reversing the whole row would have
+   thrown the AI panel over to the left. */
+.body.side-dock-right > .sidebar {
+  order: 10;
 }
 
-/* The reverse direction puts the sidebar under the workspace while it stays
-   first in the DOM. */
+/* At the bottom the sidebar spans the full width under the workspace and the
+   AI panel, which keep their row above it. */
 .body.side-dock-bottom {
-  flex-direction: column-reverse;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.body.side-dock-bottom > .sidebar {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.body.side-dock-bottom > :not(.sidebar) {
+  grid-row: 1;
+  min-height: 0;
 }
 
 .sidebar.dock-right {

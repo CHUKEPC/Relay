@@ -1,10 +1,8 @@
-# FEATURES.md — Postman-parity feature target
+# FEATURES.md — feature checklist
 
 *[Русская версия](FEATURES.ru.md)*
 
-The goal is **maximum Postman parity** in an **isolated** desktop client: everything local, no
-account, no telemetry, no connection the user did not ask for. The AI assistant is an optional pack.
-Features are tiered by priority. **P0 must work** in the first build. P1 should be attempted in the same build
+Features of the Relay desktop API client, tiered by priority. **P0 must work** in the first build. P1 should be attempted in the same build
 and is expected to mostly work. P2 is best-effort / future. Anything requiring a hosted backend
 (team sync, cloud workspaces) is **out of scope** — this app is **local-first**.
 
@@ -79,7 +77,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       list is fetched live from the provider (`/models`, incl. Anthropic's paginated endpoint) with
       search, refresh and a free-text model id.
 
-### AI assistant (optional pack) — see docs/AI_ASSISTANT.md
+### AI assistant (feature pack) — see docs/AI_ASSISTANT.md
 - [x] Dockable AI panel with a chat thread.
 - [x] Provider + model picker (OpenAI, Anthropic, OpenRouter, custom OpenAI-compatible).
 - [x] **Streaming** responses (token-by-token over IPC).
@@ -106,7 +104,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       `codegen-languages` pack (1.2).
 - [x] **Paste cURL** into the URL bar to auto-fill the whole request.
 - [x] **~50 dynamic variables** (`{{$randomFirstName}}`, `{{$randomEmail}}`, `{{$randomIP}}`,
-      `{{$randomDatetime}}`, … the Postman set) plus `{{$guid}}/{{$timestamp}}/{{$counter}}`.
+      `{{$randomDatetime}}`, …) plus `{{$guid}}/{{$timestamp}}/{{$counter}}`.
 - [x] **OAuth 2.0**: client_credentials, password, authorization_code (**+ PKCE**), **refresh_token**,
       and **device code** (RFC 8628); client creds via body or HTTP Basic; **auto-refresh on 401**.
 - [x] **Digest auth** — full RFC 7616 challenge/response (MD5, SHA-256 and `-sess` variants;
@@ -128,8 +126,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       multipart), **Hawk**, **Akamai EdgeGrid**, **ASAP**, and **NTLM** (NTLMv2 with a hand-written
       pure-JS MD4 since OpenSSL 3 drops it; the Type 1/2/3 handshake runs inside the engine on a
       forced single-connection pool, replaying the 401 challenge with the Type 3 message). Token-style
-      auth attaches a header; request-bound auth is signed after the body is assembled. **This now
-      covers Postman's entire auth roster.**
+      auth attaches a header; request-bound auth is signed after the body is assembled. **Every listed scheme is
+      supported.**
 - [x] **Test snippets** — a Snippets panel in the Scripts editor inserts ready `pm.test`/`pm.expect`
       boilerplate (status code, response time, body contains/equals/JSON value, header checks,
       set/get env vars, …).
@@ -165,17 +163,16 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Default request headers**: `User-Agent: Relay/<version>`, `Accept: */*` and
       `Accept-Encoding: gzip, deflate, br` are sent unless the user set one of them (an empty value
       drops it). undici sends none of these on its own, so a request used to arrive carrying nothing
-      but `Host` — which WAFs, API gateways and several frameworks answer with 400 or 403 while the
-      identical request from Postman goes through.
+      but `Host` — which WAFs, API gateways and several frameworks answer with 400 or 403.
 - [x] **Literal braces survive the URL**: the WHATWG parser escapes `{`/`}` to `%7B`/`%7D`, so an
       API taking a literal `{id}` — or a URL still holding an unresolved `{{var}}` — used to reach
-      the server mangled. They are sent raw now, as Postman and browsers do, and a send whose
+      the server mangled. They are sent raw now, as browsers do, and a send whose
       variables did not resolve says so instead of leaving a 400 to explain it.
 - [x] **Variable peek** (the eye in the titlebar): what the next request will actually use —
       collection, environment and global variables in precedence order, with shadowed names struck
       through, secrets masked behind a reveal, filter and copy. A token written by a pre-request
       script is visible without opening the environment editor.
-- [x] **`{{` autocomplete**, as in Postman: typing two braces in any request field (URL, params,
+- [x] **`{{` autocomplete**: typing two braces in any request field (URL, params,
       headers, auth) or in an editor (body, scripts) opens the list of variables that are actually
       in scope — collection, environment, globals with their current values (secrets masked), then
       the built-in dynamic ones. It narrows as the name is typed, ↑↓ pick, Enter/Tab insert the
@@ -183,15 +180,15 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       than nesting. One name defined in several scopes appears once, attributed to the scope that
       wins. The matching/ranking logic is pure and unit-tested (`src/renderer/lib/var-suggest.ts`),
       and the Monaco provider (`var-completion.ts`) feeds from the same function.
-- [x] **pm.sendRequest speaks every Postman body mode**: `urlencoded` (list, object or encoded
+- [x] **pm.sendRequest supports every body mode**: `urlencoded` (list, object or encoded
       string), `raw` with `options.raw.language`, `formdata` (text parts only — a script cannot
       upload a local file) and `graphql`. Only `raw` used to be understood, so the standard
       client_credentials token call went out with an empty body. A failed call's `error` prints as
       its message in the script console instead of `{}`.
 - [x] **«Verify SSL certificates» off holds on every hop**: it used to snap back on at a
       cross-origin redirect, so an auth endpoint behind a load balancer still failed with
-      «self signed certificate in certificate chain» after the user had switched it off. Postman
-      semantics now; credentials are still stripped at an origin change. A certificate error —
+      «self signed certificate in certificate chain» after the user had switched it off. The switch now
+      applies to every hop; credentials are still stripped at an origin change. A certificate error —
       in the response card or from a pre-request script — offers **«Отключить проверку SSL»** in
       place (`src/renderer/lib/tls-hint.ts`).
 - [x] **Scripts and plugins actually run in a packaged build**: the sandbox children are the
@@ -212,7 +209,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **pm.sendRequest runs on the app's own engine**, not a bare `fetch`: a script that fetches a
       token honours the same TLS strictness, CA bundle, proxy, client certificates and timeout as a
       request sent from the UI, and the async-settle window follows the request timeout instead of a
-      flat 3 s. Cookies are still not applied (as in Postman). The `ca` option carries Node's
+      flat 3 s. Cookies are still not applied. The `ca` option carries Node's
       default roots along with the user's bundle — setting it replaces the trust store outright,
       which used to break every public host the moment a corporate CA was trusted.
 - [x] Response **visualizer**: `pm.visualizer.set(template, data)` rendered with a safe, pure
@@ -340,10 +337,9 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] **Local release script** (1.2): `npm run release` builds for the current OS and creates or
       updates the GitHub release through the API — for when GitHub Actions is unavailable.
 
-## 1.3 — Isolation, layout, verification
+## 1.3 — Network, layout, verification
 
-### Isolation
-- [x] **Positioning**: an isolated desktop client for API testing; the AI assistant is an optional pack.
+### Network and session
 - [x] **No automatic update check**: the startup check and its setting are gone; «Проверить сейчас»
       in About is the only way a version check happens.
 - [x] **Session hardening**: no DNS prefetch, spellchecker off (it downloads dictionaries), every
@@ -357,10 +353,19 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       migrates): after a restart — no GPU, software compositing, Chromium low-end-device mode, no
       animations/shadows/blur, and a plain textarea editor instead of Monaco (Monaco is never loaded)
       with the same `{{` autocomplete. Every feature keeps working.
-- [x] **Dockable sidebar**: left / right / bottom / floating, by the four buttons in its header or
-      by dragging the header — edge zones dock, the middle floats. Size and position persist.
-- [x] **Dockable response panel** per pane: bottom / right / left / floating, same drag-to-dock
-      (from the status bar or the grip) and buttons; 1.2 layouts migrate.
+- [x] **Dockable sidebar**: left / right / bottom by dragging its header to an edge (the edges light
+      up; a drop anywhere else changes nothing), floating by the button in its header. Docked at the
+      bottom it lays out in three columns. Size and position persist.
+- [x] **Movable request and response** inside each pane: the response by its status bar, the request
+      by the grip left of its name; top / bottom / left / right, the other part takes the opposite
+      side. Floating response by button. 1.2 layouts migrate.
+- [x] **Swap instead of push**: moving the sidebar onto the edge a response occupies (or the other
+      way round) swaps their places.
+- [x] **Aligned seams**: the request header, the sidebar head and the response status bar share one
+      height, and the vertical divider between request and response is drawn.
+- [x] **Drop files to import**: collections (Postman, Insomnia, OpenAPI/Swagger, HAR, cURL), Postman
+      environments/globals, `.env`/CSV variables and Relay themes dropped from the file manager are
+      recognized per file; a dropped file can no longer navigate the window away.
 - [x] **Command palette**: actions are listed before requests.
 - [x] **User themes**: Settings → Appearance → My themes → Load theme… reads one JSON file (a theme,
       a list, or a pack's `themes.json`), same colour allowlist as packs; stored app-level.

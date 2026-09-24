@@ -46,7 +46,7 @@ default design system for anything missing.
   Pre-request/Tests, Settings.
 - Response viewer: status/time/size, tabs for Body (pretty/raw/preview), Headers, Cookies, Tests.
 - Collections & environments sidebar; environment/variable manager; history list.
-- **AI assistant panel** (optional pack): chat thread, provider/model picker, an input box,
+- **AI assistant panel** (feature pack): chat thread, provider/model picker, an input box,
   and message actions (e.g. "apply to request").
 - Settings: providers & API keys, theme, request defaults.
 
