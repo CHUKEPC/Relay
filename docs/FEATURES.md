@@ -17,7 +17,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] URL bar with `{{variable}}` highlighting and inline hover resolution (source + value).
 - [x] Query params editor: key / value / description / enabled checkbox; two-way sync with URL.
 - [x] Path variables (`:id` style) auto-detected from the URL and editable.
-- [x] Headers editor: key / value / enabled; common-header name autocomplete; note about auto-added headers.
+- [x] Headers editor: key / value / enabled; common-header name autocomplete; the automatic headers
+      behind an eye toggle, each one switchable off (1.3.1).
 - [x] Body types:
   - [x] none
   - [x] raw with language selector (JSON, Text, XML, HTML, JavaScript) via Monaco; sets Content-Type
@@ -406,6 +407,34 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
 - [x] Backup files are written atomically; files up to 256 MB restore (was 25 MB).
 - [x] Postman round trip keeps descriptions, disabled collection variables and path variables.
 - [x] The Data screen says honestly what a backup contains (typed-in tokens are included).
+
+## 1.3.1 — Panels, tabs, headers, terminal
+
+- [x] **Response layout per tab**: the response position, size and float geometry belong to the
+      tab, not the pane — switching tabs brings back how each one was left. A tab shown for the first
+      time starts from the default; the layout moves with the tab to another pane and is forgotten
+      when the tab closes. The pane layout saved by 1.3.0 is kept for the tab it showed.
+- [x] **One set of drop zones**: the sidebar, the response and the request zone light up the same
+      four edges. With one pane that is the whole work area; with several, the response and the
+      request zone dock inside their own pane. The sidebar can now also dock at the top (three
+      columns, resized by its bottom edge).
+- [x] **The request zone moves like the other panels**: its whole header (name row) is the grab
+      handle, and it carries top / bottom / left / right buttons. Moving it rearranges only its pane;
+      the sidebar trades places with the response only when the response itself is moved.
+- [x] **Reorder tabs by dragging** them along the tab strip, like browser tabs (the tab takes the
+      slot under the pointer; the strip scrolls at its ends). Dragging a tab into the pane grid works
+      as before.
+- [x] **Automatic headers**: the eye button in the Headers tab (off by default) lists Host,
+      User-Agent, Accept, Accept-Encoding, Content-Type, Content-Length and Cookie with the values
+      that will be sent. Unticking one leaves it out of the request (`disabledAutoHeaders` on the
+      request, honoured by the engine, send-to-terminal and code generation); Host, Content-Length
+      and the multipart Content-Type are required and stay on.
+- [x] **Send to terminal on Windows**: PowerShell 5.1 no longer fails with «The underlying
+      connection was closed» — certificate checks are skipped through a compiled ICertificatePolicy
+      (a script-block callback has no runspace on the TLS thread), TLS 1.3 is offered where Windows
+      supports it, a failed handshake is retried once and the full error chain is printed. curl on
+      Windows runs with `--ssl-no-revoke`, like the engine, so an unreachable CRL/OCSP server does
+      not fail the request.
 
 ## Out of scope (needs a hosted backend)
 

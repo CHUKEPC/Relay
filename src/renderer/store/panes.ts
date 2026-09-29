@@ -34,6 +34,19 @@ export interface PaneLeaf {
   respDock: DockMode
   /** Float geometry, relative to the pane box (px). */
   respFloat: FloatRect
+  /**
+   * The tab whose layout the three fields above hold. The layout belongs to the
+   * tab, not the pane (see {@link syncTabLayouts}); `undefined` on a new leaf or
+   * a layout saved before 1.3.1, whose fields are then taken as they are.
+   */
+  layoutTab?: string | null
+}
+
+/** How one tab arranges its response; restored whenever the tab is shown again. */
+export interface TabRespLayout {
+  respPct: number
+  respDock: DockMode
+  respFloat: FloatRect
 }
 
 export interface PaneSplit {
@@ -81,8 +94,16 @@ const RATIO_STEP = 0.05
 const RATIO_MIN = 0.1
 const LAYOUT_KEY = 'relay.panes.v1'
 
+const DEFAULT_LAYOUT: TabRespLayout = { respPct: 46, respDock: 'bottom', respFloat: { x: 40, y: 60, w: 560, h: 360 } }
+
 export function newLeaf(tabId: string | null = null): PaneLeaf {
-  return { kind: 'leaf', id: makeId('pane'), tabId, respPct: 46, layout: 'split-v', respDock: 'bottom', respFloat: { x: 40, y: 60, w: 560, h: 360 } }
+  return { kind: 'leaf', id: makeId('pane'), tabId, layout: 'split-v', ...DEFAULT_LAYOUT }
+}
+
+const isVertical = (d: DockMode): boolean => d === 'bottom' || d === 'top'
+
+function layoutOf(leaf: PaneLeaf): TabRespLayout {
+  return { respPct: leaf.respPct, respDock: leaf.respDock, respFloat: leaf.respFloat }
 }
 
 function split(dir: SplitDir, a: PaneNode, b: PaneNode, ratio = 0.5): PaneSplit {
@@ -214,6 +235,34 @@ export function leavesInReadingOrder(root: PaneNode): PaneLeaf[] {
   })
 }
 
+/**
+ * Give every pane the response layout of the tab it shows. A pane that switches
+ * tabs brings back how the new tab was left — the response stretched up to the
+ * URL on one tab no longer stretches it on the next. A tab shown for the first
+ * time starts from the default layout, except in a new leaf or one saved before
+ * 1.3.1, whose current layout becomes its tab's own. Returns null when nothing
+ * changes.
+ */
+export function syncTabLayouts(
+  root: PaneNode,
+  layouts: Record<string, TabRespLayout>
+): { root: PaneNode; layouts: Record<string, TabRespLayout> } | null {
+  let nextRoot = root
+  let nextLayouts = layouts
+  for (const leaf of leavesOf(root)) {
+    if (leaf.layoutTab === leaf.tabId) continue
+    let patch: Partial<PaneLeaf> = { layoutTab: leaf.tabId }
+    if (leaf.tabId) {
+      const saved = nextLayouts[leaf.tabId]
+      const layout = saved ?? (leaf.layoutTab === undefined ? layoutOf(leaf) : DEFAULT_LAYOUT)
+      if (!saved) nextLayouts = { ...nextLayouts, [leaf.tabId]: layout }
+      patch = { ...patch, ...layout, layout: isVertical(layout.respDock) ? 'split-v' : 'split-h' }
+    }
+    nextRoot = updateLeaf(nextRoot, leaf.id, patch)
+  }
+  return nextRoot === root && nextLayouts === layouts ? null : { root: nextRoot, layouts: nextLayouts }
+}
+
 /* ============================================================
  * Store
  * ============================================================ */
@@ -228,6 +277,8 @@ interface PanesState {
   windowMode: 'main' | 'detached'
   /** how many panes the current feature set allows (raised by a plugin) */
   maxPanes: number
+  /** response layout per tab (see {@link syncTabLayouts}) */
+  tabLayouts: Record<string, TabRespLayout>
 
   setMaxPanes: (n: number) => void
   focusPane: (id: string) => void
@@ -250,6 +301,8 @@ interface PanesState {
   toggleLeafLayout: (paneId: string) => void
   setRespDock: (paneId: string, dock: DockMode) => void
   setRespFloat: (paneId: string, rect: FloatRect) => void
+  /** load each pane's tab layout after its tab changed */
+  syncLayouts: () => void
   toggleMaximize: (id?: string) => void
   detachTab: (tabId: string) => Promise<void>
   initDetached: (tabId: string) => void
@@ -303,12 +356,25 @@ export const usePanes = create<PanesState>((set, get) => {
     saveTimer = setTimeout(() => {
       saveTimer = null
       try {
-        const { root, activeId } = get()
-        localStorage.setItem(LAYOUT_KEY, JSON.stringify({ root, activeId }))
+        const { root, activeId, tabLayouts } = get()
+        localStorage.setItem(LAYOUT_KEY, JSON.stringify({ root, activeId, tabLayouts }))
       } catch {
         // quota / privacy mode — layout is a convenience only
       }
     }, 300)
+  }
+
+  /** Change a pane's response layout and remember it for the tab it shows. */
+  const patchLayout = (paneId: string, patch: Partial<PaneLeaf>) => {
+    const s = get()
+    const leaf = findLeaf(s.root, paneId)
+    if (!leaf) return
+    const next = { ...leaf, ...patch }
+    set({
+      root: replaceNode(s.root, paneId, next),
+      ...(leaf.tabId ? { tabLayouts: { ...s.tabLayouts, [leaf.tabId]: layoutOf(next) } } : {})
+    })
+    scheduleSave()
   }
 
   return {
@@ -318,6 +384,7 @@ export const usePanes = create<PanesState>((set, get) => {
     detached: [],
     windowMode: 'main',
     maxPanes: CORE_MAX_PANES,
+    tabLayouts: {},
 
     setMaxPanes: (n) => {
       const next = clamp(Math.round(n), 1, MAX_PANES)
@@ -406,8 +473,9 @@ export const usePanes = create<PanesState>((set, get) => {
       const a = findLeaf(s.root, aId)
       const b = findLeaf(s.root, bId)
       if (!a || !b || a.id === b.id) return
-      let root = replaceNode(s.root, a.id, { ...a, tabId: b.tabId, respPct: b.respPct, layout: b.layout, respDock: b.respDock, respFloat: b.respFloat })
-      root = replaceNode(root, b.id, { ...b, tabId: a.tabId, respPct: a.respPct, layout: a.layout, respDock: a.respDock, respFloat: a.respFloat })
+      const content = (l: PaneLeaf) => ({ tabId: l.tabId, respPct: l.respPct, layout: l.layout, respDock: l.respDock, respFloat: l.respFloat, layoutTab: l.layoutTab })
+      let root = replaceNode(s.root, a.id, { ...a, ...content(b) })
+      root = replaceNode(root, b.id, { ...b, ...content(a) })
       // Focus follows the content that moved.
       const activeId = s.activeId === a.id ? b.id : s.activeId === b.id ? a.id : s.activeId
       const maximizedId = s.maximizedId === a.id ? b.id : s.maximizedId === b.id ? a.id : s.maximizedId
@@ -532,10 +600,7 @@ export const usePanes = create<PanesState>((set, get) => {
       scheduleSave()
     },
 
-    setRespPct: (paneId, pct) => {
-      set({ root: updateLeaf(get().root, paneId, { respPct: clamp(pct, 18, 82) }) })
-      scheduleSave()
-    },
+    setRespPct: (paneId, pct) => patchLayout(paneId, { respPct: clamp(pct, 18, 82) }),
 
     toggleLeafLayout: (paneId) => {
       const leaf = findLeaf(get().root, paneId)
@@ -543,8 +608,6 @@ export const usePanes = create<PanesState>((set, get) => {
       // The shortcut keeps its old meaning: flip between below and beside.
       const next: DockMode = leaf.respDock === 'bottom' || leaf.respDock === 'top' ? 'right' : 'bottom'
       get().setRespDock(paneId, next)
-      return
-      scheduleSave()
     },
 
     setRespDock: (paneId, dock) => {
@@ -552,20 +615,21 @@ export const usePanes = create<PanesState>((set, get) => {
       if (!leaf) return
       // The share is a height when docked at the bottom and a width at the sides:
       // carried across, a comfortable 30 % of the height became a 100 px column.
-      const vertical = (d: DockMode): boolean => d === 'bottom' || d === 'top'
-      const across = vertical(leaf.respDock) !== vertical(dock) && dock !== 'float' && leaf.respDock !== 'float'
-      set({
-        root: updateLeaf(get().root, paneId, {
-          respDock: dock,
-          layout: vertical(dock) ? 'split-v' : 'split-h',
-          ...(across ? { respPct: 46 } : {})
-        })
+      const across = isVertical(leaf.respDock) !== isVertical(dock) && dock !== 'float' && leaf.respDock !== 'float'
+      patchLayout(paneId, {
+        respDock: dock,
+        layout: isVertical(dock) ? 'split-v' : 'split-h',
+        ...(across ? { respPct: DEFAULT_LAYOUT.respPct } : {})
       })
-      scheduleSave()
     },
 
-    setRespFloat: (paneId, rect) => {
-      set({ root: updateLeaf(get().root, paneId, { respFloat: rect }) })
+    setRespFloat: (paneId, rect) => patchLayout(paneId, { respFloat: rect }),
+
+    syncLayouts: () => {
+      const s = get()
+      const next = syncTabLayouts(s.root, s.tabLayouts)
+      if (!next) return
+      set({ root: next.root, tabLayouts: next.layouts })
       scheduleSave()
     },
 
@@ -613,11 +677,11 @@ export const usePanes = create<PanesState>((set, get) => {
  * Wiring: tabs <-> panes, persistence, detached windows
  * ============================================================ */
 
-function loadLayout(): { root: PaneNode; activeId: string } | null {
+function loadLayout(): { root: PaneNode; activeId: string; tabLayouts: Record<string, TabRespLayout> } | null {
   try {
     const raw = localStorage.getItem(LAYOUT_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { root?: PaneNode; activeId?: string }
+    const parsed = JSON.parse(raw) as { root?: PaneNode; activeId?: string; tabLayouts?: unknown }
     const valid = (n: unknown): n is PaneNode => {
       const node = n as PaneNode
       if (!node || typeof node.id !== 'string') return false
@@ -625,10 +689,27 @@ function loadLayout(): { root: PaneNode; activeId: string } | null {
       return node.kind === 'split' && (node.dir === 'row' || node.dir === 'col') && valid(node.a) && valid(node.b)
     }
     if (!valid(parsed.root)) return null
-    return { root: migrateLeaves(parsed.root), activeId: parsed.activeId ?? '' }
+    return { root: migrateLeaves(parsed.root), activeId: parsed.activeId ?? '', tabLayouts: readTabLayouts(parsed.tabLayouts) }
   } catch {
     return null
   }
+}
+
+const DOCK_MODES: readonly DockMode[] = ['bottom', 'top', 'left', 'right', 'float']
+
+/** Saved per-tab layouts; anything malformed is dropped (the tab starts from the default). */
+function readTabLayouts(value: unknown): Record<string, TabRespLayout> {
+  const out: Record<string, TabRespLayout> = {}
+  if (!value || typeof value !== 'object') return out
+  const num = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
+  for (const [tabId, v] of Object.entries(value as Record<string, unknown>)) {
+    const l = v as Partial<TabRespLayout> | null
+    const f = l?.respFloat
+    if (!l || !num(l.respPct) || !DOCK_MODES.includes(l.respDock as DockMode)) continue
+    if (!f || !num(f.x) || !num(f.y) || !num(f.w) || !num(f.h)) continue
+    out[tabId] = { respPct: clamp(l.respPct, 18, 82), respDock: l.respDock as DockMode, respFloat: { x: f.x, y: f.y, w: f.w, h: f.h } }
+  }
+  return out
 }
 
 /**
@@ -657,8 +738,11 @@ function pruneMissingTabs(): void {
   }
   const gone = s.detached.filter((id) => !ids.has(id))
   for (const id of gone) void window.api.paneAttach(id)
-  if (root !== s.root || gone.length) {
-    usePanes.setState({ root, detached: s.detached.filter((id) => ids.has(id)) })
+  const stale = Object.keys(s.tabLayouts).filter((id) => !ids.has(id))
+  if (root !== s.root || gone.length || stale.length) {
+    const tabLayouts = { ...s.tabLayouts }
+    for (const id of stale) delete tabLayouts[id]
+    usePanes.setState({ root, detached: s.detached.filter((id) => ids.has(id)), tabLayouts })
   }
 }
 
@@ -691,8 +775,18 @@ export function initPanes(): void {
   const saved = loadLayout()
   if (saved) {
     const leaves = leavesOf(saved.root)
-    usePanes.setState({ root: saved.root, activeId: leaves.some((l) => l.id === saved.activeId) ? saved.activeId : leaves[0].id })
+    usePanes.setState({
+      root: saved.root,
+      activeId: leaves.some((l) => l.id === saved.activeId) ? saved.activeId : leaves[0].id,
+      tabLayouts: saved.tabLayouts
+    })
   }
+  // Whatever changes a pane's tab (tab strip, drop, split, close…), the pane
+  // then takes that tab's layout. Runs before React renders the change.
+  usePanes.subscribe((state, prev) => {
+    if (state.root !== prev.root) state.syncLayouts()
+  })
+  usePanes.getState().syncLayouts()
   pruneMissingTabs()
   followActiveTab(useTabs.getState().doc.activeTabId)
   const { root, activeId } = usePanes.getState()

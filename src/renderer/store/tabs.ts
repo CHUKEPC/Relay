@@ -25,6 +25,8 @@ interface TabsState {
   closeToLeft: (id: string) => void
   closeAll: () => void
   duplicateTab: (id: string) => void
+  /** Move a tab so it ends up at `toIndex` (tab strip drag). */
+  moveTab: (id: string, toIndex: number) => void
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
   markSaved: (tabId: string, savedRequestId: string) => void
@@ -160,6 +162,18 @@ export const useTabs = create<TabsState>((set, get) => {
       // The copy is an unsaved draft: not bound to a collection request, dirty.
       const tab: TabModel = { id: makeId('tab'), request, savedRequestId: null, dirty: true }
       commit({ tabs: [...prev.slice(0, idx + 1), tab, ...prev.slice(idx + 1)], activeTabId: tab.id })
+    },
+
+    moveTab: (id, toIndex) => {
+      const prev = get().doc.tabs
+      const from = prev.findIndex((t) => t.id === id)
+      if (from === -1) return
+      const to = Math.max(0, Math.min(prev.length - 1, Math.round(toIndex)))
+      if (to === from) return
+      const tabs = prev.slice()
+      const [tab] = tabs.splice(from, 1)
+      tabs.splice(to, 0, tab)
+      commit({ tabs })
     },
 
     patchActive: (patch) => {

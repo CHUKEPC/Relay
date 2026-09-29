@@ -1,4 +1,5 @@
 import type { Auth, KV, RequestBody, RequestModel } from '@shared/types'
+import { disabledAutoHeaders } from '@shared/auto-headers'
 
 export type CodeTarget =
   | 'curl'
@@ -65,11 +66,12 @@ function effectiveHeaders(req: RequestModel): KV[] {
   applyAuthToHeaders(headers, req.auth)
   // content-type from raw language if not present
   // An empty raw body sends nothing, so it gets no Content-Type either.
-  if (req.body.type === 'raw' && req.body.text && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
+  const noAutoCt = disabledAutoHeaders(req.disabledAutoHeaders).has('content-type')
+  if (req.body.type === 'raw' && req.body.text && !noAutoCt && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
     const ct = { json: 'application/json', xml: 'application/xml', html: 'text/html', javascript: 'application/javascript', text: 'text/plain' }[req.body.language]
     headers.push({ key: 'Content-Type', value: ct, enabled: true })
   }
-  if (req.body.type === 'graphql' && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
+  if (req.body.type === 'graphql' && !noAutoCt && !headers.some((h) => h.key.toLowerCase() === 'content-type')) {
     headers.push({ key: 'Content-Type', value: 'application/json', enabled: true })
   }
   return headers

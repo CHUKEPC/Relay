@@ -234,6 +234,8 @@ export interface RequestSpec {
   body: RequestBody
   auth: Auth
   settings: RequestSettings
+  /** automatic headers not to send (lower-case names) */
+  disabledAutoHeaders?: string[]
 }
 
 export interface RunOptions {
@@ -355,6 +357,11 @@ export interface RequestModel {
   pathVariables: KV[]
   body: RequestBody
   auth: Auth
+  /**
+   * Automatic headers this request does not send (lower-case names, see
+   * shared/auto-headers.ts) — switched off in the Headers tab.
+   */
+  disabledAutoHeaders?: string[]
   /** protocol mode — http (default), websocket, or sse */
   mode?: RequestMode
   /** websocket message draft + saved messages composer text */

@@ -85,6 +85,17 @@ describe('curl', () => {
     expect(s.preview.startsWith('curl.exe')).toBe(true)
   })
 
+  it('skips revocation checks on Windows unless SSL checks are off anyway', () => {
+    const win = buildTerminalScript('curl', base(), 'win32', 'C:\\t\\d')
+    expect(file(win, 'request.curlrc')).toMatch(/^ssl-no-revoke$/m)
+    expect(win.preview).toContain('--ssl-no-revoke')
+    const insecure = buildTerminalScript('curl', base({ insecure: true }), 'win32', 'C:\\t\\d')
+    expect(file(insecure, 'request.curlrc')).not.toContain('ssl-no-revoke')
+    expect(insecure.preview).toContain('-k')
+    const linux = buildTerminalScript('curl', base(), 'linux', '/tmp/d')
+    expect(file(linux, 'request.curlrc')).not.toContain('ssl-no-revoke')
+  })
+
   it('never prints the digest password in the preview', () => {
     const s = buildTerminalScript('curl', base({ credentials: { scheme: 'ntlm', username: 'u', password: 'topsecret' } }), 'linux', '/tmp/d')
     expect(s.preview).not.toContain('topsecret')
@@ -115,6 +126,22 @@ describe('HTTPie / wget / PowerShell', () => {
     expect(run).toContain(`'X-A' = 'it''s'`)
     expect(run).not.toMatch(/'Content-Type' =/)
     expect(run).toContain(`[System.IO.File]::ReadAllBytes('C:\\t\\d\\body.txt')`)
+  })
+
+  it('PowerShell 5.1 TLS: modern protocols, a compiled trust-all policy, one handshake retry', () => {
+    const strict = file(buildTerminalScript('powershell', base(), 'win32', 'C:\\t\\d'), 'run.ps1')
+    expect(strict).toContain('[Net.SecurityProtocolType]::Tls12')
+    expect(strict).toContain("[Net.SecurityProtocolType]'Tls13'")
+    expect(strict).not.toContain('RelayTrustAllCerts')
+    // A script-block callback runs without a runspace on the TLS thread and
+    // fails every handshake with «The underlying connection was closed».
+    expect(strict).not.toContain('ServerCertificateValidationCallback')
+    expect(strict).toContain("('SecureChannelFailure', 'SendFailure') -contains")
+    expect(strict).toContain('Get-RelayError $_.Exception')
+    const insecure = file(buildTerminalScript('powershell', base({ insecure: true }), 'win32', 'C:\\t\\d'), 'run.ps1')
+    expect(insecure).toContain('System.Net.ICertificatePolicy')
+    expect(insecure).toContain('[Net.ServicePointManager]::CertificatePolicy = New-Object RelayTrustAllCerts')
+    expect(insecure).not.toContain('ServerCertificateValidationCallback')
   })
 
   it('offers the right tools per OS', () => {

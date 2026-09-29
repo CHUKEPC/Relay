@@ -294,3 +294,49 @@ describe('dropping tabs into the grid', () => {
     expect(tabOf(seats[0].id)).toBe(ids[4])
   })
 })
+
+describe('response layout follows the tab', () => {
+  it('switching tabs in a pane brings back each tab its own response size and edge', () => {
+    const [a, b] = openTabs(2)
+    const pane = (P().root as PaneLeaf).id
+    tabs.useTabs.getState().setActive(a)
+    P().setRespPct(pane, 80)
+    tabs.useTabs.getState().setActive(b)
+    // A tab shown for the first time starts from the default, not from `a`.
+    expect(leaves()[0]).toMatchObject({ tabId: b, respPct: 46, respDock: 'bottom' })
+    P().setRespDock(pane, 'right')
+    P().setRespPct(pane, 30)
+    tabs.useTabs.getState().setActive(a)
+    expect(leaves()[0]).toMatchObject({ tabId: a, respPct: 80, respDock: 'bottom', layout: 'split-v' })
+    tabs.useTabs.getState().setActive(b)
+    expect(leaves()[0]).toMatchObject({ tabId: b, respPct: 30, respDock: 'right', layout: 'split-h' })
+  })
+
+  it('a tab keeps its layout when it moves to another pane', () => {
+    const [a, b] = openTabs(2)
+    P().applyPreset(2)
+    const [left, right] = leaves()
+    P().setRespDock(left.id, 'top')
+    const moved = left.tabId!
+    P().swapLeaves(left.id, right.id)
+    expect(leaves().find((l) => l.tabId === moved)).toMatchObject({ respDock: 'top' })
+    expect([a, b]).toContain(moved)
+  })
+
+  it('forgets the layout of a closed tab', () => {
+    const [a] = openTabs(2)
+    tabs.useTabs.getState().setActive(a)
+    P().setRespPct((P().root as PaneLeaf).id, 70)
+    expect(P().tabLayouts[a]).toBeDefined()
+    tabs.useTabs.getState().closeTab(a)
+    expect(P().tabLayouts[a]).toBeUndefined()
+  })
+
+  it('a layout saved before per-tab layouts is kept for the tab it shows', () => {
+    const legacy: PaneLeaf = { ...panes.newLeaf('t-legacy'), respPct: 75, respDock: 'right', layout: 'split-h' }
+    const next = panes.syncTabLayouts(legacy, {})
+    expect(next?.layouts['t-legacy']).toMatchObject({ respPct: 75, respDock: 'right' })
+    expect((next?.root as PaneLeaf).layoutTab).toBe('t-legacy')
+    expect(panes.syncTabLayouts(next!.root, next!.layouts)).toBeNull()
+  })
+})

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { Icon } from '@renderer/components/Icon'
 import { RequestTag } from '@renderer/components/RequestTag'
 import { useTabs } from '@renderer/store/tabs'
 import { leavesOf, usePanes } from '@renderer/store/panes'
 import { MOD } from '@renderer/lib/platform'
-import { TAB_MIME } from '@renderer/lib/dnd'
+import { dragKind, TAB_MIME } from '@renderer/lib/dnd'
 import { saveActiveRequest } from '@renderer/lib/save'
 import { exportRequestJson } from '@renderer/lib/export'
 import { tr, trf } from '@renderer/lib/i18n'
@@ -23,6 +23,55 @@ export function TabStrip() {
 
   const scrollerRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
+  // The tab being dragged from this strip. dragover cannot read the payload
+  // (the browser hides it until drop), so the strip remembers it itself.
+  const draggingRef = useRef<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+
+  const endDrag = () => {
+    draggingRef.current = null
+    setDraggingId(null)
+    document.body.classList.remove('pane-dragging')
+  }
+
+  // The dragged tab moves in the DOM while it is reordered; if the browser then
+  // skips its dragend, the document-level events still end the drag.
+  useEffect(() => {
+    const reset = () => draggingRef.current && endDrag()
+    document.addEventListener('dragend', reset, true)
+    document.addEventListener('drop', reset)
+    return () => {
+      document.removeEventListener('dragend', reset, true)
+      document.removeEventListener('drop', reset)
+    }
+  }, [])
+
+  /**
+   * Reorder like browser tabs: while a tab is dragged over the strip it takes
+   * the slot under the pointer. The slot is counted against the midpoints of
+   * the other tabs, so a wide tab passing a narrow one does not flip back and
+   * forth.
+   */
+  const onStripDragOver = (e: DragEvent<HTMLDivElement>) => {
+    const id = draggingRef.current
+    if (!id || dragKind(e.dataTransfer) !== 'tab') return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const scroller = scrollerRef.current
+    if (scroller) {
+      // Near an end of an overflowing strip, scroll it along.
+      const box = scroller.getBoundingClientRect()
+      if (e.clientX < box.left + 32) scroller.scrollLeft -= 14
+      else if (e.clientX > box.right - 32) scroller.scrollLeft += 14
+    }
+    let to = 0
+    for (const t of useTabs.getState().doc.tabs) {
+      if (t.id === id) continue
+      const r = tabRefs.current.get(t.id)?.getBoundingClientRect()
+      if (r && r.left + r.width / 2 < e.clientX) to++
+    }
+    useTabs.getState().moveTab(id, to)
+  }
 
   // Vertical wheel scrolls the strip horizontally. Native listener with
   // passive:false — React's synthetic onWheel can't preventDefault reliably.
@@ -47,12 +96,23 @@ export function TabStrip() {
 
   return (
     <div className="tabstrip">
-      <div className="tabstrip-scroll" ref={scrollerRef}>
+      <div
+        className="tabstrip-scroll"
+        ref={scrollerRef}
+        onDragOver={onStripDragOver}
+        onDrop={(e) => {
+          // Dropped back on the strip: the order is already in place.
+          if (draggingRef.current) {
+            e.preventDefault()
+            endDrag()
+          }
+        }}
+      >
         {tabs.map((t, i) => (
           <ContextMenu.Root key={t.id}>
             <ContextMenu.Trigger asChild>
               <div
-                className={`rtab${activeTabId === t.id ? ' on' : ''}${t.dirty ? ' is-dirty' : ''}${shownInPanes?.has(t.id) && activeTabId !== t.id ? ' in-pane' : ''}`}
+                className={`rtab${activeTabId === t.id ? ' on' : ''}${t.dirty ? ' is-dirty' : ''}${shownInPanes?.has(t.id) && activeTabId !== t.id ? ' in-pane' : ''}${draggingId === t.id ? ' dragging' : ''}`}
                 title={detached.includes(t.id) ? tr('Открыт в отдельном окне — нажмите, чтобы перейти к нему') : undefined}
                 ref={(el) => {
                   if (el) tabRefs.current.set(t.id, el)
@@ -62,9 +122,11 @@ export function TabStrip() {
                 onDragStart={(e) => {
                   e.dataTransfer.setData(TAB_MIME, t.id)
                   e.dataTransfer.effectAllowed = 'move'
+                  draggingRef.current = t.id
+                  setDraggingId(t.id)
                   document.body.classList.add('pane-dragging')
                 }}
-                onDragEnd={() => document.body.classList.remove('pane-dragging')}
+                onDragEnd={endDrag}
                 onClick={() => setActive(t.id)}
                 onAuxClick={(e) => {
                   // Middle-click closes the tab, like in browsers.

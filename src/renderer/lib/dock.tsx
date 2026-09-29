@@ -217,8 +217,24 @@ interface PaneDockValue {
   onGrabDown: (e: ReactMouseEvent) => void
 }
 
-/** Positions the response panel offers, in button order. */
-export const RESPONSE_DOCK_MODES: readonly DockMode[] = ['top', 'bottom', 'left', 'right', 'float']
+/** Every edge, in drop-zone order: the sidebar, the response and the request zone all take any of them. */
+export const ALL_EDGES: readonly DockEdge[] = ['left', 'right', 'top', 'bottom']
+
+/** Position buttons of the sidebar and the response panel, in button order. */
+export const PANEL_DOCK_MODES: readonly DockMode[] = ['top', 'bottom', 'left', 'right', 'float']
+/** The request zone cannot float — it is what stays when the response floats. */
+export const BUILDER_DOCK_MODES: readonly DockMode[] = ['top', 'bottom', 'left', 'right']
+
+/**
+ * The area a pane's panels dock into while dragged. With one pane it is the
+ * app body — the same area the sidebar docks into, so every panel shows the
+ * same landing zones. With several panes each pane is its own area (its
+ * response docks inside it), and a floating response moves within its pane.
+ */
+export function paneDockArea(pane: HTMLElement | null, singlePane: boolean): HTMLElement | null {
+  if (!singlePane || !pane) return pane
+  return (pane.closest('.body') as HTMLElement | null) ?? pane
+}
 
 /**
  * Provided by a pane around its response panel, so the panel's own status bar
@@ -242,31 +258,43 @@ export function PaneDockControls(): JSX.Element | null {
       >
         <Icon name="grip" size={12} />
       </div>
-      <DockButtons dock={ctx.dock} onDock={ctx.setDock} modes={RESPONSE_DOCK_MODES} />
+      <DockButtons dock={ctx.dock} onDock={ctx.setDock} modes={PANEL_DOCK_MODES} />
     </div>
   )
 }
 
 /**
- * Provided by a pane around its request builder: the grip in the request header
- * drags the request zone to an edge of the pane (the response takes the
- * opposite side).
+ * Provided by a pane around its request builder. The request header drags the
+ * request zone to an edge (the response takes the opposite side), exactly like
+ * the sidebar head and the response status bar; `dock` is the request zone's
+ * own edge, or 'float' while the response floats.
  */
-export const BuilderDockContext = createContext<((e: ReactMouseEvent) => void) | null>(null)
+export const BuilderDockContext = createContext<PaneDockValue | null>(null)
 
-/** The grip at the start of the request header; nothing outside a pane. */
+/** The grip at the start of the request header (the header itself takes the drag); nothing outside a pane. */
 export function BuilderDockGrip(): JSX.Element | null {
-  const onGrabDown = useContext(BuilderDockContext)
-  if (!onGrabDown) return null
+  const ctx = useContext(BuilderDockContext)
+  if (!ctx) return null
   return (
     <div
       className="dock-grip builder-dock-grab"
-      onMouseDown={onGrabDown}
-      title={tr('Перетащите к краю панели, чтобы перенести запрос')}
-      aria-label={tr('Перетащите к краю панели, чтобы перенести запрос')}
+      title={tr('Перетащите к краю, чтобы перенести запрос')}
+      aria-label={tr('Перетащите к краю, чтобы перенести запрос')}
       role="separator"
     >
       <Icon name="grip" size={12} />
     </div>
   )
+}
+
+/** Position buttons for the request zone, at the end of the request header. */
+export function BuilderDockButtons(): JSX.Element | null {
+  const ctx = useContext(BuilderDockContext)
+  if (!ctx) return null
+  return <DockButtons dock={ctx.dock} onDock={ctx.setDock} modes={BUILDER_DOCK_MODES} className="builder-dock-btns" />
+}
+
+/** The request header grabs like the other panel heads; outside a pane it does nothing. */
+export function useBuilderGrab(): ((e: ReactMouseEvent) => void) | undefined {
+  return useContext(BuilderDockContext)?.onGrabDown
 }

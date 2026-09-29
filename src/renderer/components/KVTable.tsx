@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { KV, VariableScope } from '@shared/types'
 import { makeId } from '@shared/id'
 import { serializeRows, parseBulk, mergeParsed } from '@renderer/lib/bulk-edit'
@@ -6,9 +6,16 @@ import { Icon } from './Icon'
 import { HighlightedInput } from './HighlightedInput'
 
 import { tr } from '@renderer/lib/i18n'
-function Checkbox({ on, onClick }: { on: boolean; onClick: () => void }) {
+export function Checkbox({ on, onClick, disabled, title }: { on: boolean; onClick: () => void; disabled?: boolean; title?: string }) {
   return (
-    <div className={`ck ${on ? 'on' : ''}`} onClick={onClick} role="checkbox" aria-checked={on}>
+    <div
+      className={`ck ${on ? 'on' : ''} ${disabled ? 'disabled' : ''}`}
+      onClick={disabled ? undefined : onClick}
+      role="checkbox"
+      aria-checked={on}
+      aria-disabled={disabled || undefined}
+      title={title}
+    >
       {on && <Icon name="check" size={11} strokeWidth={2.4} />}
     </div>
   )
@@ -22,6 +29,10 @@ export interface KVTableProps {
   valuePlaceholder?: string
   scope?: VariableScope
   keyAutocomplete?: string[]
+  /** extra controls at the start of the toolbar (left of the bulk-edit toggle) */
+  toolbarStart?: ReactNode
+  /** read-only rows drawn above the editable ones (table mode only) */
+  leadRows?: ReactNode
 }
 
 export function KVTable({
@@ -31,7 +42,9 @@ export function KVTable({
   keyPlaceholder = 'key',
   valuePlaceholder = 'value',
   scope,
-  keyAutocomplete
+  keyAutocomplete,
+  toolbarStart,
+  leadRows
 }: KVTableProps) {
   const listId = keyAutocomplete ? `kv-keys-${Math.abs(hash(keyAutocomplete.join(',')))}` : undefined
   // Column template — 4 cols (no description) keeps the Headers/Params tables
@@ -67,6 +80,7 @@ export function KVTable({
   return (
     <div className="kv-area">
       <div className="kv-toolbar">
+        {toolbarStart}
         <button
           type="button"
           className="btn ghost kv-bulk-toggle"
@@ -106,6 +120,7 @@ export function KVTable({
               {showDescription && <span>{tr('Описание')}</span>}
               <span />
             </div>
+            {leadRows}
             {rows.map((r, i) => (
               <div key={r.id ?? i} className={`kv-row ${r.enabled ? '' : 'off'}`} style={gridStyle}>
                 <Checkbox on={r.enabled} onClick={() => update(i, { enabled: !r.enabled })} />

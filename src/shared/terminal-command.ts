@@ -144,6 +144,10 @@ function curlConfig(req: TerminalRequest, os: TerminalOs, dir: string): string {
     lines.push(req.credentials.scheme === 'digest' ? 'digest' : 'ntlm', `user = ${curlStr(`${req.credentials.username}:${req.credentials.password}`)}`)
   }
   if (req.insecure) lines.push('insecure')
+  // Windows curl (Schannel) checks certificate revocation and fails when the CRL/OCSP
+  // servers are unreachable — routine on a closed corporate network. Relay's own engine
+  // does not check revocation either, so the terminal run behaves the same.
+  if (os === 'win32' && !req.insecure) lines.push('ssl-no-revoke')
   if (req.followRedirects) lines.push('location', `max-redirs = ${req.maxRedirects}`)
   if (req.timeoutSec > 0) lines.push(`max-time = ${req.timeoutSec}`)
   if (req.proxy) {
@@ -167,6 +171,7 @@ function curlPreview(req: TerminalRequest, os: TerminalOs): string {
     for (const f of req.body.fields) parts.push(f.filePath != null ? '-F' : '--form-string', q(f.filePath != null ? `${f.name}=@${f.filePath}` : `${f.name}=${f.value ?? ''}`))
   if (req.credentials) parts.push(`--${req.credentials.scheme}`, '-u', q(`${req.credentials.username}:${'*'.repeat(8)}`))
   if (req.insecure) parts.push('-k')
+  else if (os === 'win32') parts.push('--ssl-no-revoke')
   if (req.followRedirects) parts.push('-L', '--max-redirs', String(req.maxRedirects))
   if (req.timeoutSec > 0) parts.push('--max-time', String(req.timeoutSec))
   if (req.proxy) parts.push('-x', q(req.proxy.url))
@@ -290,17 +295,52 @@ function powershellParams(req: TerminalRequest, os: TerminalOs, dir: string, not
         `$params.ProxyCredential = New-Object System.Management.Automation.PSCredential(${psQuote(req.proxy.username)}, (ConvertTo-SecureString ${psQuote(secret(req.proxy.password ?? ''))} -AsPlainText -Force))`
       )
   }
-  if (req.insecure) L.push('[Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }')
+  L.push(...powershellTls(req.insecure))
+  return L
+}
+
+/**
+ * TLS setup for Windows PowerShell 5.1 (.NET Framework).
+ *
+ * - Protocols: 5.1 still offers SSL3/TLS 1.0 by default. TLS 1.2 is always added and
+ *   TLS 1.3 where Windows supports it as a client (build 20348+), or a TLS 1.3-only
+ *   server fails with «Could not create SSL/TLS secure channel».
+ * - Skipping certificate checks: a script block assigned to
+ *   ServerCertificateValidationCallback runs on a thread-pool thread that has no
+ *   PowerShell runspace, so the handshake throws «The underlying connection was
+ *   closed: An unexpected error occurred on a send» — every HTTPS request with SSL
+ *   verification off failed. A compiled ICertificatePolicy has no such problem.
+ */
+function powershellTls(insecure: boolean): string[] {
+  const L = [
+    '$tls = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls',
+    "if ([Environment]::OSVersion.Version.Build -ge 20348) { try { $tls = $tls -bor [Net.SecurityProtocolType]'Tls13' } catch {} }",
+    '[Net.ServicePointManager]::SecurityProtocol = $tls'
+  ]
+  if (insecure) {
+    L.push(
+      "if (-not ('RelayTrustAllCerts' -as [type])) { Add-Type -TypeDefinition 'public class RelayTrustAllCerts : System.Net.ICertificatePolicy { public bool CheckValidationResult(System.Net.ServicePoint s, System.Security.Cryptography.X509Certificates.X509Certificate c, System.Net.WebRequest r, int p) { return true; } }' }",
+      '[Net.ServicePointManager]::CertificatePolicy = New-Object RelayTrustAllCerts'
+    )
+  }
   return L
 }
 
 function powershellScript(req: TerminalRequest, os: TerminalOs, dir: string, notes: string[], t: Record<string, string>): string {
   const L = powershellParams(req, os, dir, notes, t)
-  L.push('[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls')
+  // .NET wraps the real cause (TLS alert, refused connection…) in inner exceptions;
+  // print the whole chain instead of «An unexpected error occurred on a send».
+  L.push('function Get-RelayError($e) { $m = $e.Message; while ($e.InnerException) { $e = $e.InnerException; $m += " -> " + $e.Message }; $m }')
   L.push('[Net.ServicePointManager]::Expect100Continue = $false')
   // Print it like curl -i: status line, headers, blank line, body — also for 4xx/5xx.
   L.push('try {')
-  L.push('  $r = Invoke-WebRequest @params')
+  // One retry on a failed handshake: Schannel can refuse the first TLS 1.3 handshake
+  // to a host right after a TLS 1.2 one in the same process (a redirect chain).
+  L.push('  $attempt = 0')
+  L.push('  while ($true) {')
+  L.push('    try { $r = Invoke-WebRequest @params; break }')
+  L.push("    catch [System.Net.WebException] { if ($attempt -lt 1 -and -not $_.Exception.Response -and ('SecureChannelFailure', 'SendFailure') -contains [string]$_.Exception.Status) { $attempt++; continue }; throw }")
+  L.push('  }')
   L.push('  Write-Host ("HTTP " + [int]$r.StatusCode + " " + $r.StatusDescription) -ForegroundColor Green')
   L.push('  foreach ($k in $r.Headers.Keys) { Write-Host ($k + ": " + $r.Headers[$k]) }')
   L.push("  Write-Host ''")
@@ -316,8 +356,8 @@ function powershellScript(req: TerminalRequest, os: TerminalOs, dir: string, not
   L.push("    Write-Host ''")
   L.push('    $reader = New-Object System.IO.StreamReader($resp.GetResponseStream(), [System.Text.Encoding]::UTF8)')
   L.push('    Write-Output $reader.ReadToEnd()')
-  L.push('  } else { Write-Host $_.Exception.Message -ForegroundColor Red }')
-  L.push('} catch { Write-Host $_.Exception.Message -ForegroundColor Red }')
+  L.push('  } else { Write-Host (Get-RelayError $_.Exception) -ForegroundColor Red }')
+  L.push('} catch { Write-Host (Get-RelayError $_.Exception) -ForegroundColor Red }')
   return L.join('\n')
 }
 

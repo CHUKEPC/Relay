@@ -81,6 +81,21 @@
   margin-left: -8px;
 }
 
+/* The request header is the request zone's grab handle, like the sidebar head
+   and the response status bar; the name keeps its text cursor. */
+.reqmeta-row.dock-grab-head {
+  cursor: grab;
+}
+
+.reqmeta-row.dock-grab-head:active {
+  cursor: grabbing;
+}
+
+.builder-dock-btns {
+  flex: none;
+  margin-right: -6px;
+}
+
 /* ============================ sidebar ============================ */
 
 .sidebar {
@@ -94,21 +109,36 @@
   order: 10;
 }
 
-/* At the bottom the sidebar spans the full width under the workspace and the
-   AI panel, which keep their row above it. */
-.body.side-dock-bottom {
+/* At the bottom (or the top) the sidebar spans the full width under (over) the
+   workspace and the AI panel, which keep their row beside it. */
+.body.side-dock-bottom,
+.body.side-dock-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
-.body.side-dock-bottom > .sidebar {
+.body.side-dock-top {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.body.side-dock-bottom > .sidebar,
+.body.side-dock-top > .sidebar {
   grid-column: 1 / -1;
   grid-row: 2;
 }
 
+.body.side-dock-top > .sidebar {
+  grid-row: 1;
+}
+
 .body.side-dock-bottom > :not(.sidebar) {
   grid-row: 1;
+  min-height: 0;
+}
+
+.body.side-dock-top > :not(.sidebar) {
+  grid-row: 2;
   min-height: 0;
 }
 
@@ -164,29 +194,40 @@
   flex: 1;
 }
 
-/* Docked at the bottom the panel becomes a wide strip of three columns: tabs
-   and search on the left, the list in the middle, the actions on the right. */
-.sidebar.dock-bottom {
+/* Docked at the bottom or the top the panel becomes a wide strip of three
+   columns: tabs and search on the left, the list in the middle, the actions on
+   the right. */
+.sidebar.dock-bottom,
+.sidebar.dock-top {
   width: 100% !important;
   border-right: 0;
   border-top: 1px solid var(--line);
 }
 
-.sidebar.dock-bottom .side-main {
+.sidebar.dock-top {
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.sidebar.dock-bottom .side-main,
+.sidebar.dock-top .side-main {
   flex-direction: row;
 }
 
-.sidebar.dock-bottom .side-top {
+.sidebar.dock-bottom .side-top,
+.sidebar.dock-top .side-top {
   width: 250px;
   border-right: 1px solid var(--line);
   padding-bottom: 8px;
 }
 
-.sidebar.dock-bottom .side-content {
+.sidebar.dock-bottom .side-content,
+.sidebar.dock-top .side-content {
   border-right: 1px solid var(--line);
 }
 
-.sidebar.dock-bottom .side-foot {
+.sidebar.dock-bottom .side-foot,
+.sidebar.dock-top .side-foot {
   margin-top: 0 !important;
   border-top: 0 !important;
   width: 220px;
@@ -226,7 +267,19 @@
   cursor: row-resize;
 }
 
-body.wall-resizing .wall-handle.top {
+/* ... and docked at the top, by its bottom edge. */
+.wall-handle.bottom {
+  top: auto;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 6px;
+  cursor: row-resize;
+}
+
+body.wall-resizing .wall-handle.top,
+body.wall-resizing .wall-handle.bottom {
   cursor: row-resize !important;
 }
 

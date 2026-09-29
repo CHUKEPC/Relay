@@ -16,6 +16,7 @@ import { delimiter, join } from 'node:path'
 import type { IpcMain } from 'electron'
 import { IPC } from '@shared/ipc-contract'
 import type { RequestSpec } from '@shared/types'
+import { disabledAutoHeaders } from '@shared/auto-headers'
 import {
   buildTerminalScript,
   TOOL_LABEL,
@@ -87,6 +88,7 @@ export function toTerminalRequest(spec: RequestSpec, extraNotes: string[] = []):
   const notes = [...extraNotes]
   let url = buildUrl(spec.url, spec.query ?? [])
   const headers = collectUserHeaders(spec.headers ?? [])
+  const disabledAuto = disabledAutoHeaders(spec.disabledAutoHeaders)
   const auth = spec.auth
   let credentials: TerminalRequest['credentials']
 
@@ -114,7 +116,7 @@ export function toTerminalRequest(spec: RequestSpec, extraNotes: string[] = []):
     // An empty editor is no body at all — not a zero-length one on a GET.
     if (b.text) {
       body = { kind: 'text', text: b.text }
-      if (!findHeader(headers, 'content-type')) headers['Content-Type'] = RAW_CONTENT_TYPE[b.language] ?? 'text/plain'
+      if (!findHeader(headers, 'content-type') && !disabledAuto.has('content-type')) headers['Content-Type'] = RAW_CONTENT_TYPE[b.language] ?? 'text/plain'
     }
     bodyForSign = b.text ?? ''
   } else if (b?.type === 'urlencoded') {

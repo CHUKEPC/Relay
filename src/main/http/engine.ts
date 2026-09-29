@@ -18,7 +18,8 @@ import { request as undiciRequest, Agent, ProxyAgent } from 'undici'
 import type { Dispatcher } from 'undici'
 import { Cookie } from 'tough-cookie'
 
-import { APP_VERSION, RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
+import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
+import { DEFAULT_HEADERS, disabledAutoHeaders } from '@shared/auto-headers'
 import { buildDigestAuthHeader, parseDigestChallenge } from '../auth/digest'
 import type { DigestChallenge } from '../auth/digest'
 import { fetchOAuthToken } from '../auth/oauth'
@@ -609,12 +610,6 @@ export function collectUserHeaders(headers: KV[]): Record<string, string> {
  * A user header of the same name always wins (matched case-insensitively), and
  * an empty value is how a header is deliberately dropped.
  */
-const DEFAULT_HEADERS: Record<string, string> = {
-  'User-Agent': `Relay/${APP_VERSION}`,
-  Accept: '*/*',
-  // Only what the engine can actually decode again (gzip / deflate / br).
-  'Accept-Encoding': 'gzip, deflate, br'
-}
 
 /** Is the header present at all, whatever its value? */
 function hasHeader(headers: Record<string, string>, name: string): boolean {
@@ -622,9 +617,11 @@ function hasHeader(headers: Record<string, string>, name: string): boolean {
   return Object.keys(headers).some((k) => k.toLowerCase() === lower)
 }
 
-export function applyDefaultHeaders(headers: Record<string, string>): void {
+export function applyDefaultHeaders(headers: Record<string, string>, disabled: ReadonlySet<string> = new Set()): void {
   for (const [name, value] of Object.entries(DEFAULT_HEADERS)) {
-    // Present-but-empty is how a user drops one of these on purpose.
+    // Present-but-empty is how a user drops one of these on purpose; the
+    // Headers tab can also switch any of them off for the request.
+    if (disabled.has(name.toLowerCase())) continue
     if (!hasHeader(headers, name)) headers[name] = value
   }
 }
@@ -792,7 +789,8 @@ export async function runRequest(
 
   // --- 2. Headers (enabled user headers, then auth applied last). ---
   const headers = collectUserHeaders(spec.headers ?? [])
-  applyDefaultHeaders(headers)
+  const disabledAuto = disabledAutoHeaders(spec.disabledAutoHeaders)
+  applyDefaultHeaders(headers, disabledAuto)
   const auth = buildAuthHeaders(spec.auth)
   for (const [k, v] of Object.entries(auth.headers)) headers[k] = v
 
@@ -826,7 +824,7 @@ export async function runRequest(
       []
     )
   }
-  if (encoded.contentType && !findHeader(headers, 'content-type')) {
+  if (encoded.contentType && !findHeader(headers, 'content-type') && !disabledAuto.has('content-type')) {
     headers['Content-Type'] = encoded.contentType
   }
 
@@ -995,7 +993,10 @@ export async function runRequest(
     // observable and recorded into `redirects`.
     for (let hop = 0; ; hop++) {
       // Attach cookies for this exact URL (persistent jar matches by domain/path).
-      applyCookieHeader(headers, currentUrl, userCookie, cookieJar, jar)
+      // Switched off in the Headers tab: only a Cookie header the user wrote goes out.
+      if (disabledAuto.has('cookie')) {
+        if (userCookie) setHeaderCI(headers, 'Cookie', userCookie)
+      } else applyCookieHeader(headers, currentUrl, userCookie, cookieJar, jar)
       // Sign THIS hop. Skipped once a redirect has taken us off the original
       // origin: a signature is a credential and must never be minted for a host
       // the user did not configure it for.

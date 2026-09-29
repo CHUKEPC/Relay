@@ -13,9 +13,10 @@ export type SettingsSection =
   | 'shortcuts'
   | 'help'
   | 'about'
-/** Positions the console and the sidebar can take (no top). */
-export type SideDock = Exclude<DockMode, 'top'>
-export type ConsoleDock = SideDock
+/** Positions the sidebar can take: every edge of the app body, or floating. */
+export type SideDock = DockMode
+/** Positions the request console can take (no top). */
+export type ConsoleDock = Exclude<DockMode, 'top'>
 
 export interface ConsoleFloatRect extends FloatRect {}
 
@@ -45,6 +46,8 @@ interface UiState {
   consoleSize: number
   consoleFloat: ConsoleFloatRect
   importOpen: boolean
+  /** Headers tab: list the headers Relay adds by itself */
+  showAutoHeaders: boolean
   setSideTab: (t: SideTab) => void
   toggleSidebar: () => void
   setSidebarCollapsed: (v: boolean) => void
@@ -68,6 +71,7 @@ interface UiState {
   setConsoleSize: (px: number) => void
   setConsoleFloat: (rect: ConsoleFloatRect) => void
   setImportOpen: (v: boolean) => void
+  setShowAutoHeaders: (v: boolean) => void
 }
 
 let toastSeq = 0
@@ -85,6 +89,7 @@ interface UiPrefs {
   consoleDock: ConsoleDock
   consoleSize: number
   consoleFloat: ConsoleFloatRect
+  showAutoHeaders: boolean
 }
 
 function loadUiPrefs(): Partial<UiPrefs> {
@@ -110,7 +115,8 @@ function saveUiPrefs(s: UiState): void {
       aiWidth: s.aiWidth,
       consoleDock: s.consoleDock,
       consoleSize: s.consoleSize,
-      consoleFloat: s.consoleFloat
+      consoleFloat: s.consoleFloat,
+      showAutoHeaders: s.showAutoHeaders
     }
     localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs))
   } catch {
@@ -120,6 +126,7 @@ function saveUiPrefs(s: UiState): void {
 
 const prefs = loadUiPrefs()
 const DOCKS: ConsoleDock[] = ['bottom', 'left', 'right', 'float']
+const SIDE_DOCKS: SideDock[] = ['top', ...DOCKS]
 
 function initialFloat(f: FloatRect | undefined, fallback: FloatRect): FloatRect {
   if (f && typeof f.x === 'number' && typeof f.y === 'number' && typeof f.w === 'number' && typeof f.h === 'number') {
@@ -163,13 +170,15 @@ export const useUi = create<UiState>((set, get) => {
     toast: null,
     sidebarWidth: typeof prefs.sidebarWidth === 'number' ? clamp(prefs.sidebarWidth, 200, 460) : 270,
     sidebarHeight: typeof prefs.sidebarHeight === 'number' ? clamp(prefs.sidebarHeight, 140, 600) : 260,
-    sidebarDock: prefs.sidebarDock && DOCKS.includes(prefs.sidebarDock) ? prefs.sidebarDock : 'left',
+    sidebarDock: prefs.sidebarDock && SIDE_DOCKS.includes(prefs.sidebarDock) ? prefs.sidebarDock : 'left',
     sidebarFloat: initialFloat(prefs.sidebarFloat, { x: 60, y: 90, w: 320, h: 520 }),
     aiWidth: typeof prefs.aiWidth === 'number' ? clamp(prefs.aiWidth, 300, 640) : 384,
     consoleDock: prefs.consoleDock && DOCKS.includes(prefs.consoleDock) ? prefs.consoleDock : 'bottom',
     consoleSize: typeof prefs.consoleSize === 'number' ? clamp(prefs.consoleSize, 160, 800) : 340,
     consoleFloat: initialFloat(prefs.consoleFloat, { x: 80, y: 80, w: 720, h: 420 }),
     importOpen: false,
+    // Hidden until the eye is clicked, then remembered.
+    showAutoHeaders: prefs.showAutoHeaders === true,
     setSideTab: (t) => set({ sideTab: t }),
     toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
@@ -224,6 +233,10 @@ export const useUi = create<UiState>((set, get) => {
       set({ consoleFloat: rect })
       persistPrefs()
     },
-    setImportOpen: (v) => set({ importOpen: v })
+    setImportOpen: (v) => set({ importOpen: v }),
+    setShowAutoHeaders: (v) => {
+      set({ showAutoHeaders: v })
+      persistPrefs()
+    }
   }
 })

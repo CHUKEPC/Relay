@@ -61,11 +61,23 @@ describe('sidebar and response trade places', () => {
     expect(ui.useUi.getState().sidebarDock).toBe('left')
   })
 
-  it('floating or top never trades — there is no edge to give back', () => {
+  it('floating never trades — there is no edge to give back', () => {
     swap.dockResponse(leaf().id, 'top')
     expect(ui.useUi.getState().sidebarDock).toBe('left')
     swap.dockSidebar('float')
     expect(leaf().respDock).toBe('top')
+    swap.dockResponse(leaf().id, 'float')
+    swap.dockSidebar('top')
+    expect(leaf().respDock).toBe('float')
+  })
+
+  it('the top edge trades like any other', () => {
+    swap.dockSidebar('top')
+    expect(ui.useUi.getState().sidebarDock).toBe('top')
+    expect(leaf().respDock).toBe('bottom')
+    swap.dockResponse(leaf().id, 'top')
+    expect(leaf().respDock).toBe('top')
+    expect(ui.useUi.getState().sidebarDock).toBe('bottom')
   })
 
   it('only a pane that actually touches that window edge counts', () => {

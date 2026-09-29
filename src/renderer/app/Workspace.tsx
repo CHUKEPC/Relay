@@ -22,7 +22,18 @@ import {
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { useCollections } from '@renderer/store/collections'
 import { trackDrag } from '@renderer/lib/drag'
-import { BuilderDockContext, FLOAT_MIN_H, FLOAT_MIN_W, oppositeEdge, PaneDockContext, useDockDrag, type DockEdge, type DockMode, type FloatRect } from '@renderer/lib/dock'
+import {
+  ALL_EDGES,
+  BuilderDockContext,
+  FLOAT_MIN_H,
+  FLOAT_MIN_W,
+  oppositeEdge,
+  PaneDockContext,
+  paneDockArea,
+  useDockDrag,
+  type DockMode,
+  type FloatRect
+} from '@renderer/lib/dock'
 import { dockResponse } from '@renderer/lib/dock-swap'
 import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
@@ -59,31 +70,40 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   const tabId = leaf.tabId
   const mode = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request.mode ?? 'http')
   const wsRef = useRef<HTMLDivElement>(null)
+  const singlePane = usePanes((s) => s.root.kind === 'leaf')
   const dock = leaf.respDock
   const horizontal = dock === 'right' || dock === 'left'
 
   const setDock = (d: DockMode): void => dockResponse(leaf.id, d)
+  // Alone in the window, the pane's panels land on the same zones as the
+  // sidebar (the app body); among several panes, on the edges of their pane.
+  const dockArea = () => paneDockArea(wsRef.current, singlePane && dock !== 'float')
 
-  // The response panel is dragged by its status bar to an edge of this pane.
+  // The response panel is dragged by its status bar to an edge.
   const { onGrabDown, overlay } = useDockDrag({
-    container: () => wsRef.current,
+    container: dockArea,
     dock,
     onDock: setDock,
-    edges: PANE_EDGES,
+    edges: ALL_EDGES,
     float: leaf.respFloat,
     setFloat: (rect) => setRespFloat(leaf.id, rect),
     coords: 'container'
   })
 
-  // The request zone is dragged by the grip in its header; the response takes
-  // the opposite side. With a floating response the builder owns the pane, so
-  // there is nothing to move.
+  // The request zone is dragged by its header; the response takes the
+  // opposite side. Only the pane is rearranged: the sidebar trades places with
+  // the response when the response itself is moved, never as a side effect of
+  // moving the request zone. With a floating response the builder owns the
+  // pane, so there is nothing to move.
   const builderEdge: DockMode = dock === 'float' ? 'float' : oppositeEdge(dock)
+  const setBuilderDock = (m: DockMode): void => {
+    if (m !== 'float') usePanes.getState().setRespDock(leaf.id, oppositeEdge(m))
+  }
   const builderDrag = useDockDrag({
-    container: () => wsRef.current,
+    container: dockArea,
     dock: builderEdge,
-    onDock: (edge) => setDock(oppositeEdge(edge)),
-    edges: PANE_EDGES,
+    onDock: setBuilderDock,
+    edges: ALL_EDGES,
     float: leaf.respFloat,
     setFloat: () => undefined,
     coords: 'container'
@@ -127,7 +147,7 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   )
 
   const requestBuilder = (
-    <BuilderDockContext.Provider value={dock === 'float' ? null : builderDrag.onGrabDown}>
+    <BuilderDockContext.Provider value={dock === 'float' ? null : { dock: builderEdge, setDock: setBuilderDock, onGrabDown: builderDrag.onGrabDown }}>
       <RequestBuilder tabId={tabId} />
     </BuilderDockContext.Provider>
   )
@@ -200,9 +220,6 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
     </div>
   )
 }
-
-/** Both the response and the request zone may take any edge of their pane. */
-const PANE_EDGES: readonly DockEdge[] = ['left', 'right', 'top', 'bottom']
 
 /** Resize a floating response panel from its bottom-right grip. */
 function onFloatGrip(e: ReactMouseEvent, leaf: PaneLeaf, setRespFloat: (paneId: string, rect: FloatRect) => void): void {

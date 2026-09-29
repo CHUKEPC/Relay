@@ -7,16 +7,13 @@ import { useFindReplace } from '@renderer/store/find-replace'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
 import { trackDrag } from '@renderer/lib/drag'
-import { DockButtons, FLOAT_MIN_H, FLOAT_MIN_W, useDockDrag, type DockEdge } from '@renderer/lib/dock'
+import { ALL_EDGES, DockButtons, FLOAT_MIN_H, FLOAT_MIN_W, PANEL_DOCK_MODES, useDockDrag } from '@renderer/lib/dock'
 import { dockSidebar } from '@renderer/lib/dock-swap'
 import { CollectionsTree } from './CollectionsTree'
 import { HistoryList } from './HistoryList'
 import { EnvList } from './EnvList'
 import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-resize.css'
-
-/** The sidebar docks to the sides or the bottom of the app body. */
-const SIDEBAR_EDGES: readonly DockEdge[] = ['left', 'right', 'bottom']
 
 const NAV: { id: SideTab; label: string; icon: string }[] = [
   { id: 'collections', label: 'Коллекции', icon: 'collections' },
@@ -42,20 +39,19 @@ export function Sidebar() {
   const pluginBusy = usePlugins((s) => s.busy)
   const sidebarButtons = useMemo(() => collectButtons(pluginList, 'sidebar'), [pluginList])
 
-  // Dragging the head re-docks the panel to an edge of the app body; a response
-  // panel already on that edge trades places with it (lib/dock-swap).
+  // Dragging the head re-docks the panel to an edge of the app body — the same
+  // zones the response and the request zone use; a response panel already on
+  // that edge trades places with it (lib/dock-swap).
   const { onGrabDown, overlay } = useDockDrag({
     container: () => document.querySelector('.body'),
     dock,
-    onDock: (edge) => {
-      if (edge !== 'top') dockSidebar(edge)
-    },
-    edges: SIDEBAR_EDGES,
+    onDock: dockSidebar,
+    edges: ALL_EDGES,
     float,
     setFloat
   })
 
-  /** Docked: drag the inner edge to resize. Left/right change the width, bottom the height. */
+  /** Docked: drag the inner edge to resize. Left/right change the width, top/bottom the height. */
   const onHandleDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     const aside = asideRef.current
@@ -68,10 +64,11 @@ export function Sidebar() {
       (ev) => {
         if (dock === 'left') setSidebarWidth(ev.clientX - box.left)
         else if (dock === 'right') setSidebarWidth(box.right - ev.clientX)
+        else if (dock === 'top') setSidebarHeight(ev.clientY - box.top)
         else setSidebarHeight(box.bottom - ev.clientY)
       },
       {
-        cursor: dock === 'bottom' ? 'row-resize' : 'col-resize',
+        cursor: across ? 'row-resize' : 'col-resize',
         onEnd: () => {
           handle.classList.remove('dragging')
           document.body.classList.remove('wall-resizing')
@@ -103,10 +100,12 @@ export function Sidebar() {
   // the position.
   if (collapsed) return null
 
+  const across = dock === 'bottom' || dock === 'top'
+
   const style: CSSProperties =
     dock === 'float'
       ? { left: float.x, top: float.y, width: float.w, height: float.h }
-      : dock === 'bottom'
+      : across
         ? { height: sidebarHeight }
         : { width: sidebarWidth }
 
@@ -116,7 +115,7 @@ export function Sidebar() {
         <div className="panel-dock-head dock-grip" onMouseDown={onGrabDown} title={tr('Перетащите, чтобы перенести панель')}>
           <Icon name="grip" size={13} style={{ color: 'var(--tx-3)' }} />
           <span className="panel-dock-title">{tr('Навигация')}</span>
-          <DockButtons dock={dock} onDock={(m) => m !== 'top' && dockSidebar(m)} />
+          <DockButtons dock={dock} onDock={dockSidebar} modes={PANEL_DOCK_MODES} />
           <button
             className="icon-btn"
             style={{ width: 22, height: 22 }}
@@ -229,10 +228,10 @@ export function Sidebar() {
 
         {dock !== 'float' && (
           <div
-            className={`wall-handle ${dock === 'left' ? 'right' : dock === 'right' ? 'left' : 'top'}`}
+            className={`wall-handle ${dock === 'left' ? 'right' : dock === 'right' ? 'left' : dock === 'top' ? 'bottom' : 'top'}`}
             aria-hidden="true"
             onMouseDown={onHandleDown}
-            onDoubleClick={() => (dock === 'bottom' ? setSidebarHeight(260) : setSidebarWidth(270))}
+            onDoubleClick={() => (across ? setSidebarHeight(260) : setSidebarWidth(270))}
             title={tr('Перетащите, чтобы изменить размер · двойной клик — сброс')}
           />
         )}

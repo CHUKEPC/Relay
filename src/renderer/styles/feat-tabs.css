@@ -47,3 +47,8 @@
   opacity: 0.45;
   pointer-events: none;
 }
+
+/* The tab being dragged along the strip (reorder) keeps its slot, dimmed. */
+.rtab.dragging {
+  opacity: 0.45;
+}

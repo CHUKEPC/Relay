@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RequestModel, TabModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { BuilderDockGrip } from '@renderer/lib/dock'
+import { BuilderDockButtons, BuilderDockGrip, useBuilderGrab } from '@renderer/lib/dock'
 import { useTabs } from '@renderer/store/tabs'
 import { debounce } from '@renderer/lib/debounce'
 import { tr } from '@renderer/lib/i18n'
@@ -26,6 +26,9 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
   const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tab.id, p)
 
   const [editing, setEditing] = useState(false)
+  // The whole header drags the request zone, like the sidebar head and the
+  // response status bar (the name, the buttons and the input keep their clicks).
+  const onGrab = useBuilderGrab()
   const [draft, setDraft] = useState(req.name)
   const [desc, setDesc] = useState(req.description ?? '')
   // Auto-expand on mount when a description already exists.
@@ -90,7 +93,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
 
   return (
     <div className="reqmeta">
-      <div className="reqmeta-row">
+      <div className={`reqmeta-row${onGrab ? ' dock-grab-head' : ''}`} onMouseDown={onGrab}>
         <BuilderDockGrip />
         {editing ? (
           <input
@@ -127,6 +130,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
           title={tr('Описание запроса')}
         > {tr('Описание')} <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} />
         </button>
+        <BuilderDockButtons />
       </div>
       {descOpen && (
         <div className="reqmeta-desc">

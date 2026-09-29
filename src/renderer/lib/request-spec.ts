@@ -134,7 +134,8 @@ export function buildRequestSpec(
     headers: resolveKVs(req.headers, scope, unresolved),
     body: resolveBody(req.body, scope, unresolved),
     auth: resolveAuth(effectiveAuth, scope, unresolved),
-    settings
+    settings,
+    ...(req.disabledAutoHeaders?.length ? { disabledAutoHeaders: req.disabledAutoHeaders } : {})
   }
 
   return { spec, resolvedUrl: url, unresolved: [...unresolved] }

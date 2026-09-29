@@ -191,15 +191,19 @@ Outbound connections happen as part of user actions. The parts involved:
 ## Dockable panels (`src/renderer/lib/dock.tsx`)
 
 The sidebar, the response panel and the request console share one dock model: `left | right |
-bottom | top | float` (the sidebar and the console take no top). `useDockDrag` turns a press on a
-panel header into a drag session: the allowed edges of the container light up and a drop there docks
-the panel; a drop anywhere else cancels. Floating is a button only, and a floating panel dragged by
-its header just moves. The request zone is dragged too (`BuilderDockContext`, the grip in the request
-header) and puts the response on the opposite edge. `lib/dock-swap.ts` makes the sidebar and a
-response that touches the same window edge trade places instead of stacking. The sidebar's position
-lives in the UI store (localStorage); the response panel's is per pane (`PaneLeaf.respDock` /
-`respFloat`, migrated from the 1.2 `layout` field). Panels that render a status bar get their
-controls through `PaneDockContext` instead of props. `--panel-head-h` keeps every panel header the
+bottom | top | float` (the console takes no top). `useDockDrag` turns a press on a panel header into
+a drag session: the allowed edges of the container light up and a drop there docks the panel; a drop
+anywhere else cancels. Floating is a button only, and a floating panel dragged by its header just
+moves. The sidebar, the response and the request zone all offer the same four edges (`ALL_EDGES`)
+over the same area: the app body, or — with several panes — the pane itself for the response and the
+request zone (`paneDockArea`). The request zone is dragged by its whole header row
+(`BuilderDockContext`) and puts the response on the opposite edge without touching the sidebar.
+`lib/dock-swap.ts` makes the sidebar and a moved response that touches the same window edge trade
+places instead of stacking. The sidebar's position lives in the UI store (localStorage). The
+response layout belongs to the tab: `PaneLeaf.respDock` / `respPct` / `respFloat` hold the layout of
+the tab the pane shows (`layoutTab`), every change is recorded in `usePanes.tabLayouts`, and
+`syncTabLayouts` loads a tab's record whenever a pane switches tabs (persisted with the pane tree).
+Panels that render a status bar get their controls through `PaneDockContext` instead of props. `--panel-head-h` keeps every panel header the
 same height so their bottom lines meet.
 
 Files dropped from the OS are handled by `app/FileDropZone.tsx` → `lib/file-drop.ts` (routing per

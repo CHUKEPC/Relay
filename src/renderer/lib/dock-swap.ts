@@ -1,7 +1,7 @@
 /**
  * Moving the sidebar and the response panel against each other.
  *
- * Both can sit on the left, right or bottom edge. When one is moved to the edge
+ * Both can sit on any edge. When one is moved to the edge
  * the other already occupies, they trade places instead of stacking — the
  * sidebar takes the response's edge and the response takes the one the sidebar
  * left. "Occupies" is measured against the window: a response docked right
@@ -28,7 +28,7 @@ export function touchesEdge(rect: Rect | undefined, edge: DockEdge): boolean {
   }
 }
 
-const isSideEdge = (d: DockMode): d is 'left' | 'right' | 'bottom' => d === 'left' || d === 'right' || d === 'bottom'
+const isSideEdge = (d: DockMode): d is DockEdge => d !== 'float'
 
 /** Dock the sidebar; a response panel already on that edge moves to where the sidebar was. */
 export function dockSidebar(next: SideDock): void {

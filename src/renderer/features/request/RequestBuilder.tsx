@@ -16,6 +16,7 @@ import { ExamplesTab } from './ExamplesTab'
 import { RequestMeta } from './RequestMeta'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
 import { TerminalButton } from './TerminalButton'
+import { AutoHeaderRows, AutoHeadersToggle } from './AutoHeaders'
 
 import { tr } from '@renderer/lib/i18n'
 
@@ -172,11 +173,23 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
         )}
         {activeSubTab === 'headers' && (
           <>
-            <KVTable rows={req.headers} onChange={(headers) => patch({ headers })} scope={scope} keyPlaceholder="Header-Name" keyAutocomplete={COMMON_HEADER_NAMES} />
+            <KVTable
+              rows={req.headers}
+              onChange={(headers) => patch({ headers })}
+              scope={scope}
+              keyPlaceholder="Header-Name"
+              keyAutocomplete={COMMON_HEADER_NAMES}
+              toolbarStart={mode === 'http' ? <AutoHeadersToggle req={req} /> : undefined}
+              leadRows={
+                mode === 'http' ? (
+                  <AutoHeaderRows req={req} scope={scope} onChange={(disabledAutoHeaders) => patch({ disabledAutoHeaders })} />
+                ) : undefined
+              }
+            />
             <div style={{ padding: '4px 18px 14px', fontSize: 11, color: 'var(--tx-3)' }}>
               {mode === 'http'
                 ? tr(
-                    'Host, Content-Length, User-Agent и др. добавляются автоматически. Чтобы переопределить любой из них — добавьте заголовок с тем же именем выше.'
+                    'Host, Content-Length, User-Agent и др. добавляются автоматически — глаз показывает их, снятая галочка убирает заголовок из запроса. Чтобы заменить значение, добавьте заголовок с тем же именем.'
                   )
                 : tr('Заголовки рукопожатия отправляются при подключении.')}
             </div>

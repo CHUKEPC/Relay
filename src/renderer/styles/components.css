@@ -169,9 +169,21 @@
 .kv-cell.k input { color: var(--c-key); }
 .ck { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line-2); display: grid; place-items: center; cursor: pointer; transition: .12s; color: transparent; }
 .ck.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ck.disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Headers tab: the headers Relay adds by itself (eye toggle) */
+.kv-auto-toggle { height: 26px; font-size: 12px; margin-right: auto; color: var(--tx-2); }
+.kv-auto-toggle.on { color: var(--accent); }
+.kv-auto-count { font-family: var(--font-mono); font-size: 10.5px; padding: 0 5px; border-radius: 8px; background: var(--bg-3, var(--bg-2)); color: var(--tx-2); }
+.kv-row.kv-auto .kv-cell input { color: var(--tx-2); cursor: default; }
+.kv-row.kv-auto .kv-cell.k input { color: var(--tx-1); }
+.kv-row.kv-auto .kv-cell input.hint { font-style: italic; color: var(--tx-3); }
+.kv-row.kv-auto:hover .kv-cell { background: transparent; border-color: transparent; }
+.kv-row.kv-auto.overridden .kv-cell input { text-decoration: line-through; }
+.kv-auto-mark { display: grid; place-items: center; color: var(--tx-3); }
 
 /* ---------- KVTable bulk-edit mode ---------- */
-.kv-toolbar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 6px; }
+.kv-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-bottom: 6px; }
 .kv-bulk-toggle { height: 26px; font-size: 12px; }
 .kv-bulk {
   width: 100%; min-height: 160px; resize: vertical;
