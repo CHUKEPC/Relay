@@ -11,6 +11,7 @@
  *                                      --linux-tar, a Linux ARM64 tar.gz (Electron needs no
  *                                      native rebuild, so both cross-build from an x64 machine)
  *   npm run release -- --version 1.1.1 --dir ../old/release --skip-build
+ *   npm run release -- --repo owner/name   publish somewhere other than `origin`
  *
  * Run it once on Windows, once on macOS and once on Linux: every run adds its
  * installers to the same release (an asset with the same name is replaced).
@@ -28,7 +29,23 @@ import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const REPO = 'CHUKEPC/Relay'
+/**
+ * The GitHub repository releases go to: `--repo owner/name`, otherwise the one
+ * `origin` points at — so a fork publishes to itself without editing this file.
+ */
+function detectRepo() {
+  const explicit = process.argv.includes('--repo') ? process.argv[process.argv.indexOf('--repo') + 1] : undefined
+  if (explicit) return explicit
+  try {
+    const url = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: ROOT, encoding: 'utf8' }).trim()
+    const m = /github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url)
+    if (m) return m[1]
+  } catch {
+    // no git or no origin — fall through
+  }
+  return 'CHUKEPC/Relay'
+}
+const REPO = detectRepo()
 const API = 'https://api.github.com'
 
 const argv = process.argv.slice(2)
@@ -183,7 +200,9 @@ const auth = token()
 if (!auth)
   fail(
     'no GitHub token. Either run `gh auth login`, or create a token at https://github.com/settings/tokens ' +
-      '(fine-grained: repository CHUKEPC/Relay, "Contents: Read and write") and set GH_TOKEN before running.'
+      `for ${REPO}: a classic token with the "repo" scope, or a fine-grained one with "Contents: Read and write" ` +
+      '(fine-grained tokens only cover repositories you own — for a repository you collaborate on use a classic token). ' +
+      'Then set GH_TOKEN before running.'
   )
 
 async function gh(method, url, body, headers = {}) {
