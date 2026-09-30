@@ -76,7 +76,7 @@ export const PANE_COUNT_LABEL: Record<number, string> = {
 }
 export type PanePreset = (typeof PANE_PRESETS)[number]
 
-export interface Rect {
+interface Rect {
   x: number
   y: number
   w: number

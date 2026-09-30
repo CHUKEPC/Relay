@@ -27,6 +27,7 @@ import {
   BuilderDockContext,
   FLOAT_MIN_H,
   FLOAT_MIN_W,
+  floatStyle,
   oppositeEdge,
   PaneDockContext,
   paneDockArea,
@@ -156,10 +157,10 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   if (dock === 'float') {
     return (
       <div className="workspace" ref={wsRef} style={{ position: 'relative' }}>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>{requestBuilder}</div>
-        <div
-          className="resp-float"
-          style={{ left: leaf.respFloat.x, top: leaf.respFloat.y, width: leaf.respFloat.w, height: leaf.respFloat.h }}
+        <div className="pane-builder" style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {requestBuilder}
+        </div>
+        <div className="resp-float" style={floatStyle(leaf.respFloat, 'container')}
           onMouseDownCapture={grabFromHead}
         >
           {response}

@@ -436,6 +436,23 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       Windows runs with `--ssl-no-revoke`, like the engine, so an unreachable CRL/OCSP server does
       not fail the request.
 
+## 1.3.2 — Panels in several panes
+
+- [x] **The sidebar stays put with several panes**: the sidebar and a response trade places only
+      while the main window shows a single pane. With several panes (or a maximized one) a
+      response moves inside its own pane and never throws the sidebar to the far side of the
+      window; a pane window never touches the main window's sidebar.
+- [x] **Floating panels stay reachable**: a floating response is kept inside its pane and a
+      floating sidebar inside the window whatever they shrink to (a split, a smaller window,
+      another monitor), and a drag starts from where the panel is drawn. The floating sidebar and
+      console header stay clickable over the titlebar.
+- [x] **Short and narrow zones**: a short response area clips and scrolls its own content (the
+      empty state drops its illustration) instead of spilling over the request zone; in a narrow
+      request zone the URL bar takes two rows — protocol and method, then URL and Send — Send
+      keeps only its icon when very narrow, and the description button becomes an icon.
+- [x] Verified by driving the app: 35 scenarios with one to four panes, a maximized pane, a pane
+      window, floating panels, tab switching, pane swaps and the AI panel.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

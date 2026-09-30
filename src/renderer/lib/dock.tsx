@@ -130,7 +130,12 @@ export function useDockDrag({ container, dock, onDock, edges, float, setFloat, c
 
     const box = host.getBoundingClientRect()
     const start = { x: e.clientX, y: e.clientY }
-    const orig = float
+    const areaW = coords === 'container' ? box.width : window.innerWidth
+    const areaH = coords === 'container' ? box.height : window.innerHeight
+    // Start from where the panel is drawn: a rect stored in a larger pane or
+    // window is clamped into view on screen (floatStyle), so dragging from the
+    // stored coordinates would leave it stuck until the mouse caught up.
+    const orig = { ...float, x: clamp(float.x, 120 - float.w, areaW - 120), y: clamp(float.y, 0, areaH - FLOAT_HEAD_H) }
     let moved = false
     let target: DockEdge | null = null
 
@@ -140,8 +145,6 @@ export function useDockDrag({ container, dock, onDock, edges, float, setFloat, c
         if (!moved && Math.abs(ev.clientX - start.x) + Math.abs(ev.clientY - start.y) < 5) return
         moved = true
         if (dock === 'float') {
-          const areaW = coords === 'container' ? box.width : window.innerWidth
-          const areaH = coords === 'container' ? box.height : window.innerHeight
           const x = clamp(orig.x + ev.clientX - start.x, 120 - orig.w, areaW - 120)
           const y = clamp(orig.y + ev.clientY - start.y, 0, areaH - FLOAT_HEAD_H)
           setFloat({ ...orig, x, y })
@@ -168,6 +171,22 @@ export function useDockDrag({ container, dock, onDock, edges, float, setFloat, c
     onGrabDown,
     dragging: showing,
     overlay: showing && rect ? <DockZones rect={rect} edges={edges} active={zone} /> : null
+  }
+}
+
+/**
+ * Position and size of a floating panel. The stored rect is clamped into its
+ * area by CSS — the pane for a response, the window for the sidebar — so a
+ * split, a smaller window or another monitor never leaves the header out of
+ * reach (the header carries the buttons that dock the panel again).
+ */
+export function floatStyle(rect: FloatRect, area: 'container' | 'viewport'): React.CSSProperties {
+  const full = area === 'container' ? { w: '100%', h: '100%' } : { w: '100vw', h: '100vh' }
+  return {
+    left: `clamp(calc(120px - min(${rect.w}px, ${full.w} - 8px)), ${rect.x}px, calc(${full.w} - 120px))`,
+    top: `clamp(0px, ${rect.y}px, calc(${full.h} - ${FLOAT_HEAD_H}px))`,
+    width: rect.w,
+    height: rect.h
   }
 }
 

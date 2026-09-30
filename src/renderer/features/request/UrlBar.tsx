@@ -291,25 +291,31 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
 
       {isHttpLike ? (
         sending ? (
-          <button className="btn send-btn" onClick={cancelSend} style={{ minWidth: 120, justifyContent: 'center' }}>
-            <Spinner size={15} /> {tr('Отмена')} </button>
+          <button className="btn send-btn" onClick={cancelSend} style={{ minWidth: 120, justifyContent: 'center' }} title={tr('Отмена')}>
+            <Spinner size={15} /> <span className="send-label">{tr('Отмена')}</span>
+          </button>
         ) : (
-          <button className="btn primary send-btn" data-tour="send" onClick={send}> {tr('Отправить')} <Icon name="send" size={14} />
+          <button className="btn primary send-btn" data-tour="send" onClick={send} title={tr('Отправить')}>
+            <span className="send-label">{tr('Отправить')}</span> <Icon name="send" size={14} />
           </button>
         )
       ) : isGrpc ? (
         grpcBusy ? (
           <button className="btn send-btn" onClick={() => useGrpc.getState().cancel(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
-            <Icon name="stop" size={13} /> {tr('Отмена')} </button>
+            <Icon name="stop" size={13} /> <span className="send-label">{tr('Отмена')}</span>
+          </button>
         ) : (
-          <button className="btn primary send-btn" onClick={invokeGrpc}> {tr('Вызвать')} <Icon name="send" size={14} />
+          <button className="btn primary send-btn" onClick={invokeGrpc} title={tr('Вызвать')}>
+            <span className="send-label">{tr('Вызвать')}</span> <Icon name="send" size={14} />
           </button>
         )
       ) : realtimeBusy ? (
         <button className="btn send-btn" onClick={() => useRealtime.getState().disconnect(tabId)} style={{ minWidth: 120, justifyContent: 'center' }}>
-          <Icon name="stop" size={13} /> {tr('Отключить')} </button>
+          <Icon name="stop" size={13} /> <span className="send-label">{tr('Отключить')}</span>
+        </button>
       ) : (
-        <button className="btn primary send-btn" onClick={connectRealtime}> {tr('Подключить')} <Icon name="bolt" size={14} />
+        <button className="btn primary send-btn" onClick={connectRealtime} title={tr('Подключить')}>
+          <span className="send-label">{tr('Подключить')}</span> <Icon name="bolt" size={14} />
         </button>
       )}
     </div>

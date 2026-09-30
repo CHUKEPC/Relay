@@ -239,6 +239,10 @@
 .sidebar.dock-float {
   position: fixed;
   z-index: 55;
+  /* It can be dragged over the titlebar, the window's drag region: without
+     no-drag its header would move the window instead of the panel (Electron
+     subtracts no-drag rects from drag regions, see feat-help.css). */
+  -webkit-app-region: no-drag;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg, 12px);
   box-shadow: var(--shadow-3, 0 18px 50px rgb(0 0 0 / 0.35));
@@ -284,6 +288,88 @@ body.wall-resizing .wall-handle.bottom {
 }
 
 /* ============================ response ============================ */
+
+/* A short response area (docked on top of a small pane) scrolls inside itself
+   instead of spilling its content under the request zone. */
+.pane-response {
+  overflow: hidden;
+  container-type: size;
+}
+
+/* The empty state never centres itself out of reach: taller than its area it
+   starts at the top, and a short area drops the illustration. */
+.pane-response .empty {
+  place-items: safe center;
+}
+
+@container (max-height: 240px) {
+  .pane-response .empty {
+    padding: 10px 14px;
+  }
+
+  .pane-response .empty-ico {
+    display: none;
+  }
+}
+
+/* A narrow request zone — a response docked beside it, several panes: the URL
+   takes a row of its own, so Send stays in view instead of behind a scrollbar,
+   and the description button keeps only its icon so the name keeps its room. */
+.pane-builder {
+  container-type: inline-size;
+}
+
+@container (max-width: 640px) {
+  /* protocol and method on the first row, the URL and Send on the second */
+  .pane-builder .req-bar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .pane-builder .req-bar::before {
+    content: '';
+    order: 1;
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .pane-builder .req-bar .url-bar {
+    order: 2;
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .pane-builder .req-bar .send-btn {
+    order: 3;
+  }
+}
+
+/* Very narrow: Send keeps only its icon, the URL gets the room. */
+@container (max-width: 440px) {
+  .pane-builder .req-bar .send-btn {
+    min-width: 0 !important;
+    padding: 0 14px;
+  }
+
+  .pane-builder .req-bar .send-label {
+    display: none;
+  }
+}
+
+.reqmeta-desc-ico {
+  display: none;
+}
+
+@container (max-width: 560px) {
+  .reqmeta-desc-label,
+  .reqmeta-desc-chev {
+    display: none;
+  }
+
+  .reqmeta-desc-ico {
+    display: block;
+  }
+}
 
 /* The status bar is the response panel's header: same height as the request
    header next to it, whatever it currently shows. */

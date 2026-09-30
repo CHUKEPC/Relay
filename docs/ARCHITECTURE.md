@@ -198,8 +198,11 @@ moves. The sidebar, the response and the request zone all offer the same four ed
 over the same area: the app body, or — with several panes — the pane itself for the response and the
 request zone (`paneDockArea`). The request zone is dragged by its whole header row
 (`BuilderDockContext`) and puts the response on the opposite edge without touching the sidebar.
-`lib/dock-swap.ts` makes the sidebar and a moved response that touches the same window edge trade
-places instead of stacking. The sidebar's position lives in the UI store (localStorage). The
+`lib/dock-swap.ts` makes the sidebar and a moved response on the same edge trade places instead of
+stacking — only while the main window shows a single pane; with several panes each response moves
+inside its own pane and the sidebar stays put. `floatStyle` clamps a floating panel into its pane
+or the window in CSS, so a split or a smaller window never strands its header; a narrow
+`.pane-builder` (a container) wraps the URL bar into two rows. The sidebar's position lives in the UI store (localStorage). The
 response layout belongs to the tab: `PaneLeaf.respDock` / `respPct` / `respFloat` hold the layout of
 the tab the pane shows (`layoutTab`), every change is recorded in `usePanes.tabLayouts`, and
 `syncTabLayouts` loads a tab's record whenever a pane switches tabs (persisted with the pane tree).

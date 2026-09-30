@@ -7,7 +7,7 @@ import { useFindReplace } from '@renderer/store/find-replace'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
 import { trackDrag } from '@renderer/lib/drag'
-import { ALL_EDGES, DockButtons, FLOAT_MIN_H, FLOAT_MIN_W, PANEL_DOCK_MODES, useDockDrag } from '@renderer/lib/dock'
+import { ALL_EDGES, DockButtons, FLOAT_MIN_H, FLOAT_MIN_W, floatStyle, PANEL_DOCK_MODES, useDockDrag } from '@renderer/lib/dock'
 import { dockSidebar } from '@renderer/lib/dock-swap'
 import { CollectionsTree } from './CollectionsTree'
 import { HistoryList } from './HistoryList'
@@ -104,7 +104,7 @@ export function Sidebar() {
 
   const style: CSSProperties =
     dock === 'float'
-      ? { left: float.x, top: float.y, width: float.w, height: float.h }
+      ? floatStyle(float, 'viewport')
       : across
         ? { height: sidebarHeight }
         : { width: sidebarWidth }

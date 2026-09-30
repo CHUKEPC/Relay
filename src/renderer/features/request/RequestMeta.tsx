@@ -128,7 +128,10 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
           className={`btn ghost reqmeta-desc-btn ${descOpen ? 'on' : ''}`}
           onClick={() => setDescOpen((v) => !v)}
           title={tr('Описание запроса')}
-        > {tr('Описание')} <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} />
+        >
+          <Icon name="doc" size={14} className="reqmeta-desc-ico" />
+          <span className="reqmeta-desc-label">{tr('Описание')}</span>
+          <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} className="reqmeta-desc-chev" />
         </button>
         <BuilderDockButtons />
       </div>

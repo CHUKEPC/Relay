@@ -42,6 +42,8 @@
 
 /* ---------- float: inline left/top/width/height ---------- */
 .console-drawer.dock-float {
+  /* Same as the floating sidebar: never swallowed by the titlebar drag region. */
+  -webkit-app-region: no-drag;
   left: auto;
   right: auto;
   top: auto;

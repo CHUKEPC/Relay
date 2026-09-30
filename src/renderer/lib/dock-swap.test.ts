@@ -80,16 +80,43 @@ describe('sidebar and response trade places', () => {
     expect(ui.useUi.getState().sidebarDock).toBe('bottom')
   })
 
-  it('only a pane that actually touches that window edge counts', () => {
+  it('with several panes the sidebar and the responses move independently', () => {
     const p = panes.usePanes.getState()
-    p.splitActive('row') // two panes side by side
+    p.splitActive('row') // two panes side by side, sidebar on the left
     const [first, second] = panes.leavesOf(panes.usePanes.getState().root)
-    p.setRespDock(first.id, 'right') // the left pane's right edge is the middle of the window
+    // The left pane's response moved next to the sidebar: the sidebar stays put
+    // (it used to jump to the old response edge, across the whole window).
+    swap.dockResponse(first.id, 'left')
+    expect(ui.useUi.getState().sidebarDock).toBe('left')
+    swap.dockResponse(first.id, 'right')
+    swap.dockResponse(first.id, 'left')
+    expect(ui.useUi.getState().sidebarDock).toBe('left')
+    // ... and the sidebar moved onto a response's edge leaves every response alone.
     p.setRespDock(second.id, 'right')
     swap.dockSidebar('right')
     const [a, b] = panes.leavesOf(panes.usePanes.getState().root)
-    expect(a.respDock).toBe('right')
-    expect(b.respDock).toBe('left')
+    expect(ui.useUi.getState().sidebarDock).toBe('right')
+    expect(a.respDock).toBe('left')
+    expect(b.respDock).toBe('right')
+  })
+
+  it('a maximized pane still counts as one of several', () => {
+    const p = panes.usePanes.getState()
+    p.splitActive('col')
+    const [first] = panes.leavesOf(panes.usePanes.getState().root)
+    p.toggleMaximize(first.id)
+    swap.dockResponse(first.id, 'left')
+    expect(ui.useUi.getState().sidebarDock).toBe('left')
+  })
+
+  it('a pane window never moves the main window sidebar', () => {
+    panes.usePanes.getState().initDetached('t-win')
+    const pane = leaf()
+    swap.dockResponse(pane.id, 'left')
+    expect(pane.id).toBe('detached')
+    expect(leaf().respDock).toBe('left')
+    expect(ui.useUi.getState().sidebarDock).toBe('left')
+    panes.usePanes.setState({ windowMode: 'main' })
   })
 
   it('switching between a side and top/bottom resets the share to something usable', () => {
