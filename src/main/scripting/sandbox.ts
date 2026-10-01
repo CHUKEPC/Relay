@@ -66,10 +66,17 @@ export function recordAsyncScriptError(message: string, fatal = true): boolean {
   return true
 }
 
+/**
+ * chai-style type name. Works across the vm realm boundary: a value parsed by
+ * pm.response.json() is built in the host realm, an array literal in the script
+ * realm, so `instanceof` cannot tell them apart and the toString tag can.
+ */
 function typeOf(v: unknown): string {
   if (v === null) return 'null'
   if (Array.isArray(v)) return 'array'
-  return typeof v
+  const t = typeof v
+  if (t !== 'object') return t
+  return Object.prototype.toString.call(v).slice(8, -1).toLowerCase()
 }
 
 /** Duck-typed RegExp check that survives the vm realm boundary (a `/x/` literal
@@ -85,263 +92,753 @@ function isRegExpLike(v: unknown): v is { test: (s: string) => boolean } {
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
-  if (typeof a !== typeof b) return false
-  if (a && b && typeof a === 'object') {
-    const ak = Object.keys(a as object)
-    const bk = Object.keys(b as object)
-    if (ak.length !== bk.length) return false
-    return ak.every((k) => deepEqual((a as any)[k], (b as any)[k]))
+  if (typeof a === 'number' && typeof b === 'number') return Number.isNaN(a) && Number.isNaN(b)
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  const kind = typeOf(a)
+  if (kind !== typeOf(b)) return false
+  if (kind === 'date') return (a as Date).getTime() === (b as Date).getTime()
+  if (kind === 'regexp') return String(a) === String(b)
+  const ak = Object.keys(a)
+  const bk = Object.keys(b)
+  if (ak.length !== bk.length) return false
+  return ak.every((k) => Object.prototype.hasOwnProperty.call(b, k) && deepEqual((a as any)[k], (b as any)[k]))
+}
+
+/** `a.b[0].c` → ['a', 'b', '0', 'c'] — the path syntax of chai and Postman. */
+function parsePath(path: string): string[] {
+  return path
+    .replace(/\[(\w+)\]/g, '.$1')
+    .split('.')
+    .filter(Boolean)
+}
+
+function walkPath(root: unknown, path: string): { exists: boolean; value: unknown } {
+  let cur: unknown = root
+  for (const seg of parsePath(path)) {
+    if (cur == null || !Object.prototype.hasOwnProperty.call(cur, seg)) return { exists: false, value: undefined }
+    cur = (cur as any)[seg]
   }
-  return false
+  return { exists: true, value: cur }
+}
+
+function lengthOf(v: unknown): number | undefined {
+  const kind = typeOf(v)
+  if (kind === 'map' || kind === 'set') return (v as { size: number }).size
+  const len = (v as { length?: unknown } | null | undefined)?.length
+  return typeof len === 'number' ? len : undefined
+}
+
+/**
+ * The responses the response assertions understand: pm.response and the
+ * results of pm.sendRequest. Registered by identity, so an object that merely
+ * looks like a response is not treated as one.
+ */
+interface ResponseView {
+  code: number
+  status: string
+  headers: { get: (name: string) => string | undefined }
+  text: () => string
+  json: () => unknown
+}
+const responseViews = new WeakSet<object>()
+
+function asResponse(v: unknown): ResponseView | null {
+  return typeof v === 'object' && v !== null && responseViews.has(v) ? (v as ResponseView) : null
+}
+
+/** Make `view.to.have.status(…)`, `view.to.be.ok`… available on a response. */
+function assertable<T extends object>(view: T): T {
+  responseViews.add(view)
+  Object.defineProperty(view, 'to', { get: () => expectValue(view), enumerable: false })
+  return view
+}
+
+/** A short, readable rendering of a value for an assertion message. */
+function show(v: unknown): string {
+  if (v === undefined) return 'undefined'
+  if (typeof v === 'number' || typeof v === 'bigint' || typeof v === 'symbol') return String(v)
+  if (typeof v === 'function') return '[Function]'
+  const r = asResponse(v)
+  if (r) return `response ${r.code}`
+  const s = json(v) ?? String(v)
+  return s.length > 120 ? `${s.slice(0, 117)}...` : s
+}
+
+/* ============================================================
+ * pm.expect — a chai-compatible assertion chain
+ * ============================================================ */
+
+/** Modifiers set by chain words; they change what the next assertion checks. */
+interface Flags {
+  negate?: boolean
+  deep?: boolean
+  nested?: boolean
+  own?: boolean
+  /** `.any.keys` */
+  any?: boolean
+  /** `.include` / `.contain` used as a chain: `.include.members`, `.include.keys` */
+  contains?: boolean
+  /** `.ordered.members` */
+  ordered?: boolean
+  /** `.lengthOf` / `.length` used as a chain: compare the length, not the value */
+  length?: boolean
+}
+
+const STATE = Symbol('assertion')
+
+/**
+ * Property names the runtime itself may look up on an assertion — awaiting a
+ * returned value, printing or serialising it. They are never a typo in a test.
+ */
+const PASS_THROUGH = new Set(['then', 'catch', 'inspect', 'toJSON', 'message', 'stack', 'name', 'nodeType', 'asymmetricMatch', '$$typeof'])
+
+/**
+ * Wrap an assertion so that reading a word it does not know THROWS.
+ *
+ * Without this, a misspelt or unsupported property (`.to.be.tru`, `.to.exist`
+ * on a runtime that lacks it, Postman's `pm.response.to.be.json` without
+ * parentheses) reads as `undefined`, nothing throws, and pm.test records a pass
+ * whatever the response was. chai guards its chains the same way.
+ */
+function guard(target: Assertion): Assertion {
+  return new Proxy(target, {
+    get(t, prop, receiver) {
+      if (typeof prop === 'string' && !PASS_THROUGH.has(prop) && !Reflect.has(t, prop)) {
+        throw new Error(`Invalid or unsupported assertion property: ${prop}`)
+      }
+      return Reflect.get(t, prop, receiver)
+    }
+  })
+}
+
+function expectValue(actual: unknown, flags: Flags = {}): Assertion {
+  return guard(new Assertion(actual, flags))
+}
+
+type Chainable = Assertion & ((...args: any[]) => Assertion)
+
+/**
+ * A word that is both a method and a chain — `.include(x)` and
+ * `.include.members([…])`, `.lengthOf(3)` and `.lengthOf.above(2)`,
+ * `.an('array')` and `.an.instanceOf(Array)`. Calling it runs `call`; reading a
+ * property continues the chain on `next`.
+ */
+function chainable(next: Assertion, call: (...args: any[]) => Assertion): Chainable {
+  return new Proxy(() => undefined, {
+    apply: (_t, _self, args) => call(...args),
+    get: (_t, prop) => Reflect.get(next, prop),
+    has: (_t, prop) => Reflect.has(next, prop)
+  }) as unknown as Chainable
+}
+
+function derive(a: Assertion, extra: Flags): Assertion {
+  const { actual, flags } = a[STATE]
+  return expectValue(actual, { ...flags, ...extra })
+}
+
+/** Pass/fail honouring `.not`. `what` reads as in "expected 5 to be above 3". */
+function verify(a: Assertion, pass: boolean, what: string, detail?: string): void {
+  const { actual, flags } = a[STATE]
+  if (flags.negate ? !pass : pass) return
+  const tail = detail ? ` (${detail})` : ''
+  throw new AssertionError(`expected ${show(actual)} ${flags.negate ? 'not ' : ''}to ${what}${tail}`)
+}
+
+/** A misuse that fails whether or not `.not` is set (chai throws on these too). */
+function misuse(message: string): never {
+  throw new AssertionError(message)
+}
+
+/** The number a comparison works on (the value, or its length after
+ *  `.lengthOf`) and its bounds; dates compare by time. Fails on anything else. */
+function numbers(a: Assertion, word: string, bounds: unknown[]): { value: number; limits: number[] } {
+  const { actual, flags } = a[STATE]
+  const num = (x: unknown): number | undefined =>
+    typeof x === 'number' ? x : typeOf(x) === 'date' ? (x as Date).getTime() : undefined
+  const value = num(flags.length ? lengthOf(actual) : actual)
+  if (value === undefined) misuse(`expected ${show(actual)} to ${flags.length ? 'have a length' : 'be a number or a date'}`)
+  const limits = bounds.map((b) => num(b) ?? misuse(`the bound for "${word}" must be a number or a date, got ${show(b)}`))
+  return { value, limits }
+}
+
+function compare(a: Assertion, word: string, n: unknown, pass: (v: number, n: number) => boolean): Assertion {
+  const { value, limits } = numbers(a, word, [n])
+  verify(a, pass(value, limits[0]), `${a[STATE].flags.length ? 'have a length' : 'be'} ${word} ${show(n)}`)
+  return a
+}
+
+function needResponse(a: Assertion, word: string): ResponseView {
+  const { actual } = a[STATE]
+  return asResponse(actual) ?? misuse(`.${word} applies to pm.response or a pm.sendRequest response, not ${show(actual)}`)
+}
+
+function statusIs(a: Assertion, what: string, pass: (code: number) => boolean): Assertion {
+  const r = needResponse(a, what)
+  verify(a, pass(r.code), `be ${what}`, `status ${r.code}`)
+  return a
+}
+
+/** Built-in constructors recognised by kind, so `instanceOf(Array)` holds for a
+ *  JSON array that was parsed outside the script's realm. */
+const BUILTIN_KINDS: Record<string, string> = {
+  Array: 'array',
+  Date: 'date',
+  RegExp: 'regexp',
+  Error: 'error',
+  Map: 'map',
+  Set: 'set',
+  Promise: 'promise'
 }
 
 class Assertion {
-  constructor(
-    private actual: unknown,
-    private negate = false,
-    private _deep = false,
-    private _nested = false
-  ) {}
+  readonly [STATE]: { actual: unknown; flags: Flags }
 
-  private check(pass: boolean, message: string): void {
-    const ok = this.negate ? !pass : pass
-    if (!ok) throw new AssertionError(message)
+  constructor(actual: unknown, flags: Flags) {
+    this[STATE] = { actual, flags }
   }
 
-  // chain words (no-ops that return this)
-  get to(): this {
+  // --- language chains: readability only ------------------------------------
+  get to(): Assertion {
     return this
   }
-  get be(): this {
+  get be(): Assertion {
     return this
   }
-  get been(): this {
+  get been(): Assertion {
     return this
   }
-  get is(): this {
+  get is(): Assertion {
     return this
   }
-  get that(): this {
+  get that(): Assertion {
     return this
   }
-  get which(): this {
+  get which(): Assertion {
     return this
   }
-  get and(): this {
+  get and(): Assertion {
     return this
   }
-  get has(): this {
+  get has(): Assertion {
     return this
   }
-  get have(): this {
+  get have(): Assertion {
     return this
   }
-  get with(): this {
+  get with(): Assertion {
     return this
   }
-  get of(): this {
+  get at(): Assertion {
     return this
   }
+  get of(): Assertion {
+    return this
+  }
+  get same(): Assertion {
+    return this
+  }
+  get but(): Assertion {
+    return this
+  }
+  get does(): Assertion {
+    return this
+  }
+  get still(): Assertion {
+    return this
+  }
+  get also(): Assertion {
+    return this
+  }
+
+  // --- flags ---------------------------------------------------------------
   get not(): Assertion {
-    return new Assertion(this.actual, !this.negate, this._deep, this._nested)
+    return derive(this, { negate: !this[STATE].flags.negate })
   }
   get deep(): Assertion {
-    return new Assertion(this.actual, this.negate, true, this._nested)
+    return derive(this, { deep: true })
   }
-  // `.nested.property('a.b.c')` resolves a dotted path instead of a flat key.
+  /** `.nested.property('a.b[0].c')` resolves a path instead of a flat key. */
   get nested(): Assertion {
-    return new Assertion(this.actual, this.negate, this._deep, true)
+    return derive(this, { nested: true })
+  }
+  get own(): Assertion {
+    return derive(this, { own: true })
+  }
+  get any(): Assertion {
+    return derive(this, { any: true })
+  }
+  get all(): Assertion {
+    return derive(this, { any: false })
+  }
+  get ordered(): Assertion {
+    return derive(this, { ordered: true })
   }
 
-  // terminal getters (return `this` so they can be used in a chain)
-  get ok(): this {
-    this.check(Boolean(this.actual), `expected ${json(this.actual)} to be ok`)
+  // --- property assertions --------------------------------------------------
+  /** Truthy — or, on a response, status 200 (Postman's `pm.response.to.be.ok`). */
+  get ok(): Assertion {
+    const r = asResponse(this[STATE].actual)
+    if (r) return statusIs(this, 'ok', (c) => c === 200)
+    verify(this, Boolean(this[STATE].actual), 'be ok')
     return this
   }
-  get true(): this {
-    this.check(this.actual === true, `expected ${json(this.actual)} to be true`)
+  get true(): Assertion {
+    verify(this, this[STATE].actual === true, 'be true')
     return this
   }
-  get false(): this {
-    this.check(this.actual === false, `expected ${json(this.actual)} to be false`)
+  get false(): Assertion {
+    verify(this, this[STATE].actual === false, 'be false')
     return this
   }
-  get null(): this {
-    this.check(this.actual === null, `expected ${json(this.actual)} to be null`)
+  get null(): Assertion {
+    verify(this, this[STATE].actual === null, 'be null')
     return this
   }
-  get undefined(): this {
-    this.check(this.actual === undefined, `expected value to be undefined`)
+  get undefined(): Assertion {
+    verify(this, this[STATE].actual === undefined, 'be undefined')
     return this
   }
-  get empty(): this {
-    const len = (this.actual as any)?.length ?? Object.keys((this.actual as any) ?? {}).length
-    this.check(len === 0, `expected ${json(this.actual)} to be empty`)
+  get NaN(): Assertion {
+    verify(this, Number.isNaN(this[STATE].actual), 'be NaN')
+    return this
+  }
+  get exist(): Assertion {
+    verify(this, this[STATE].actual != null, 'exist')
+    return this
+  }
+  get finite(): Assertion {
+    verify(this, Number.isFinite(this[STATE].actual), 'be a finite number')
+    return this
+  }
+  get empty(): Assertion {
+    const { actual } = this[STATE]
+    const kind = typeOf(actual)
+    let size: number | undefined
+    if (kind === 'string' || kind === 'array' || kind === 'map' || kind === 'set') size = lengthOf(actual)
+    else if (kind === 'object') size = Object.keys(actual as object).length
+    if (size === undefined) misuse(`.empty needs a string, array, object, Map or Set, got ${show(actual)}`)
+    verify(this, size === 0, 'be empty')
+    return this
+  }
+  get extensible(): Assertion {
+    const { actual } = this[STATE]
+    verify(this, Object(actual) === actual && Object.isExtensible(actual), 'be extensible')
+    return this
+  }
+  get sealed(): Assertion {
+    verify(this, Object.isSealed(this[STATE].actual), 'be sealed')
+    return this
+  }
+  get frozen(): Assertion {
+    verify(this, Object.isFrozen(this[STATE].actual), 'be frozen')
     return this
   }
 
-  // methods
-  equal(expected: unknown): void {
-    const pass = this._deep ? deepEqual(this.actual, expected) : this.actual === expected
-    this.check(pass, `expected ${json(this.actual)} to equal ${json(expected)}`)
+  // --- type and equality ----------------------------------------------------
+  get a(): Chainable {
+    return chainable(this, (type: string) => {
+      verify(this, typeOf(this[STATE].actual) === String(type).toLowerCase(), `be a ${type}`)
+      return this
+    })
   }
-  eql(expected: unknown): void {
-    this.check(deepEqual(this.actual, expected), `expected ${json(this.actual)} to deeply equal ${json(expected)}`)
+  get an(): Chainable {
+    return this.a
   }
-  a(type: string): Assertion {
-    this.check(typeOf(this.actual) === type, `expected ${json(this.actual)} to be a ${type}`)
+  equal(expected: unknown): Assertion {
+    const { actual, flags } = this[STATE]
+    if (flags.length) {
+      verify(this, lengthOf(actual) === expected, `have length ${show(expected)}`)
+      return this
+    }
+    const pass = flags.deep ? deepEqual(actual, expected) : actual === expected
+    verify(this, pass, `${flags.deep ? 'deeply ' : ''}equal ${show(expected)}`)
     return this
   }
-  an(type: string): Assertion {
-    return this.a(type)
+  equals(expected: unknown): Assertion {
+    return this.equal(expected)
   }
-  above(n: number): void {
-    this.check((this.actual as number) > n, `expected ${json(this.actual)} to be above ${n}`)
+  eq(expected: unknown): Assertion {
+    return this.equal(expected)
   }
-  below(n: number): void {
-    this.check((this.actual as number) < n, `expected ${json(this.actual)} to be below ${n}`)
+  eql(expected: unknown): Assertion {
+    verify(this, deepEqual(this[STATE].actual, expected), `deeply equal ${show(expected)}`)
+    return this
   }
-  least(n: number): void {
-    this.check((this.actual as number) >= n, `expected ${json(this.actual)} to be at least ${n}`)
+  eqls(expected: unknown): Assertion {
+    return this.eql(expected)
   }
-  most(n: number): void {
-    this.check((this.actual as number) <= n, `expected ${json(this.actual)} to be at most ${n}`)
+  instanceOf(ctor: unknown): Assertion {
+    if (typeof ctor !== 'function') misuse(`instanceOf needs a constructor, got ${show(ctor)}`)
+    const { actual } = this[STATE]
+    const isObject = (typeof actual === 'object' && actual !== null) || typeof actual === 'function'
+    let pass = isObject && actual instanceof (ctor as new (...args: never[]) => unknown)
+    const name = (ctor as { name?: string }).name ?? ''
+    const native = Function.prototype.toString.call(ctor).includes('[native code]')
+    if (!pass && native && name === 'Object') pass = isObject
+    if (!pass && native && BUILTIN_KINDS[name]) pass = typeOf(actual) === BUILTIN_KINDS[name]
+    verify(this, pass, `be an instance of ${name || 'the given constructor'}`)
+    return this
   }
-  private includeOf(sub: unknown): void {
-    let pass = false
-    if (typeof this.actual === 'string') pass = this.actual.includes(String(sub))
-    else if (Array.isArray(this.actual)) pass = this.actual.some((x) => deepEqual(x, sub))
-    else if (this.actual && typeof this.actual === 'object' && sub && typeof sub === 'object')
-      pass = Object.entries(sub as object).every(([k, v]) => deepEqual((this.actual as any)[k], v))
-    this.check(pass, `expected ${json(this.actual)} to include ${json(sub)}`)
+  instanceof(ctor: unknown): Assertion {
+    return this.instanceOf(ctor)
+  }
+  oneOf(list: unknown[]): Assertion {
+    const items = Array.isArray(list) ? list : misuse(`oneOf needs an array, got ${show(list)}`)
+    verify(this, items.some((c) => deepEqual(this[STATE].actual, c)), `be one of ${show(items)}`)
+    return this
+  }
+  satisfy(fn: unknown): Assertion {
+    if (typeof fn !== 'function') misuse(`satisfy needs a function, got ${show(fn)}`)
+    verify(this, Boolean((fn as (v: unknown) => unknown)(this[STATE].actual)), 'satisfy the given condition')
+    return this
+  }
+  satisfies(fn: unknown): Assertion {
+    return this.satisfy(fn)
+  }
+
+  // --- numbers --------------------------------------------------------------
+  above(n: unknown): Assertion {
+    return compare(this, 'above', n, (v, b) => v > b)
+  }
+  gt(n: unknown): Assertion {
+    return this.above(n)
+  }
+  greaterThan(n: unknown): Assertion {
+    return this.above(n)
+  }
+  below(n: unknown): Assertion {
+    return compare(this, 'below', n, (v, b) => v < b)
+  }
+  lt(n: unknown): Assertion {
+    return this.below(n)
+  }
+  lessThan(n: unknown): Assertion {
+    return this.below(n)
+  }
+  least(n: unknown): Assertion {
+    return compare(this, 'at least', n, (v, b) => v >= b)
+  }
+  gte(n: unknown): Assertion {
+    return this.least(n)
+  }
+  greaterThanOrEqual(n: unknown): Assertion {
+    return this.least(n)
+  }
+  most(n: unknown): Assertion {
+    return compare(this, 'at most', n, (v, b) => v <= b)
+  }
+  lte(n: unknown): Assertion {
+    return this.most(n)
+  }
+  lessThanOrEqual(n: unknown): Assertion {
+    return this.most(n)
+  }
+  within(lo: unknown, hi: unknown): Assertion {
+    const { value, limits } = numbers(this, 'within', [lo, hi])
+    const label = this[STATE].flags.length ? 'have a length' : 'be'
+    verify(this, value >= limits[0] && value <= limits[1], `${label} within ${show(lo)}..${show(hi)}`)
+    return this
+  }
+  closeTo(n: number, delta: number): Assertion {
+    const { actual } = this[STATE]
+    if (typeof actual !== 'number') misuse(`expected ${show(actual)} to be a number`)
+    verify(this, Math.abs(actual - n) <= delta, `be close to ${n} ±${delta}`)
+    return this
+  }
+  approximately(n: number, delta: number): Assertion {
+    return this.closeTo(n, delta)
+  }
+
+  // --- strings, collections, objects ----------------------------------------
+  /** `.include(x)` checks membership; `.include.members(…)` / `.include.keys(…)`
+   *  switch those to subset semantics. */
+  get include(): Chainable {
+    return chainable(derive(this, { contains: true }), (sub: unknown) => {
+      const { actual } = this[STATE]
+      const kind = typeOf(actual)
+      let pass: boolean
+      if (kind === 'string') pass = (actual as string).includes(String(sub))
+      else if (kind === 'array') pass = (actual as unknown[]).some((x) => deepEqual(x, sub))
+      else if (kind === 'set') pass = [...(actual as Set<unknown>)].some((x) => deepEqual(x, sub))
+      else if (kind === 'map') pass = [...(actual as Map<unknown, unknown>).values()].some((x) => deepEqual(x, sub))
+      else if (kind === 'object' && sub !== null && typeof sub === 'object')
+        pass = Object.entries(sub).every(([k, v]) => deepEqual((actual as any)[k], v))
+      else misuse(`.include needs a string, array, Set, Map or object, got ${show(actual)}`)
+      verify(this, pass, `include ${show(sub)}`)
+      return this
+    })
+  }
+  get includes(): Chainable {
+    return this.include
+  }
+  get contain(): Chainable {
+    return this.include
+  }
+  get contains(): Chainable {
+    return this.include
+  }
+  /** `.lengthOf(3)` checks the length; `.lengthOf.above(2)` compares it. */
+  get lengthOf(): Chainable {
+    return chainable(derive(this, { length: true }), (n: unknown) => {
+      const len = lengthOf(this[STATE].actual)
+      verify(this, len === n, `have length ${show(n)}`, `length ${len}`)
+      return this
+    })
+  }
+  get length(): Chainable {
+    return this.lengthOf
+  }
+  match(re: unknown): Assertion {
+    if (!isRegExpLike(re)) misuse(`match needs a regular expression, got ${show(re)}`)
+    verify(this, re.test(String(this[STATE].actual)), `match ${String(re)}`)
+    return this
+  }
+  matches(re: unknown): Assertion {
+    return this.match(re)
+  }
+  string(sub: string): Assertion {
+    verify(this, String(this[STATE].actual).includes(sub), `contain string ${show(sub)}`)
+    return this
+  }
+  property(name: string, ...value: unknown[]): Assertion {
+    const { actual, flags } = this[STATE]
+    let exists: boolean
+    let found: unknown
+    if (flags.nested) {
+      const hit = walkPath(actual, String(name))
+      exists = hit.exists
+      found = hit.value
+    } else if (flags.own) {
+      exists = actual != null && Object.prototype.hasOwnProperty.call(actual, name)
+      found = exists ? (actual as any)[name] : undefined
+    } else {
+      exists = actual != null && name in Object(actual)
+      found = exists ? (actual as any)[name] : undefined
+    }
+    const label = `have ${flags.nested ? 'nested ' : flags.own ? 'own ' : ''}property ${show(name)}`
+    if (value.length === 0) {
+      verify(this, exists, label)
+    } else {
+      verify(this, exists && deepEqual(found, value[0]), `${label} of ${show(value[0])}`, exists ? `got ${show(found)}` : undefined)
+    }
+    // chai moves the subject to the property's value for the rest of the chain
+    return expectValue(found, { negate: flags.negate, deep: flags.deep })
+  }
+  ownProperty(name: string, ...value: unknown[]): Assertion {
+    return derive(this, { own: true }).property(name, ...value)
+  }
+  haveOwnProperty(name: string, ...value: unknown[]): Assertion {
+    return this.ownProperty(name, ...value)
   }
   /**
-   * `include` is both a method (`expect(x).to.include(y)`) and a chainable
-   * (`expect(arr).to.include.members([...])`). We expose it as a getter that
-   * returns a callable carrying a `.members` method so both forms work.
+   * `.keys` — exactly these keys; `.any.keys` — at least one of them;
+   * `.include.keys` / `.contain.keys` — all of them, others allowed.
    */
-  get include(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
-    const fn = ((sub: unknown) => this.includeOf(sub)) as ((sub: unknown) => void) & {
-      members: (arr: unknown[]) => void
+  keys(...names: unknown[]): Assertion {
+    const { actual, flags } = this[STATE]
+    const first = names[0]
+    const want =
+      names.length === 1 && Array.isArray(first)
+        ? first.map(String)
+        : names.length === 1 && first !== null && typeof first === 'object'
+          ? Object.keys(first)
+          : names.map(String)
+    if (!want.length) misuse('keys needs at least one key')
+    const kind = typeOf(actual)
+    const have =
+      kind === 'map' || kind === 'set'
+        ? [...(actual as Map<unknown, unknown>).keys()].map(String)
+        : actual !== null && typeof actual === 'object'
+          ? Object.keys(actual)
+          : misuse(`.keys needs an object, Map or Set, got ${show(actual)}`)
+    let pass: boolean
+    if (flags.any) pass = want.some((k) => have.includes(k))
+    else if (flags.contains) pass = want.every((k) => have.includes(k))
+    else pass = have.length === want.length && want.every((k) => have.includes(k))
+    verify(this, pass, `have ${flags.any ? 'any of the' : flags.contains ? 'the' : 'exactly the'} keys ${show(want)}`)
+    return this
+  }
+  key(...names: unknown[]): Assertion {
+    return this.keys(...names)
+  }
+  /**
+   * `.members` — the same elements in any order; `.include.members` — a subset;
+   * `.ordered.members` — the same elements in this order.
+   */
+  members(list: unknown[]): Assertion {
+    const { actual, flags } = this[STATE]
+    if (!Array.isArray(actual)) misuse(`.members needs an array, got ${show(actual)}`)
+    const want = Array.isArray(list) ? list : misuse(`.members needs an array to compare with, got ${show(list)}`)
+    let pass: boolean
+    if (flags.ordered) {
+      pass = (flags.contains || actual.length === want.length) && want.every((w, i) => deepEqual(actual[i], w))
+    } else if (flags.contains) {
+      pass = want.every((w) => actual.some((h) => deepEqual(h, w)))
+    } else {
+      const pool = [...actual]
+      pass =
+        actual.length === want.length &&
+        want.every((w) => {
+          const i = pool.findIndex((h) => deepEqual(h, w))
+          if (i < 0) return false
+          pool.splice(i, 1)
+          return true
+        })
     }
-    fn.members = (arr: unknown[]) => this.members(arr)
-    return fn
-  }
-  get contain(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
-    return this.include
-  }
-  get contains(): ((sub: unknown) => void) & { members: (arr: unknown[]) => void } {
-    return this.include
-  }
-  property(key: string, value?: unknown): Assertion {
-    if (this._nested) {
-      // Walk a dotted path: 'a.b.c'. Existence requires every segment to resolve.
-      const path = String(key).split('.')
-      let cur: unknown = this.actual
-      let exists = true
-      for (const seg of path) {
-        if (cur != null && Object.prototype.hasOwnProperty.call(cur, seg)) {
-          cur = (cur as any)[seg]
-        } else {
-          exists = false
-          cur = undefined
-          break
-        }
-      }
-      this.check(exists, `expected object to have nested property ${key}`)
-      if (arguments.length > 1) this.check(deepEqual(cur, value), `nested property ${key} mismatch`)
-      return new Assertion(cur, this.negate, this._deep)
-    }
-    const has = this.actual != null && Object.prototype.hasOwnProperty.call(this.actual, key)
-    this.check(has, `expected object to have property ${key}`)
-    if (arguments.length > 1) this.check(deepEqual((this.actual as any)[key], value), `property ${key} mismatch`)
-    return new Assertion((this.actual as any)?.[key], this.negate, this._deep)
-  }
-  lengthOf(n: number): void {
-    this.check((this.actual as any)?.length === n, `expected length ${n}`)
-  }
-  length(n: number): void {
-    this.lengthOf(n)
-  }
-  match(re: RegExp): void {
-    this.check(re.test(String(this.actual)), `expected ${json(this.actual)} to match ${re}`)
+    verify(this, pass, `have ${flags.contains ? 'the' : 'the same'}${flags.ordered ? ' ordered' : ''} members ${show(want)}`)
+    return this
   }
 
-  // --- additional chai-style methods (Postman parity) ----------------------
-
-  /** Asserts the actual array contains every element of `arr` (order-insensitive,
-   *  deep). Doubles as `.include.members` (chai aliases it). */
-  members(arr: unknown[]): void {
-    const actual = Array.isArray(this.actual) ? this.actual : []
-    const pass = arr.every((want) => actual.some((have) => deepEqual(have, want)))
-    this.check(pass, `expected ${json(this.actual)} to include members ${json(arr)}`)
-  }
-
-  /** Asserts the actual value deep-equals one of the supplied candidates. */
-  oneOf(arr: unknown[]): void {
-    const pass = arr.some((c) => deepEqual(this.actual, c))
-    this.check(pass, `expected ${json(this.actual)} to be one of ${json(arr)}`)
-  }
-
-  /** Asserts the target object has exactly the given own keys (set equality). */
-  keys(...names: Array<string | string[]>): void {
-    const want = names.flat()
-    const actualKeys =
-      this.actual && typeof this.actual === 'object' ? Object.keys(this.actual as object) : []
-    const pass = actualKeys.length === want.length && want.every((k) => actualKeys.includes(k))
-    this.check(pass, `expected ${json(this.actual)} to have keys ${json(want)}`)
-  }
-
-  /** Asserts the actual number is within `delta` of `n`. */
-  closeTo(n: number, delta: number): void {
-    const pass = Math.abs((this.actual as number) - n) <= delta
-    this.check(pass, `expected ${json(this.actual)} to be close to ${n} ±${delta}`)
-  }
-
+  // --- functions ------------------------------------------------------------
   /** Asserts the target function throws when invoked (optionally with a message
-   *  substring or matching RegExp). `.Throw` is an alias chai also exposes. */
-  throw(matcher?: string | RegExp): void {
+   *  substring or matching RegExp). */
+  throw(matcher?: string | RegExp): Assertion {
+    const { actual } = this[STATE]
+    if (typeof actual !== 'function') misuse(`.throw needs a function, got ${show(actual)}`)
     let threw = false
     let caught: unknown
-    if (typeof this.actual === 'function') {
-      const fn = this.actual as () => unknown
-      try {
-        fn()
-      } catch (err) {
-        threw = true
-        caught = err
-      }
+    try {
+      const fn = actual as () => unknown
+      fn()
+    } catch (err) {
+      threw = true
+      caught = err
     }
     let pass = threw
     if (threw && matcher != null) {
-      const message = caught instanceof Error ? caught.message : String(caught)
+      const message = isErrorLike(caught) ? caught.message : String(caught)
       // Duck-type the RegExp: a literal created inside the vm realm is NOT an
       // instanceof the host RegExp, so check for a `.test` method instead.
       pass = isRegExpLike(matcher) ? matcher.test(message) : message.includes(String(matcher))
     }
-    this.check(pass, `expected function to throw${matcher != null ? ` ${json(matcher)}` : ''}`)
+    verify(this, pass, `throw${matcher != null ? ` ${show(matcher)}` : ''}`)
+    return this
   }
-  Throw(matcher?: string | RegExp): void {
-    this.throw(matcher)
+  throws(matcher?: string | RegExp): Assertion {
+    return this.throw(matcher)
+  }
+  Throw(matcher?: string | RegExp): Assertion {
+    return this.throw(matcher)
   }
 
-  /** Asserts the actual string contains `sub` (chai's `.string(...)`). */
-  string(sub: string): void {
-    this.check(String(this.actual).includes(sub), `expected ${json(this.actual)} to contain string ${json(sub)}`)
+  // --- responses: pm.response and pm.sendRequest results ---------------------
+  /** `status(200)` checks the code, `status('OK')` the reason phrase. */
+  status(code: number | string): Assertion {
+    const r = needResponse(this, 'status')
+    const pass = typeof code === 'number' ? r.code === code : r.status === String(code)
+    verify(this, pass, `have status ${show(code)}`, `got ${r.code}${r.status ? ` ${r.status}` : ''}`)
+    return this
   }
-
-  // numeric comparison aliases mirroring chai's named forms.
-  greaterThan(n: number): void {
-    this.above(n)
+  header(name: string, ...value: unknown[]): Assertion {
+    const r = needResponse(this, 'header')
+    const got = r.headers.get(String(name))
+    if (value.length === 0) {
+      verify(this, got !== undefined, `have header ${show(name)}`)
+    } else {
+      const want = value[0]
+      const pass = got !== undefined && (isRegExpLike(want) ? want.test(got) : got === String(want))
+      verify(this, pass, `have header ${show(name)} of ${show(want)}`, got === undefined ? 'header missing' : `got ${show(got)}`)
+    }
+    return this
   }
-  lessThan(n: number): void {
-    this.below(n)
+  /** No argument: the body is not empty; a string: equals it; a RegExp: matches. */
+  body(...expected: unknown[]): Assertion {
+    const text = needResponse(this, 'body').text()
+    if (expected.length === 0) verify(this, text.length > 0, 'have a body')
+    else if (isRegExpLike(expected[0])) verify(this, expected[0].test(text), `have a body matching ${String(expected[0])}`)
+    else verify(this, text === String(expected[0]), `have body ${show(expected[0])}`)
+    return this
   }
-  gte(n: number): void {
-    this.least(n)
+  /**
+   * Postman's `jsonBody`: no argument — the body is JSON; a path — it exists
+   * (`'data.items[0].id'`); a path and a value — it deep-equals the value;
+   * an object — the whole body deep-equals it.
+   */
+  jsonBody(...args: unknown[]): Assertion {
+    const r = needResponse(this, 'jsonBody')
+    let data: unknown
+    try {
+      data = r.json()
+    } catch {
+      verify(this, false, 'have a JSON body')
+      return this
+    }
+    if (args.length === 0) {
+      verify(this, true, 'have a JSON body')
+    } else if (typeof args[0] === 'string') {
+      const { exists, value } = walkPath(data, args[0])
+      if (args.length === 1) verify(this, exists, `have JSON body path ${show(args[0])}`)
+      else
+        verify(this, exists && deepEqual(value, args[1]), `have JSON body path ${show(args[0])} of ${show(args[1])}`, exists ? `got ${show(value)}` : 'path missing')
+    } else {
+      verify(this, deepEqual(data, args[0]), `have JSON body ${show(args[0])}`)
+    }
+    return this
   }
-  lte(n: number): void {
-    this.most(n)
+  jsonSchema(): Assertion {
+    return misuse('jsonSchema is not supported by Relay yet — check the fields with pm.expect instead')
+  }
+  /** Valid JSON body. Readable as a property (Postman) and callable (older Relay scripts). */
+  get json(): Chainable {
+    const r = needResponse(this, 'json')
+    let pass = true
+    try {
+      r.json()
+    } catch {
+      pass = false
+    }
+    verify(this, pass, 'have a JSON body')
+    return chainable(this, () => this)
+  }
+  get html(): Assertion {
+    const type = needResponse(this, 'html').headers.get('content-type') ?? ''
+    verify(this, /html/i.test(type), 'be HTML', `content-type ${show(type)}`)
+    return this
+  }
+  get xml(): Assertion {
+    const type = needResponse(this, 'xml').headers.get('content-type') ?? ''
+    verify(this, /xml/i.test(type), 'be XML', `content-type ${show(type)}`)
+    return this
+  }
+  get withBody(): Assertion {
+    verify(this, needResponse(this, 'withBody').text().length > 0, 'have a body')
+    return this
+  }
+  get success(): Assertion {
+    return statusIs(this, 'successful (2xx)', (c) => c >= 200 && c < 300)
+  }
+  get info(): Assertion {
+    return statusIs(this, 'informational (1xx)', (c) => c >= 100 && c < 200)
+  }
+  get redirection(): Assertion {
+    return statusIs(this, 'a redirection (3xx)', (c) => c >= 300 && c < 400)
+  }
+  get clientError(): Assertion {
+    return statusIs(this, 'a client error (4xx)', (c) => c >= 400 && c < 500)
+  }
+  get serverError(): Assertion {
+    return statusIs(this, 'a server error (5xx)', (c) => c >= 500 && c < 600)
+  }
+  get error(): Assertion {
+    return statusIs(this, 'an error (4xx or 5xx)', (c) => c >= 400 && c < 600)
+  }
+  get accepted(): Assertion {
+    return statusIs(this, 'accepted (202)', (c) => c === 202)
+  }
+  get badRequest(): Assertion {
+    return statusIs(this, 'a bad request (400)', (c) => c === 400)
+  }
+  get unauthorized(): Assertion {
+    return statusIs(this, 'unauthorized (401)', (c) => c === 401)
+  }
+  get forbidden(): Assertion {
+    return statusIs(this, 'forbidden (403)', (c) => c === 403)
+  }
+  get notFound(): Assertion {
+    return statusIs(this, 'not found (404)', (c) => c === 404)
+  }
+  get rateLimited(): Assertion {
+    return statusIs(this, 'rate limited (429)', (c) => c === 429)
   }
 }
 
@@ -594,7 +1091,7 @@ async function performSendRequest(input: SendRequestInput, settings?: RequestSet
   const textBody =
     result.body.text ?? (result.body.base64 ? Buffer.from(result.body.base64, 'base64').toString('utf8') : '')
 
-  return {
+  return assertable({
     code: result.status,
     status: result.statusText,
     responseTime: result.timings.totalMs,
@@ -603,7 +1100,7 @@ async function performSendRequest(input: SendRequestInput, settings?: RequestSet
     },
     text: () => textBody,
     json: () => JSON.parse(textBody)
-  }
+  })
 }
 
 /**
@@ -712,7 +1209,7 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       logs.push({ level, message: args.map((a) => (typeof a === 'string' ? a : json(a))).join(' ') })
 
   const responseObj = payload.response
-    ? {
+    ? assertable({
         code: payload.response.status,
         status: payload.response.statusText,
         responseTime: payload.response.timings.totalMs,
@@ -723,32 +1220,8 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
           get: (name: string) =>
             payload.response?.headers.find(([k]) => k.toLowerCase() === name.toLowerCase())?.[1],
           all: () => payload.response?.headers ?? []
-        },
-        to: {
-          have: {
-            status: (code: number | string) => {
-              const pass =
-                typeof code === 'number'
-                  ? payload.response?.status === code
-                  : payload.response?.statusText === code
-              if (!pass) throw new AssertionError(`expected status ${code}, got ${payload.response?.status}`)
-            },
-            header: (name: string) => {
-              const pass = payload.response?.headers.some(([k]) => k.toLowerCase() === name.toLowerCase())
-              if (!pass) throw new AssertionError(`expected header ${name}`)
-            }
-          },
-          be: {
-            json: () => {
-              try {
-                JSON.parse(payload.response?.body.text ?? '')
-              } catch {
-                throw new AssertionError('expected body to be JSON')
-              }
-            }
-          }
         }
-      }
+      })
     : undefined
 
   const pm = {
@@ -865,7 +1338,11 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
         tests.push({ name, passed: false, error: err instanceof Error ? err.message : String(err) })
       }
     },
-    expect: (actual: unknown) => new Assertion(actual),
+    expect: Object.assign((actual: unknown) => expectValue(actual), {
+      fail: (message?: string): never => {
+        throw new AssertionError(message ?? 'expect.fail()')
+      }
+    }),
     // pm.sendRequest(urlOrReq, callback?) — a real HTTP request through the app's
     // engine, with this run's network settings. Calls back (err, res)
     // Postman-style and also returns a promise. The cookie jar is not applied.

@@ -94,7 +94,8 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       `pm.environment`, `pm.globals`, `pm.variables` (incl. `.set/.unset` local scope),
       `pm.collectionVariables`, `pm.iterationData`, `pm.request`, `pm.response`, `pm.cookies`,
       `pm.sendRequest`, `pm.visualizer`, `pm.test`, and a broad `pm.expect` chai surface
-      (`.members/.oneOf/.keys/.closeTo/.throw/.nested.property/…`). **Collection- and folder-level**
+      (`.members/.oneOf/.keys/.closeTo/.throw/.nested.property/…`, an unknown word fails the test —
+      see 1.3.3) plus `pm.response.to.*` assertions. **Collection- and folder-level**
       pre-request/test scripts run top-down around the request. Results in a Tests tab with console.
 - [x] **Import**: Postman Collection v2.1, OpenAPI 3.x **and Swagger 2.0** (JSON **or YAML**),
       **HAR**, **Insomnia v4**, and cURL (paste or file).
@@ -452,6 +453,27 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       keeps only its icon when very narrow, and the description button becomes an icon.
 - [x] Verified by driving the app: 35 scenarios with one to four panes, a maximized pane, a pane
       window, floating panels, tab switching, pane swaps and the AI panel.
+
+## 1.3.3 — Test assertions
+
+- [x] **No silent passes**: every `pm.expect(...)` / `pm.response.to` chain is guarded — reading a
+      word the runtime does not know (a typo, an unsupported assertion) throws «Invalid or
+      unsupported assertion property» and fails the test. `exist`, `NaN`, `finite` and a response's
+      `ok` / `json` are real checks (they used to read as `undefined` and pass).
+- [x] **Chai chains**: `at`, `same`, `but`, `also`, `still`, `does`, `own`, `any`, `all`, `ordered`;
+      `within`, `instanceOf` (built-ins recognised across the sandbox realm, so JSON from the
+      response is an `Array`), `satisfy`, `ownProperty`, `oneOf`, `.include.keys`, `.any.keys`,
+      `.same.members`, `.ordered.members`, `.lengthOf(n)` and `.lengthOf.above(n)`, `.a`/`.an` as a
+      chain (`.an.instanceOf(...)`), aliases `gt/lt/eq/equals/eqls/throws/matches/approximately`,
+      nested paths with indexes (`data[0].id`) and `pm.expect.fail()`. Comparisons need a number or a
+      date and `.empty` a collection — a wrong type fails even under `.not`.
+- [x] **Response assertions** on `pm.response` and `pm.sendRequest` results (also as
+      `pm.expect(response)`): `status(code | reason)`, `header(name, value | RegExp)`,
+      `body(text | RegExp)`, `jsonBody(path, value)`, `ok`, `success`, `info`, `redirection`,
+      `clientError`, `serverError`, `error`, `accepted`, `badRequest`, `unauthorized`, `forbidden`,
+      `notFound`, `rateLimited`, `json` (as a property or a call), `html`, `xml`, `withBody`.
+      `jsonSchema` fails with «not supported» instead of passing.
+- [x] Every snippet of the `script-snippets` pack is run by a test against the runtime.
 
 ## Out of scope (needs a hosted backend)
 

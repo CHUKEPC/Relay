@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { join } from 'node:path'
 import { buildSendRequestSpec, runSandbox } from './sandbox'
 import type { RequestModel, RequestSettings, ResponseResult, ScriptRunRequest, StoredCookie } from '@shared/types'
 
@@ -47,6 +49,30 @@ function base(partial: Partial<ScriptRunRequest>): ScriptRunRequest {
 async function passes(code: string, partial: Partial<ScriptRunRequest> = {}): Promise<boolean> {
   const res = await runSandbox(base({ ...partial, code: `pm.test("t", () => { ${code} })` }))
   return res.tests[0]?.passed === true
+}
+
+/** Run a single `pm.test` and return its failure message ('' when it passed). */
+async function failure(code: string, partial: Partial<ScriptRunRequest> = {}): Promise<string> {
+  const res = await runSandbox(base({ ...partial, code: `pm.test("t", () => { ${code} })` }))
+  const t = res.tests[0]
+  if (!t) return res.error ?? 'no test recorded'
+  return t.passed ? '' : (t.error ?? 'failed')
+}
+
+/** The sample request answered with this status, a text body and a request id header. */
+function reply(status: number, statusText: string, text: string, contentType = 'text/plain'): Partial<ScriptRunRequest> {
+  return {
+    response: {
+      ...response,
+      status,
+      statusText,
+      headers: [
+        ['content-type', contentType],
+        ['x-request-id', 'abc-123']
+      ],
+      body: { text, contentType, isBinary: false, sizeBytes: text.length }
+    }
+  }
 }
 
 describe('sandbox chai assertions', () => {
@@ -96,6 +122,212 @@ describe('sandbox chai assertions', () => {
     expect(await passes('pm.expect(pm.response.json()).to.have.nested.property("nested.a.b.c", 7)')).toBe(true)
     expect(await passes('pm.expect(pm.response.json()).to.have.nested.property("nested.a.b.z")')).toBe(false)
   })
+})
+
+describe('chai parity: chains that Postman scripts use', () => {
+  it('.at.least / .at.most — including the bundled «Status is 2xx» snippet', async () => {
+    expect(await passes('pm.expect(5).to.be.at.least(5)')).toBe(true)
+    expect(await passes('pm.expect(5).to.be.at.most(4)')).toBe(false)
+    expect(
+      await passes('pm.expect(pm.response.code).to.be.below(300); pm.expect(pm.response.code).to.be.at.least(200)')
+    ).toBe(true)
+    expect(await failure('pm.expect(5).to.be.at.most(4)')).toBe('expected 5 to be at most 4')
+  })
+
+  it('.within, and .lengthOf both as a check and as a chain', async () => {
+    expect(await passes('pm.expect(5).to.be.within(1, 9)')).toBe(true)
+    expect(await passes('pm.expect(10).to.be.within(1, 9)')).toBe(false)
+    expect(await passes('pm.expect(10).to.not.be.within(1, 9)')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.lengthOf(3)')).toBe(true)
+    expect(await passes('pm.expect("abc").to.have.length(3)')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.lengthOf.above(2)')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.length.within(4, 9)')).toBe(false)
+  })
+
+  it('.instanceOf holds for JSON parsed outside the script realm', async () => {
+    expect(await passes('pm.expect(pm.response.json().data).to.be.instanceOf(Array)')).toBe(true)
+    expect(await passes('pm.expect([1]).to.be.an.instanceOf(Array)')).toBe(true)
+    expect(await passes('pm.expect(pm.response.json()).to.be.instanceOf(Object)')).toBe(true)
+    expect(await passes('pm.expect({}).to.be.instanceOf(Array)')).toBe(false)
+  })
+
+  it('.satisfy runs a predicate', async () => {
+    expect(await passes('pm.expect(5).to.satisfy((n) => n % 5 === 0)')).toBe(true)
+    expect(await passes('pm.expect(6).to.satisfy((n) => n % 5 === 0)')).toBe(false)
+  })
+
+  it('.keys — exact by default, .any / .include for partial sets', async () => {
+    expect(await passes('pm.expect({a:1,b:2}).to.have.all.keys("a","b")')).toBe(true)
+    expect(await passes('pm.expect({a:1,b:2}).to.have.any.keys("a","z")')).toBe(true)
+    expect(await passes('pm.expect({a:1,b:2}).to.include.keys("a")')).toBe(true)
+    expect(await passes('pm.expect({a:1,b:2}).to.contain.all.keys("a")')).toBe(true)
+    expect(await passes('pm.expect({a:1,b:2}).to.have.keys("a")')).toBe(false)
+  })
+
+  it('.members — same set, subset with .include, order with .ordered', async () => {
+    expect(await passes('pm.expect([1,2,3]).to.have.same.members([3,2,1])')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.members([1,2])')).toBe(false)
+    expect(await passes('pm.expect([1,2,3]).to.include.members([1,2])')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.ordered.members([1,2,3])')).toBe(true)
+    expect(await passes('pm.expect([1,2,3]).to.have.ordered.members([3,2,1])')).toBe(false)
+    expect(await passes('pm.expect([{a:1}]).to.have.deep.members([{a:1}])')).toBe(true)
+  })
+
+  it('.ownProperty and nested paths with array indexes', async () => {
+    expect(await passes('pm.expect({a:1}).to.have.ownProperty("a")')).toBe(true)
+    expect(await passes('pm.expect({a:1}).to.haveOwnProperty("toString")')).toBe(false)
+    expect(await passes('pm.expect(pm.response.json()).to.have.nested.property("data[1]", 2)')).toBe(true)
+    expect(await passes('pm.expect(pm.response.json()).to.have.property("name").that.is.a("string")')).toBe(true)
+  })
+
+  it('the remaining language words: but, also, still, does', async () => {
+    expect(await passes('pm.expect([1]).to.be.an("array").but.not.empty')).toBe(true)
+    expect(await passes('pm.expect(1).to.equal(1).and.also.be.a("number")')).toBe(true)
+    expect(await passes('pm.expect("x").to.still.be.a("string").and.does.not.equal("y")')).toBe(true)
+  })
+
+  it('property assertions: exist, NaN, finite, empty', async () => {
+    expect(await passes('pm.expect(0).to.exist')).toBe(true)
+    expect(await passes('pm.expect(undefined).to.not.exist')).toBe(true)
+    expect(await passes('pm.expect(NaN).to.be.NaN')).toBe(true)
+    expect(await passes('pm.expect(1).to.be.finite')).toBe(true)
+    expect(await passes('pm.expect(Infinity).to.be.finite')).toBe(false)
+    expect(await passes('pm.expect({}).to.be.empty')).toBe(true)
+    expect(await failure('pm.expect([1]).to.be.empty')).toBe('expected [1] to be empty')
+    expect(await failure('pm.expect([]).to.not.be.empty')).toBe('expected [] not to be empty')
+  })
+
+  it('misuse fails even under .not, like chai', async () => {
+    expect(await passes('pm.expect("5").to.not.be.above(3)')).toBe(false)
+    expect(await passes('pm.expect(5).to.not.be.empty')).toBe(false)
+    expect(await passes('pm.expect(5).to.not.have.status(200)')).toBe(false)
+  })
+
+  it('eql tells an array from an object with the same indexes', async () => {
+    expect(await passes('pm.expect([1]).to.not.eql({0:1})')).toBe(true)
+    expect(await passes('pm.expect({a:[1,{b:2}]}).to.eql({a:[1,{b:2}]})')).toBe(true)
+  })
+
+  it('pm.expect.fail fails the test with its message', async () => {
+    expect(await failure('pm.expect.fail("nope")')).toBe('nope')
+  })
+})
+
+describe('no silent passes', () => {
+  it('an unknown or misspelt word fails the test instead of passing it', async () => {
+    expect(await failure('pm.expect(false).to.be.tru')).toBe('Invalid or unsupported assertion property: tru')
+    expect(await passes('pm.expect(1).to.have.sizeOf(1)')).toBe(false)
+  })
+
+  it('exist and NaN really check the value', async () => {
+    expect(await passes('pm.expect(null).to.exist')).toBe(false)
+    expect(await passes('pm.expect(undefined).to.exist')).toBe(false)
+    expect(await passes('pm.expect(5).to.be.NaN')).toBe(false)
+  })
+
+  it('pm.response.to.be.ok checks the status', async () => {
+    expect(await passes('pm.response.to.be.ok')).toBe(true)
+    expect(await failure('pm.response.to.be.ok', reply(404, 'Not Found', 'missing'))).toBe(
+      'expected response 404 to be ok (status 404)'
+    )
+  })
+
+  it('pm.response.to.be.json checks the body, as a property and as a call', async () => {
+    expect(await passes('pm.response.to.be.json')).toBe(true)
+    expect(await passes('pm.response.to.be.json()')).toBe(true)
+    expect(await passes('pm.response.to.be.json', reply(200, 'OK', 'hello'))).toBe(false)
+    expect(await passes('pm.response.to.be.json()', reply(200, 'OK', 'hello'))).toBe(false)
+  })
+
+  it('a test body that returns the assertion still records the right verdict', async () => {
+    const res = await runSandbox(
+      base({ code: 'pm.test("ok", () => pm.expect(1).to.equal(1)); pm.test("bad", () => pm.expect(1).to.equal(2))' })
+    )
+    expect(res.tests.map((t) => t.passed)).toEqual([true, false])
+  })
+
+  it('printing an assertion does not break the script', async () => {
+    const res = await runSandbox(base({ code: 'console.log(pm.expect(1))' }))
+    expect(res.error).toBeUndefined()
+  })
+})
+
+describe('pm.response assertions', () => {
+  it('status by code or reason phrase, and negated', async () => {
+    expect(await passes('pm.response.to.have.status(200)')).toBe(true)
+    expect(await passes('pm.response.to.have.status("OK")')).toBe(true)
+    expect(await passes('pm.response.to.not.have.status(500)')).toBe(true)
+    expect(await failure('pm.response.to.have.status(201)')).toBe(
+      'expected response 200 to have status 201 (got 200 OK)'
+    )
+    expect(await passes('pm.expect(pm.response).to.have.status(200)')).toBe(true)
+  })
+
+  it('status classes', async () => {
+    expect(await passes('pm.response.to.be.success')).toBe(true)
+    expect(await passes('pm.response.to.be.clientError', reply(404, 'Not Found', ''))).toBe(true)
+    expect(await passes('pm.response.to.be.notFound', reply(404, 'Not Found', ''))).toBe(true)
+    expect(await passes('pm.response.to.be.error', reply(503, 'Service Unavailable', ''))).toBe(true)
+    expect(await passes('pm.response.to.be.serverError', reply(404, 'Not Found', ''))).toBe(false)
+    expect(await passes('pm.response.to.be.unauthorized', reply(401, 'Unauthorized', ''))).toBe(true)
+    expect(await passes('pm.response.to.be.redirection', reply(302, 'Found', ''))).toBe(true)
+  })
+
+  it('headers by name, value or pattern', async () => {
+    const r = reply(200, 'OK', 'hi')
+    expect(await passes('pm.response.to.have.header("X-Request-Id")', r)).toBe(true)
+    expect(await passes('pm.response.to.have.header("x-request-id", "abc-123")', r)).toBe(true)
+    expect(await passes('pm.response.to.have.header("x-request-id", /^abc-/)', r)).toBe(true)
+    expect(await passes('pm.response.to.have.header("x-request-id", "other")', r)).toBe(false)
+    expect(await passes('pm.response.to.not.have.header("x-missing")', r)).toBe(true)
+  })
+
+  it('body and withBody', async () => {
+    const r = reply(200, 'OK', 'hello world')
+    expect(await passes('pm.response.to.have.body()', r)).toBe(true)
+    expect(await passes('pm.response.to.have.body("hello world")', r)).toBe(true)
+    expect(await passes('pm.response.to.have.body(/world$/)', r)).toBe(true)
+    expect(await passes('pm.response.to.be.withBody', reply(204, 'No Content', ''))).toBe(false)
+    expect(await passes('pm.response.to.be.html', reply(200, 'OK', '<p>', 'text/html; charset=utf-8'))).toBe(true)
+  })
+
+  it('jsonBody: valid JSON, a path, a path with a value, the whole body', async () => {
+    expect(await passes('pm.response.to.have.jsonBody()')).toBe(true)
+    expect(await passes('pm.response.to.have.jsonBody("nested.a.b.c")')).toBe(true)
+    expect(await passes('pm.response.to.have.jsonBody("nested.a.b.c", 7)')).toBe(true)
+    expect(await passes('pm.response.to.have.jsonBody("data[2]", 3)')).toBe(true)
+    expect(await passes('pm.response.to.have.jsonBody("nested.a.z")')).toBe(false)
+    expect(
+      await passes('pm.response.to.have.jsonBody({ok: true})', reply(200, 'OK', '{"ok":true}', 'application/json'))
+    ).toBe(true)
+    expect(await passes('pm.response.to.not.have.jsonBody()', reply(200, 'OK', 'plain'))).toBe(true)
+  })
+
+  it('jsonSchema says plainly that it is not supported', async () => {
+    expect(await failure('pm.response.to.have.jsonSchema({})')).toMatch(/not supported/)
+  })
+
+  it('response words on something that is not a response fail', async () => {
+    expect(await failure('pm.expect({code: 200}).to.have.status(200)')).toMatch(/applies to pm.response/)
+  })
+})
+
+describe('bundled script snippets', () => {
+  const file = join(__dirname, '..', '..', '..', 'plugins', 'script-snippets', 'snippets.json')
+  const { snippets } = JSON.parse(readFileSync(file, 'utf8')) as { snippets: Array<{ id: string; code: string }> }
+
+  // A snippet may fail on the sample response (wrong status, missing field) —
+  // that is what a test is for. It must never fail because the runtime lacks a
+  // word it uses.
+  const RUNTIME_GAP = /is not a function|Cannot read properties|Invalid or unsupported|is not defined/
+
+  for (const s of snippets.filter((x) => !x.code.includes('sendRequest'))) {
+    it(`«${s.id}» uses only supported API`, async () => {
+      const res = await runSandbox(base({ code: s.code, request: { ...request, method: 'POST' } }))
+      expect(res.error ?? '').not.toMatch(RUNTIME_GAP)
+      for (const t of res.tests) expect(t.error ?? '').not.toMatch(RUNTIME_GAP)
+    })
+  }
 })
 
 describe('pm.variables local scope', () => {
@@ -259,6 +491,23 @@ describe('pm.sendRequest', () => {
     )
     expect(res.tests.every((t) => t.passed)).toBe(true)
     expect(res.tests.length).toBe(2)
+  })
+
+  it('a pm.sendRequest response takes the pm.response assertions', async () => {
+    const res = await runSandbox(
+      base({
+        code: `
+          pm.sendRequest({ url: "${baseUrl}/post", method: "POST", body: { mode: "raw", raw: "x" } }, function (err, r) {
+            pm.test("status", () => { r.to.have.status(201) });
+            pm.test("class", () => { r.to.be.success });
+            pm.test("header", () => { r.to.have.header("x-echo", "yes") });
+            pm.test("json path", () => { pm.expect(r).to.have.jsonBody("method", "POST") });
+            pm.test("wrong status", () => { r.to.have.status(200) });
+          });
+        `
+      })
+    )
+    expect(res.tests.map((t) => t.passed)).toEqual([true, true, true, true, false])
   })
 
   it('returns a promise when no callback is given', async () => {

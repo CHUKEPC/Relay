@@ -259,6 +259,11 @@ function ScriptsTopic(): JSX.Element {
             <code>pm.response</code> {tr('— статус, заголовки,')} <code>pm.response.json()</code>;
           </li>
           <li>
+            <code>pm.response.to.have.status(200)</code>, <code>pm.response.to.be.ok</code>,{' '}
+            <code>pm.response.to.have.jsonBody(&apos;id&apos;)</code>{' '}
+            {tr('— готовые проверки ответа. Неизвестное слово или опечатка в проверке проваливают тест, а не засчитывают его;')}
+          </li>
+          <li>
             <code>pm.environment</code>, <code>pm.globals</code>, <code>pm.variables</code> — <code>get</code>/<code>set</code>{' '}
             {tr('переменных;')}
           </li>

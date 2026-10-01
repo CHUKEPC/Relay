@@ -94,7 +94,8 @@
       `pm.environment`, `pm.globals`, `pm.variables` (включая локальную область `.set/.unset`),
       `pm.collectionVariables`, `pm.iterationData`, `pm.request`, `pm.response`, `pm.cookies`,
       `pm.sendRequest`, `pm.visualizer`, `pm.test` и широкое подмножество chai для `pm.expect`
-      (`.members/.oneOf/.keys/.closeTo/.throw/.nested.property/…`). Pre-request- и тестовые скрипты **уровня коллекции и папки**
+      (`.members/.oneOf/.keys/.closeTo/.throw/.nested.property/…`, неизвестное слово проваливает тест — см. 1.3.3),
+      а также проверки `pm.response.to.*`. Pre-request- и тестовые скрипты **уровня коллекции и папки**
       выполняются сверху вниз вокруг запроса. Результаты — на вкладке тестов с консолью.
 - [x] **Импорт**: Postman Collection v2.1, OpenAPI 3.x **и Swagger 2.0** (JSON **или YAML**),
       **HAR**, **Insomnia v4** и cURL (вставкой или из файла).
@@ -446,6 +447,26 @@
       становится значком.
 - [x] Проверено управлением приложением: 35 сценариев с одной–четырьмя панелями, развёрнутой панелью, отдельным
       окном, плавающими панелями, переключением вкладок, обменом панелей и AI-панелью.
+
+## 1.3.3 — Проверки в тестах
+
+- [x] **Без ложных «успехов»**: каждая цепочка `pm.expect(...)` / `pm.response.to` защищена — обращение к слову,
+      которого среда выполнения не знает (опечатка, неподдерживаемая проверка), выбрасывает «Invalid or unsupported
+      assertion property» и проваливает тест. `exist`, `NaN`, `finite`, а также `ok` / `json` у ответа — настоящие
+      проверки (раньше они читались как `undefined` и тест проходил).
+- [x] **Цепочки chai**: `at`, `same`, `but`, `also`, `still`, `does`, `own`, `any`, `all`, `ordered`; `within`,
+      `instanceOf` (встроенные типы распознаются через границу песочницы, поэтому JSON из ответа — это `Array`),
+      `satisfy`, `ownProperty`, `oneOf`, `.include.keys`, `.any.keys`, `.same.members`, `.ordered.members`,
+      `.lengthOf(n)` и `.lengthOf.above(n)`, `.a`/`.an` как связка (`.an.instanceOf(...)`), синонимы
+      `gt/lt/eq/equals/eqls/throws/matches/approximately`, вложенные пути с индексами (`data[0].id`) и
+      `pm.expect.fail()`. Сравнения требуют число или дату, а `.empty` — коллекцию: неверный тип проваливает проверку
+      и под `.not`.
+- [x] **Проверки ответа** для `pm.response` и ответов `pm.sendRequest` (в том числе через `pm.expect(response)`):
+      `status(код | текст)`, `header(имя, значение | RegExp)`, `body(текст | RegExp)`, `jsonBody(путь, значение)`,
+      `ok`, `success`, `info`, `redirection`, `clientError`, `serverError`, `error`, `accepted`, `badRequest`,
+      `unauthorized`, `forbidden`, `notFound`, `rateLimited`, `json` (как свойство и как вызов), `html`, `xml`,
+      `withBody`. `jsonSchema` проваливает тест с «not supported», а не проходит.
+- [x] Каждый сниппет комплекта `script-snippets` прогоняется тестом через среду выполнения.
 
 ## Вне рамок проекта (требуется серверный бэкенд)
 
