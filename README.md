@@ -108,7 +108,7 @@ npm run lint                   # eslint + tsc --noEmit
 
 ## Connect an AI provider
 
-1. Open **Settings → AI-провайдеры** (sidebar bottom, or `⌘/Ctrl+,`).
+1. Open **Settings → AI provider** (sidebar bottom, or `⌘/Ctrl+,`).
 2. Pick a provider (Anthropic, OpenAI, OpenRouter, or a custom OpenAI-compatible base URL for
    Ollama/LM Studio) and paste your API key. It is stored **encrypted** locally and never leaves
    your machine except in requests to that provider.
