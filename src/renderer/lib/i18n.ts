@@ -11,7 +11,6 @@
  */
 import { create } from 'zustand'
 import en from '@renderer/locales/en.json'
-import { CORE_LOCALES } from '@shared/features'
 
 export type Dict = Record<string, string>
 
@@ -81,22 +80,6 @@ export function trp(n: number, one: string, few: string, many: string): string {
   return tr(category === 'one' ? one : category === 'few' ? few : many)
 }
 
-/** Is this language part of the base app? */
-export function isCoreLanguage(code: string): boolean {
-  return (CORE_LOCALES as readonly string[]).includes(code)
-}
-
-/**
- * How much of the UI a catalog covers, as a share of the English catalog. The
- * language picker shows it so a partial plugin language is never a surprise.
- */
-export function coverage(dict: Dict): number {
-  const total = Object.keys(en as Dict).length
-  if (!total) return 1
-  let hit = 0
-  for (const key of Object.keys(en as Dict)) if (dict[key]) hit++
-  return hit / total
-}
 
 /**
  * Swap the active catalog. Core languages are bundled; anything else is read

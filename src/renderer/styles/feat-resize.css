@@ -42,6 +42,11 @@ body.wall-resizing {
 body.wall-resizing * {
   cursor: col-resize !important;
 }
+/* ... row-resize for a wall that moves up and down */
+body.wall-resizing.wall-resizing-rows,
+body.wall-resizing.wall-resizing-rows * {
+  cursor: row-resize !important;
+}
 
 /* Sidebar footer buttons («Консоль», «Настройки»): <button> inherits
    text-align: center, which floats the label away from the icon. */

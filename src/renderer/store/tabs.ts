@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { RequestModel, TabModel, TabsDoc } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
-import { emptyTabs } from './defaults'
+import { defaultTabs } from '@shared/defaults'
 import { emptyRequest } from './collections'
 import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
@@ -79,7 +79,7 @@ export const useTabs = create<TabsState>((set, get) => {
   }
 
   return {
-    doc: emptyTabs(),
+    doc: defaultTabs(),
     hydrate: (doc) => set({ doc: { ...doc, version: STORAGE_VERSION } }),
 
     activeTab: () => {

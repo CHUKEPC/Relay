@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { IPC, type OpenFileOptions, type SaveFileOptions } from '@shared/ipc-contract'
 import type { FilePickResult } from '@shared/types'
 import { registerHttpHandlers } from '../http'
@@ -198,7 +198,6 @@ export function registerIpc(ctx: IpcContext): void {
     else win.maximize()
   })
   ipcMain.handle(IPC.app.close, (e) => windowOf(e.sender)?.close())
-  ipcMain.handle(IPC.app.getVersion, () => app.getVersion())
 
   // Update checker — GitHub Releases, no own backend. Never throws.
   ipcMain.handle(IPC.update.check, () => checkForUpdate())

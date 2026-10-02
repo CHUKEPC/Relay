@@ -20,17 +20,10 @@ import { requestSnapshotForPlugin, responseSnapshotForPlugin } from '@shared/plu
 import type { PluginEventContext, ResponseResult, HttpErrorKind } from '@shared/types'
 
 import { tr, trf } from '@renderer/lib/i18n'
+import { formatBytes } from '@renderer/lib/format'
 /* ============================================================
  * Helpers
  * ============================================================ */
-
-/** Format a byte count into B / KB / MB. */
-export function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return '0 B'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 2 : 1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`
-}
 
 type BodyView = 'pretty' | 'raw' | 'preview'
 /** Fixed tabs, plus dynamic `panel:<pluginId>:<panelId>` tabs from plugins. */

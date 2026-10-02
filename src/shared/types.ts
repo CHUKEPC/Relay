@@ -1078,8 +1078,6 @@ export interface CookiesDoc extends DocEnvelope {
  * Realtime (WebSocket + SSE) — P2
  * ============================================================ */
 
-export type RealtimeKind = 'websocket' | 'sse'
-
 /** One entry in a connection's message log. */
 export interface RealtimeMessage {
   id: string

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { HistoryDoc, HistoryEntry } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
-import { emptyHistory } from './defaults'
+import { defaultHistory } from '@shared/defaults'
 import { persist } from './persist'
 
 interface HistoryState {
@@ -14,7 +14,7 @@ interface HistoryState {
 }
 
 export const useHistory = create<HistoryState>((set, get) => ({
-  doc: emptyHistory(),
+  doc: defaultHistory(),
   hydrate: (doc) => set({ doc: { ...doc, version: STORAGE_VERSION } }),
   add: (entry, maxHistory) => {
     // Respect maxHistory === 0 (history disabled) instead of forcing a floor of 1.

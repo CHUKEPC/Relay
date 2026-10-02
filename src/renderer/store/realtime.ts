@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { KV, RealtimeEvent, RealtimeMessage } from '@shared/types'
 import { makeId } from '@shared/id'
+import { appendCapped, systemMessage } from './message-log'
 
 export type RealtimeStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
 /** Connection kinds handled by the realtime panel. */
@@ -16,8 +17,6 @@ export interface TabRealtime {
 }
 
 const EMPTY: TabRealtime = { status: 'idle', messages: [] }
-/** Cap the in-memory log so a chatty stream can't grow unbounded. */
-const MAX_MESSAGES = 2000
 
 /** Per-tab unsubscribe handles for the IPC event listeners (kept out of state). */
 const subs = new Map<string, () => void>()
@@ -60,10 +59,6 @@ interface RealtimeState {
   clear: (tabId: string) => void
 }
 
-function sys(text: string): RealtimeMessage {
-  return { id: makeId('rt'), dir: 'system', data: text, at: Date.now(), kind: 'system' }
-}
-
 export const useRealtime = create<RealtimeState>((set, get) => {
   const patch = (tabId: string, p: Partial<TabRealtime>): void =>
     set((s) => ({ byTab: { ...s.byTab, [tabId]: { ...(s.byTab[tabId] ?? EMPTY), ...p } } }))
@@ -71,30 +66,28 @@ export const useRealtime = create<RealtimeState>((set, get) => {
   const append = (tabId: string, msg: RealtimeMessage): void =>
     set((s) => {
       const cur = s.byTab[tabId] ?? EMPTY
-      const messages = [...cur.messages, msg]
-      if (messages.length > MAX_MESSAGES) messages.splice(0, messages.length - MAX_MESSAGES)
-      return { byTab: { ...s.byTab, [tabId]: { ...cur, messages } } }
+      return { byTab: { ...s.byTab, [tabId]: { ...cur, messages: appendCapped(cur.messages, msg) } } }
     })
 
   const onEvent = (tabId: string, ev: RealtimeEvent): void => {
     switch (ev.type) {
       case 'open':
         patch(tabId, { status: 'open', error: undefined })
-        append(tabId, sys(ev.protocol ? `Connected (${ev.protocol})` : 'Connected'))
+        append(tabId, systemMessage(ev.protocol ? `Connected (${ev.protocol})` : 'Connected'))
         break
       case 'message':
         append(tabId, ev.message)
         break
       case 'close':
         patch(tabId, { status: 'closed' })
-        append(tabId, sys(`Closed${ev.code ? ` (code ${ev.code})` : ''}${ev.reason ? `: ${ev.reason}` : ''}`))
+        append(tabId, systemMessage(`Closed${ev.code ? ` (code ${ev.code})` : ''}${ev.reason ? `: ${ev.reason}` : ''}`))
         break
       case 'error':
         patch(tabId, { status: 'error', error: ev.error })
-        append(tabId, sys(`Error: ${ev.error}`))
+        append(tabId, systemMessage(`Error: ${ev.error}`))
         break
       case 'reconnecting':
-        append(tabId, sys(`Reconnecting (attempt ${ev.attempt}, in ${ev.delayMs} ms)…`))
+        append(tabId, systemMessage(`Reconnecting (attempt ${ev.attempt}, in ${ev.delayMs} ms)…`))
         break
     }
   }
@@ -112,7 +105,7 @@ export const useRealtime = create<RealtimeState>((set, get) => {
       set((s) => ({
         byTab: {
           ...s.byTab,
-          [tabId]: { status: 'connecting', kind: opts.kind, connId, url: opts.url, messages: [sys(`Connecting to ${opts.url}…`)] }
+          [tabId]: { status: 'connecting', kind: opts.kind, connId, url: opts.url, messages: [systemMessage(`Connecting to ${opts.url}…`)] }
         }
       }))
       const unsub = window.api.onRealtime(connId, (ev) => onEvent(tabId, ev))

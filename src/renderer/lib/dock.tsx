@@ -190,6 +190,22 @@ export function floatStyle(rect: FloatRect, area: 'container' | 'viewport'): Rea
   }
 }
 
+/** Resize a floating panel from its bottom-right grip. */
+export function startFloatResize(e: ReactMouseEvent, rect: FloatRect, setFloat: (rect: FloatRect) => void): void {
+  e.preventDefault()
+  e.stopPropagation()
+  const start = { x: e.clientX, y: e.clientY }
+  trackDrag(
+    (ev) =>
+      setFloat({
+        ...rect,
+        w: Math.max(FLOAT_MIN_W, rect.w + ev.clientX - start.x),
+        h: Math.max(FLOAT_MIN_H, rect.h + ev.clientY - start.y)
+      }),
+    { cursor: 'nwse-resize' }
+  )
+}
+
 /** The position buttons a dockable panel header carries. */
 export function DockButtons({
   dock,

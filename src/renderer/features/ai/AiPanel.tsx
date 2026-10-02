@@ -10,7 +10,7 @@ import { useActiveRequest, useActiveTab } from '@renderer/lib/hooks'
 import { currentScope, currentSecretValues } from '@renderer/lib/request-runner'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
 import { MOD } from '@renderer/lib/platform'
-import { trackDrag } from '@renderer/lib/drag'
+import { trackWallResize } from '@renderer/lib/drag'
 import { interpolate } from '@shared/interpolate'
 import { MessageContent } from './MessageContent'
 
@@ -46,15 +46,7 @@ function ResizableAiAside({ children }: { children: ReactNode }) {
     if (!panel) return
     // Right edge is anchored to the window; capture once so the math stays stable mid-drag.
     const right = panel.getBoundingClientRect().right
-    const handle = e.currentTarget
-    handle.classList.add('dragging')
-    document.body.classList.add('wall-resizing')
-    trackDrag((ev) => setAiWidth(right - ev.clientX), {
-      onEnd: () => {
-        handle.classList.remove('dragging')
-        document.body.classList.remove('wall-resizing')
-      }
-    })
+    trackWallResize(e.currentTarget, (ev) => setAiWidth(right - ev.clientX))
   }
 
   return (

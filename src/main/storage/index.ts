@@ -20,7 +20,7 @@ import {
   defaultSettings,
   defaultTabs,
   defaultUserThemes
-} from './defaults'
+} from '@shared/defaults'
 
 const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   collections: defaultCollections,

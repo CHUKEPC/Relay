@@ -1,4 +1,4 @@
-import { STORAGE_VERSION } from '@shared/constants'
+import { STORAGE_VERSION } from './constants'
 import type {
   CollectionsDoc,
   CookiesDoc,
@@ -9,14 +9,16 @@ import type {
   ProvidersDoc,
   SettingsDoc,
   TabsDoc
-} from '@shared/types'
-import type { FeaturePluginsDoc } from '@shared/ipc-contract'
-import type { UserThemesDoc } from '@shared/pack-data'
+} from './types'
+import type { FeaturePluginsDoc } from './ipc-contract'
+import type { UserThemesDoc } from './pack-data'
 
 /**
- * First-run seed data. The app starts CLEAN — no demo collections, environments,
- * variables, history or tabs (the renderer opens a single blank tab on boot).
- * Only the default settings are seeded; AI providers start empty.
+ * Default documents: the main process seeds them on first run, the renderer
+ * holds them until the real documents are loaded. The app starts CLEAN — no
+ * demo collections, environments, variables, history or tabs (the renderer
+ * opens a single blank tab on boot). Only the default settings are seeded; AI
+ * providers start empty.
  */
 
 export function defaultCollections(): CollectionsDoc {

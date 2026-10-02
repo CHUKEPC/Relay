@@ -3,9 +3,8 @@
  * (`productName`) — the only two places to rename the app.
  */
 export const APP_NAME = 'Relay'
-export const APP_ID = 'com.relay.apiclient'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.3.3'
+export const APP_VERSION = '1.3.4'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'
@@ -32,23 +31,6 @@ export const STORAGE_VERSION = 1
 
 export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
-export const DEFAULT_SETTINGS = {
-  theme: 'system' as 'light' | 'dark' | 'system',
-  accentHue: 264,
-  requestTimeoutMs: 30000,
-  followRedirects: true,
-  maxRedirects: 10,
-  rejectUnauthorized: true,
-  maxHistory: 200,
-  wordWrapResponse: false,
-  sendAiContext: true,
-  autoApplyAiTools: false,
-  proxy: { enabled: false, url: '', bypass: [] as string[] },
-  clientCerts: [] as import('./types').ClientCert[],
-  http2: false
-}
-
-export type AppSettings = typeof DEFAULT_SETTINGS
 
 /** Content-Type mapping for the raw-body language selector. */
 export const RAW_LANGUAGE_CONTENT_TYPE: Record<string, string> = {
@@ -84,13 +66,3 @@ export const COMMON_HEADER_NAMES = [
   'Connection'
 ]
 
-/** Common Content-Type values for value autocomplete. */
-export const COMMON_CONTENT_TYPES = [
-  'application/json',
-  'application/xml',
-  'application/x-www-form-urlencoded',
-  'multipart/form-data',
-  'text/plain',
-  'text/html',
-  'application/octet-stream'
-]

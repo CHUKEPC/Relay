@@ -8,6 +8,7 @@ import type {
   RealtimeMessage
 } from '@shared/types'
 import { makeId } from '@shared/id'
+import { appendCapped, systemMessage } from './message-log'
 import { tr, trf } from '../lib/i18n'
 
 export type GrpcStatus = 'idle' | 'running' | 'done' | 'error'
@@ -22,7 +23,6 @@ export interface TabGrpc {
 }
 
 const EMPTY: TabGrpc = { status: 'idle', messages: [] }
-const MAX_MESSAGES = 2000
 
 /** Per-tab unsubscribe handles for the IPC event listeners (kept out of state). */
 const subs = new Map<string, () => void>()
@@ -65,10 +65,6 @@ interface GrpcState {
   clear: (tabId: string) => void
 }
 
-function sys(text: string): RealtimeMessage {
-  return { id: makeId('rt'), dir: 'system', data: text, at: Date.now(), kind: 'system' }
-}
-
 export const useGrpc = create<GrpcState>((set, get) => {
   const patch = (tabId: string, p: Partial<TabGrpc>): void =>
     set((s) => ({ byTab: { ...s.byTab, [tabId]: { ...(s.byTab[tabId] ?? EMPTY), ...p } } }))
@@ -76,27 +72,25 @@ export const useGrpc = create<GrpcState>((set, get) => {
   const append = (tabId: string, msg: RealtimeMessage): void =>
     set((s) => {
       const cur = s.byTab[tabId] ?? EMPTY
-      const messages = [...cur.messages, msg]
-      if (messages.length > MAX_MESSAGES) messages.splice(0, messages.length - MAX_MESSAGES)
-      return { byTab: { ...s.byTab, [tabId]: { ...cur, messages } } }
+      return { byTab: { ...s.byTab, [tabId]: { ...cur, messages: appendCapped(cur.messages, msg) } } }
     })
 
   const onEvent = (tabId: string, ev: RealtimeEvent): void => {
     switch (ev.type) {
       case 'open':
         patch(tabId, { status: 'running', error: undefined })
-        append(tabId, sys(trf('Вызов запущен ({protocol})', { protocol: ev.protocol ?? 'unary' })))
+        append(tabId, systemMessage(trf('Вызов запущен ({protocol})', { protocol: ev.protocol ?? 'unary' })))
         break
       case 'message':
         append(tabId, ev.message)
         break
       case 'close':
         patch(tabId, { status: 'done' })
-        append(tabId, sys(tr('Вызов завершён')))
+        append(tabId, systemMessage(tr('Вызов завершён')))
         break
       case 'error':
         patch(tabId, { status: 'error', error: ev.error })
-        append(tabId, sys(trf('Ошибка: {message}', { message: ev.error })))
+        append(tabId, systemMessage(trf('Ошибка: {message}', { message: ev.error })))
         break
       case 'reconnecting':
         break
@@ -125,7 +119,7 @@ export const useGrpc = create<GrpcState>((set, get) => {
             status: 'running',
             connId,
             callKind: args.callKind,
-            messages: [sys(`${args.service}/${args.method} → ${args.address}`)]
+            messages: [systemMessage(`${args.service}/${args.method} → ${args.address}`)]
           }
         }
       }))

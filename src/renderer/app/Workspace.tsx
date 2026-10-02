@@ -25,15 +25,13 @@ import { trackDrag } from '@renderer/lib/drag'
 import {
   ALL_EDGES,
   BuilderDockContext,
-  FLOAT_MIN_H,
-  FLOAT_MIN_W,
   floatStyle,
   oppositeEdge,
   PaneDockContext,
   paneDockArea,
+  startFloatResize,
   useDockDrag,
-  type DockMode,
-  type FloatRect
+  type DockMode
 } from '@renderer/lib/dock'
 import { dockResponse } from '@renderer/lib/dock-swap'
 import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
@@ -164,7 +162,7 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
           onMouseDownCapture={grabFromHead}
         >
           {response}
-          <div className="float-grip" onMouseDown={(e) => onFloatGrip(e, leaf, setRespFloat)} />
+          <div className="float-grip" onMouseDown={(e) => startFloatResize(e, leaf.respFloat, (rect) => setRespFloat(leaf.id, rect))} />
         </div>
       </div>
     )
@@ -219,24 +217,6 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
       {overlay}
       {builderDrag.overlay}
     </div>
-  )
-}
-
-/** Resize a floating response panel from its bottom-right grip. */
-function onFloatGrip(e: ReactMouseEvent, leaf: PaneLeaf, setRespFloat: (paneId: string, rect: FloatRect) => void): void {
-  e.preventDefault()
-  e.stopPropagation()
-  const start = { x: e.clientX, y: e.clientY }
-  const orig = leaf.respFloat
-  trackDrag(
-    (ev) => {
-      setRespFloat(leaf.id, {
-        ...orig,
-        w: Math.max(FLOAT_MIN_W, orig.w + ev.clientX - start.x),
-        h: Math.max(FLOAT_MIN_H, orig.h + ev.clientY - start.y)
-      })
-    },
-    { cursor: 'nwse-resize' }
   )
 }
 

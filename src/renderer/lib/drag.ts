@@ -28,3 +28,20 @@ export function trackDrag(
   window.addEventListener('mouseup', finish)
   return finish
 }
+
+/**
+ * Drag a panel wall (`.wall-handle`): the handle stays lit and the resize
+ * cursor holds over the whole window until the button is released. `rows`
+ * for a wall that moves up and down (a panel docked at the top or bottom).
+ */
+export function trackWallResize(handle: HTMLElement, onMove: (ev: MouseEvent) => void, rows = false): () => void {
+  const classes = rows ? ['wall-resizing', 'wall-resizing-rows'] : ['wall-resizing']
+  handle.classList.add('dragging')
+  document.body.classList.add(...classes)
+  return trackDrag(onMove, {
+    onEnd: () => {
+      handle.classList.remove('dragging')
+      document.body.classList.remove(...classes)
+    }
+  })
+}

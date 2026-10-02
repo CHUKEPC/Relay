@@ -6,8 +6,8 @@ import { useRunner } from '@renderer/store/runner'
 import { useFindReplace } from '@renderer/store/find-replace'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
-import { trackDrag } from '@renderer/lib/drag'
-import { ALL_EDGES, DockButtons, FLOAT_MIN_H, FLOAT_MIN_W, floatStyle, PANEL_DOCK_MODES, useDockDrag } from '@renderer/lib/dock'
+import { trackWallResize } from '@renderer/lib/drag'
+import { ALL_EDGES, DockButtons, floatStyle, PANEL_DOCK_MODES, startFloatResize, useDockDrag } from '@renderer/lib/dock'
 import { dockSidebar } from '@renderer/lib/dock-swap'
 import { CollectionsTree } from './CollectionsTree'
 import { HistoryList } from './HistoryList'
@@ -57,41 +57,15 @@ export function Sidebar() {
     const aside = asideRef.current
     if (!aside) return
     const box = aside.getBoundingClientRect()
-    const handle = e.currentTarget
-    handle.classList.add('dragging')
-    document.body.classList.add('wall-resizing')
-    trackDrag(
+    trackWallResize(
+      e.currentTarget,
       (ev) => {
         if (dock === 'left') setSidebarWidth(ev.clientX - box.left)
         else if (dock === 'right') setSidebarWidth(box.right - ev.clientX)
         else if (dock === 'top') setSidebarHeight(ev.clientY - box.top)
         else setSidebarHeight(box.bottom - ev.clientY)
       },
-      {
-        cursor: across ? 'row-resize' : 'col-resize',
-        onEnd: () => {
-          handle.classList.remove('dragging')
-          document.body.classList.remove('wall-resizing')
-        }
-      }
-    )
-  }
-
-  /** Floating: the bottom-right grip resizes the panel. */
-  const onFloatGripDown = (e: ReactMouseEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    e.stopPropagation()
-    const start = { x: e.clientX, y: e.clientY }
-    const orig = useUi.getState().sidebarFloat
-    trackDrag(
-      (ev) => {
-        setFloat({
-          ...orig,
-          w: Math.max(FLOAT_MIN_W, orig.w + ev.clientX - start.x),
-          h: Math.max(FLOAT_MIN_H, orig.h + ev.clientY - start.y)
-        })
-      },
-      { cursor: 'nwse-resize' }
+      across
     )
   }
 
@@ -235,7 +209,7 @@ export function Sidebar() {
             title={tr('Перетащите, чтобы изменить размер · двойной клик — сброс')}
           />
         )}
-        {dock === 'float' && <div className="float-grip" onMouseDown={onFloatGripDown} />}
+        {dock === 'float' && <div className="float-grip" onMouseDown={(e) => startFloatResize(e, float, setFloat)} />}
       </aside>
       {overlay}
     </>

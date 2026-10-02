@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { AiContextSnapshot, ChatMessage, ProviderConfig, ProvidersDoc, ToolCall } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
-import { emptyProviders } from './defaults'
+import { defaultProviders } from '@shared/defaults'
 import { flushPersistAndWait, persist } from './persist'
 import { useSettings } from './settings'
 import { buildContextBlock, SYSTEM_PROMPT } from '../lib/ai-context'
@@ -66,7 +66,7 @@ function safeParse(s: string): any {
 }
 
 export const useAi = create<AiState>((set, get) => ({
-  providers: emptyProviders(),
+  providers: defaultProviders(),
   thread: [],
   isStreaming: false,
   currentStreamId: null,

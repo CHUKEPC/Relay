@@ -15,14 +15,14 @@ import { applyLanguage } from '../lib/i18n'
 import { flushPersist, persist } from './persist'
 import { LEGACY_PRESET_IDS } from '../lib/provider-templates'
 import {
-  defaultSettingsDoc,
-  emptyCollections,
-  emptyEnvironments,
-  emptyGlobals,
-  emptyHistory,
-  emptyProviders,
-  emptyTabs
-} from './defaults'
+  defaultSettings,
+  defaultCollections,
+  defaultEnvironments,
+  defaultGlobals,
+  defaultHistory,
+  defaultProviders,
+  defaultTabs
+} from '@shared/defaults'
 
 let unloadWired = false
 
@@ -68,14 +68,14 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
   useFeatures.getState().setPlugins(features)
   // Before the settings hydrate: a user theme may be the active one.
   useUserThemes.getState().hydrate(userThemes)
-  useSettings.getState().hydrate(settings ?? defaultSettingsDoc())
+  useSettings.getState().hydrate(settings ?? defaultSettings())
   // Language depends on the packs above (a plugin language needs its pack on).
   await applyLanguage(useSettings.getState().settings.language || 'ru')
-  useCollections.getState().hydrate(collections ?? emptyCollections())
-  useEnvironments.getState().hydrate(environments ?? emptyEnvironments(), globals ?? emptyGlobals())
-  useHistory.getState().hydrate(history ?? emptyHistory())
-  useTabs.getState().hydrate(tabs ?? emptyTabs())
-  useAi.getState().hydrateProviders(providers ?? emptyProviders())
+  useCollections.getState().hydrate(collections ?? defaultCollections())
+  useEnvironments.getState().hydrate(environments ?? defaultEnvironments(), globals ?? defaultGlobals())
+  useHistory.getState().hydrate(history ?? defaultHistory())
+  useTabs.getState().hydrate(tabs ?? defaultTabs())
+  useAi.getState().hydrateProviders(providers ?? defaultProviders())
 
   // Reflect stored hasKey against the actual secret store (keys may have been
   // cleared out-of-band); keep the UI honest.
@@ -125,9 +125,9 @@ export async function reloadWorkspace(): Promise<void> {
     window.api.storageLoad('tabs')
   ])
 
-  useCollections.getState().hydrate(collections ?? emptyCollections())
-  useEnvironments.getState().hydrate(environments ?? emptyEnvironments(), globals ?? emptyGlobals())
-  useHistory.getState().hydrate(history ?? emptyHistory())
-  useTabs.getState().hydrate(tabs ?? emptyTabs())
+  useCollections.getState().hydrate(collections ?? defaultCollections())
+  useEnvironments.getState().hydrate(environments ?? defaultEnvironments(), globals ?? defaultGlobals())
+  useHistory.getState().hydrate(history ?? defaultHistory())
+  useTabs.getState().hydrate(tabs ?? defaultTabs())
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 }

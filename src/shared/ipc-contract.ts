@@ -159,8 +159,7 @@ export const IPC = {
   /** «Send to terminal»: run the request with curl / HTTPie / wget / PowerShell */
   terminal: {
     tools: 'terminal:tools',
-    run: 'terminal:run',
-    preview: 'terminal:preview'
+    run: 'terminal:run'
   },
   /** feature plugins bundled with the app (declarative capability packs) */
   features: {
@@ -205,14 +204,12 @@ export const IPC = {
     readBinary: 'dialog:readBinary'
   },
   app: {
-    platform: 'app:platform',
     themeChanged: 'app:themeChanged',
     windowMaximized: 'app:windowMaximized',
     minimize: 'app:minimize',
     maximize: 'app:maximize',
     close: 'app:close',
-    openExternal: 'app:openExternal',
-    getVersion: 'app:getVersion'
+    openExternal: 'app:openExternal'
   },
   update: {
     check: 'update:check'
@@ -389,8 +386,6 @@ export interface RelayApi {
    * are printed before the output (e.g. unresolved variables).
    */
   terminalRun(tool: TerminalTool, spec: RequestSpec, notes: string[]): Promise<{ ok: true; preview: string } | { ok: false; error: string }>
-  /** The command that `terminalRun` would execute, for display. */
-  terminalPreview(tool: TerminalTool, spec: RequestSpec): Promise<string>
 
   /* ---- feature plugins bundled in `plugins/` (docs/PLUGINS.md §10) ---- */
   featuresList(): Promise<FeaturePluginInfo[]>
@@ -479,7 +474,6 @@ export interface RelayApi {
   closeWindow(): Promise<void>
 
   /* ---- updates ---- */
-  getAppVersion(): Promise<string>
   /** Check GitHub Releases for a newer version. Resolves, never rejects. */
   checkUpdates(): Promise<UpdateCheckResult>
 

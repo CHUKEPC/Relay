@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 import { Icon } from '@renderer/components/Icon'
 import { statusColor } from '@renderer/lib/status-color'
 import { useConsole, type ConsoleEntry } from '@renderer/store/console'
-import { useUi, type ConsoleDock } from '@renderer/store/ui'
-import { trackDrag } from '@renderer/lib/drag'
-import { clamp } from '@renderer/lib/math'
+import { CONSOLE_HEIGHT, CONSOLE_WIDTH, useUi } from '@renderer/store/ui'
+import { trackWallResize } from '@renderer/lib/drag'
+import { formatBytes } from '@renderer/lib/format'
+import {
+  ALL_EDGES,
+  DockButtons,
+  floatStyle,
+  PANEL_DOCK_MODES,
+  startFloatResize,
+  useDockDrag,
+  type DockEdge
+} from '@renderer/lib/dock'
 import { tr, trf } from '@renderer/lib/i18n'
+import '@renderer/styles/feat-resize.css'
 import '@renderer/styles/feat-console.css'
 
 /* ============================================================
  * Helpers
  * ============================================================ */
-
-/** Format a byte count into B / KB / MB (local copy to keep this self-contained). */
-function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return '0 B'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 2 : 1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`
-}
 
 /** Format a duration in ms; promotes to seconds past 1000ms. */
 function formatMs(ms: number): string {
@@ -161,141 +163,156 @@ function EntryRow({ e }: { e: ConsoleEntry }): JSX.Element {
 }
 
 /* ============================================================
- * ConsolePanel — dockable drawer (request log)
- * Dock modes: bottom (default) / left / right / float.
+ * ConsolePanel — the request log, a panel above the app body
+ *
+ * It moves like the sidebar, the request and the response: drag the header to
+ * an edge of the app body (the landing zones light up), use the position
+ * buttons, resize by the inner edge, or float it and move it like a window.
+ * Unlike them it stays a layer over the body instead of taking room from it.
  * ============================================================ */
 
-const DOCK_OPTIONS: { mode: ConsoleDock; icon: string; title: string }[] = [
-  { mode: 'bottom', icon: 'dockBottom', title: 'Закрепить снизу' }, // titles go through tr() at render
-  { mode: 'left', icon: 'dockLeft', title: 'Закрепить слева' },
-  { mode: 'right', icon: 'dockRight', title: 'Закрепить справа' },
-  { mode: 'float', icon: 'floatWin', title: 'Плавающее окно' }
-]
+/** The app body's box, kept current — the docked console covers one of its edges. */
+function useBodyRect(active: boolean): DOMRect | null {
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  useLayoutEffect(() => {
+    if (!active) return
+    const body = document.querySelector<HTMLElement>('.body')
+    if (!body) return
+    const update = (): void => setRect(body.getBoundingClientRect())
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(body)
+    window.addEventListener('resize', update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [active])
+  return rect
+}
 
-/** Header height (px) — keep at least this much of the float window on screen. */
-const FLOAT_HEAD_H = 38
-const FLOAT_MIN_W = 380
-const FLOAT_MIN_H = 240
+/** Inline position of a docked console: one edge of the body, never larger than it. */
+function dockedStyle(dock: DockEdge, body: DOMRect, width: number, height: number): CSSProperties {
+  const w = Math.min(width, Math.max(CONSOLE_WIDTH.min, body.width - 40))
+  const h = Math.min(height, Math.max(CONSOLE_HEIGHT.min, body.height - 40))
+  if (dock === 'left') return { left: body.left, top: body.top, width: w, height: body.height }
+  if (dock === 'right') return { left: body.right - w, top: body.top, width: w, height: body.height }
+  if (dock === 'top') return { left: body.left, top: body.top, width: body.width, height: h }
+  return { left: body.left, top: body.bottom - h, width: body.width, height: h }
+}
+
+/** The side of the panel its resize handle sits on — the one facing the body. */
+const HANDLE_SIDE: Record<DockEdge, DockEdge> = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' }
 
 export function ConsolePanel(): JSX.Element | null {
   const open = useConsole((s) => s.open)
   const entries = useConsole((s) => s.entries)
-  const clear = useConsole((s) => s.clear)
-  const setOpen = useConsole((s) => s.setOpen)
   const dock = useUi((s) => s.consoleDock)
-  const size = useUi((s) => s.consoleSize)
-  const floatRect = useUi((s) => s.consoleFloat)
+  const width = useUi((s) => s.consoleWidth)
+  const height = useUi((s) => s.consoleHeight)
+  const float = useUi((s) => s.consoleFloat)
   const setConsoleDock = useUi((s) => s.setConsoleDock)
-  const setConsoleSize = useUi((s) => s.setConsoleSize)
   const setConsoleFloat = useUi((s) => s.setConsoleFloat)
+  const body = useBodyRect(open)
 
-  // Active-drag cleanup so window listeners never leak past unmount.
-  const dragCleanupRef = useRef<(() => void) | null>(null)
-  useEffect(() => () => dragCleanupRef.current?.(), [])
-
-  /** Wire a window-level drag session (shared helper keeps cursor/selection state). */
-  const startDrag = (move: (ev: MouseEvent) => void, cursor: string): void => {
-    dragCleanupRef.current?.()
-    dragCleanupRef.current = trackDrag(move, { cursor, onEnd: () => (dragCleanupRef.current = null) })
-  }
-
-  /** Docked modes: drag the inner edge to resize (store clamps 160..800). */
-  const onResizeDown = (e: React.MouseEvent): void => {
-    e.preventDefault()
-    const mode = dock
-    startDrag((ev) => {
-      if (mode === 'bottom') setConsoleSize(window.innerHeight - ev.clientY)
-      else if (mode === 'left') setConsoleSize(ev.clientX)
-      else setConsoleSize(window.innerWidth - ev.clientX)
-    }, mode === 'bottom' ? 'row-resize' : 'col-resize')
-  }
-
-  /** Float mode: header background drags the window (buttons excluded). */
-  const onHeadDown = (e: React.MouseEvent): void => {
-    if (dock !== 'float') return
-    if ((e.target as HTMLElement).closest('button')) return
-    e.preventDefault()
-    const start = { x: e.clientX, y: e.clientY }
-    const orig = useUi.getState().consoleFloat
-    startDrag((ev) => {
-      // Keep at least 120px of the header horizontally and the full header vertically on screen.
-      const x = clamp(orig.x + ev.clientX - start.x, 120 - orig.w, window.innerWidth - 120)
-      const y = clamp(orig.y + ev.clientY - start.y, 0, window.innerHeight - FLOAT_HEAD_H)
-      setConsoleFloat({ ...orig, x, y })
-    }, 'grabbing')
-  }
-
-  /** Float mode: bottom-right grip resizes width/height. */
-  const onGripDown = (e: React.MouseEvent): void => {
-    e.preventDefault()
-    e.stopPropagation()
-    const start = { x: e.clientX, y: e.clientY }
-    const orig = useUi.getState().consoleFloat
-    startDrag((ev) => {
-      const w = Math.max(FLOAT_MIN_W, orig.w + ev.clientX - start.x)
-      const h = Math.max(FLOAT_MIN_H, orig.h + ev.clientY - start.y)
-      setConsoleFloat({ ...orig, w, h })
-    }, 'nwse-resize')
-  }
+  const { onGrabDown, overlay } = useDockDrag({
+    container: () => document.querySelector('.body'),
+    dock,
+    onDock: setConsoleDock,
+    edges: ALL_EDGES,
+    float,
+    setFloat: setConsoleFloat
+  })
 
   if (!open) return null
 
-  // Newest first.
-  const ordered = [...entries].reverse()
+  const across = dock === 'top' || dock === 'bottom'
 
-  const rootStyle: React.CSSProperties =
-    dock === 'bottom'
-      ? { height: size }
-      : dock === 'float'
-        ? { left: floatRect.x, top: floatRect.y, width: floatRect.w, height: floatRect.h }
-        : { width: size }
+  /** Docked: drag the edge facing the body to resize. */
+  const onHandleDown = (e: ReactMouseEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    if (dock === 'float' || !body) return
+    const { setConsoleWidth, setConsoleHeight } = useUi.getState()
+    trackWallResize(
+      e.currentTarget,
+      (ev) => {
+        if (dock === 'left') setConsoleWidth(ev.clientX - body.left)
+        else if (dock === 'right') setConsoleWidth(body.right - ev.clientX)
+        else if (dock === 'top') setConsoleHeight(ev.clientY - body.top)
+        else setConsoleHeight(body.bottom - ev.clientY)
+      },
+      across
+    )
+  }
+
+  const resetSize = (): void => {
+    const ui = useUi.getState()
+    if (across) ui.setConsoleHeight(CONSOLE_HEIGHT.initial)
+    else ui.setConsoleWidth(CONSOLE_WIDTH.initial)
+  }
+
+  const style: CSSProperties =
+    dock === 'float' ? floatStyle(float, 'viewport') : body ? dockedStyle(dock, body, width, height) : {}
 
   return (
-    <div className={`console-drawer dock-${dock}`} style={rootStyle} role="region" aria-label={tr('Консоль')}>
-      {dock !== 'float' && <div className="console-resize" onMouseDown={onResizeDown} />}
-      <div className="console-head" onMouseDown={onHeadDown}>
-        <Icon name="code2" size={15} className="console-head-ico" />
-        <span className="console-head-title">{tr('Консоль')}</span>
-        <span className="console-head-count">{entries.length}</span>
-        <div className="console-head-spacer" />
-        <div className="console-dock-group">
-          {DOCK_OPTIONS.map((o) => (
-            <button
-              key={o.mode}
-              type="button"
-              className={`icon-btn console-dock-btn${dock === o.mode ? ' on' : ''}`}
-              onClick={() => setConsoleDock(o.mode)}
-              title={tr(o.title)}
-              aria-label={tr(o.title)}
-            >
-              <Icon name={o.icon} size={14} />
-            </button>
-          ))}
+    <>
+      <div className={`console-drawer dock-${dock}`} style={style} role="region" aria-label={tr('Консоль')}>
+        <div className="panel-dock-head dock-grip console-head" onMouseDown={onGrabDown} title={tr('Перетащите, чтобы перенести панель')}>
+          <Icon name="grip" size={13} className="console-head-grip" />
+          <span className="panel-dock-title">{tr('Консоль')}</span>
+          <span className="console-head-count">{entries.length}</span>
+          <DockButtons dock={dock} onDock={setConsoleDock} modes={PANEL_DOCK_MODES} />
+          <button
+            type="button"
+            className="icon-btn console-head-act"
+            onClick={() => useConsole.getState().clear()}
+            disabled={entries.length === 0}
+            title={tr('Очистить')}
+            aria-label={tr('Очистить')}
+          >
+            <Icon name="trash" size={13} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn console-head-act"
+            onClick={() => useConsole.getState().setOpen(false)}
+            title={tr('Закрыть консоль')}
+            aria-label={tr('Закрыть консоль')}
+          >
+            <Icon name="close" size={13} />
+          </button>
         </div>
-        <button type="button" className="btn ghost console-head-btn" onClick={clear} disabled={entries.length === 0}>
-          <Icon name="trash" size={14} /> {tr('Очистить')} </button>
-        <button type="button" className="icon-btn" onClick={() => setOpen(false)} title={tr('Закрыть консоль')} aria-label={tr('Закрыть консоль')}>
-          <Icon name="close" size={15} />
-        </button>
-      </div>
 
-      {entries.length === 0 ? (
-        <div className="console-empty">
-          <div className="console-empty-ico">
-            <Icon name="code2" size={22} />
+        {entries.length === 0 ? (
+          <div className="console-empty">
+            <div className="console-empty-ico">
+              <Icon name="code2" size={22} />
+            </div>
+            <div className="console-empty-title">{tr('Логи пусты')}</div>
+            <div className="console-empty-sub">{tr('Отправьте запрос — детали появятся здесь.')}</div>
           </div>
-          <div className="console-empty-title">{tr('Логи пусты')}</div>
-          <div className="console-empty-sub">{tr('Отправьте запрос — детали появятся здесь.')}</div>
-        </div>
-      ) : (
-        <div className="console-list">
-          {ordered.map((e) => (
-            <EntryRow key={e.id} e={e} />
-          ))}
-        </div>
-      )}
+        ) : (
+          <div className="console-list">
+            {/* newest first */}
+            {[...entries].reverse().map((e) => (
+              <EntryRow key={e.id} e={e} />
+            ))}
+          </div>
+        )}
 
-      {dock === 'float' && <div className="console-float-grip" onMouseDown={onGripDown} />}
-    </div>
+        {dock === 'float' ? (
+          <div className="float-grip" onMouseDown={(e) => startFloatResize(e, float, setConsoleFloat)} />
+        ) : (
+          <div
+            className={`wall-handle ${HANDLE_SIDE[dock]}`}
+            aria-hidden="true"
+            onMouseDown={onHandleDown}
+            onDoubleClick={resetSize}
+            title={tr('Перетащите, чтобы изменить размер · двойной клик — сброс')}
+          />
+        )}
+      </div>
+      {overlay}
+    </>
   )
 }

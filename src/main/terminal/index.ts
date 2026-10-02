@@ -275,13 +275,6 @@ export function runInTerminal(tool: TerminalTool, spec: RequestSpec, notes: stri
   }
 }
 
-/** The command as it would run, for the code dialog — nothing is written. */
-export function previewCommand(tool: TerminalTool, spec: RequestSpec): string {
-  const os = osName()
-  const dir = os === 'win32' ? join(tmpdir(), `${TEMP_PREFIX}xxxxxx`) : `${tmpdir()}/${TEMP_PREFIX}xxxxxx`
-  return buildTerminalScript(tool, toTerminalRequest(spec), os, dir, mainLanguage() === 'ru' ? 'ru' : 'en').preview
-}
-
 const isTool = (v: unknown): v is TerminalTool => v === 'curl' || v === 'httpie' || v === 'wget' || v === 'powershell'
 
 export function registerTerminalHandlers(ipcMain: IpcMain): void {
@@ -290,13 +283,5 @@ export function registerTerminalHandlers(ipcMain: IpcMain): void {
     if (!isTool(tool)) return { ok: false, error: 'unknown tool' }
     const safeNotes = Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string').slice(0, 10).map((n) => n.slice(0, 300)) : []
     return runInTerminal(tool, spec, safeNotes)
-  })
-  ipcMain.handle(IPC.terminal.preview, (_e, tool: unknown, spec: RequestSpec) => {
-    if (!isTool(tool)) return ''
-    try {
-      return previewCommand(tool, spec)
-    } catch (err) {
-      return `# ${(err as Error).message}`
-    }
   })
 }

@@ -6,8 +6,6 @@
  */
 import type { ResolvedToken, VariableDef, VariableScope } from './types'
 
-const TOKEN_RE = /\{\{\s*([^}]+?)\s*\}\}/g
-
 export function flattenVariables(defs: VariableDef[] | undefined): Record<string, string> {
   const out: Record<string, string> = {}
   if (!defs) return out
@@ -371,13 +369,4 @@ export function resolveString(input: string, scope: VariableScope, maxDepth = 10
 /** Convenience: resolve and return only the string. */
 export function interpolate(input: string, scope: VariableScope): string {
   return resolveString(input, scope).value
-}
-
-/** Extract the variable names referenced by a string (for highlighting). */
-export function extractTokens(input: string): string[] {
-  const names: string[] = []
-  let m: RegExpExecArray | null
-  TOKEN_RE.lastIndex = 0
-  while ((m = TOKEN_RE.exec(input)) !== null) names.push(m[1].trim())
-  return names
 }

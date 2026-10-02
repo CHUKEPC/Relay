@@ -3,7 +3,7 @@ import type { Environment, EnvironmentsDoc, GlobalsDoc, VariableDef } from '@sha
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { flattenVariables } from '@shared/interpolate'
-import { emptyEnvironments, emptyGlobals } from './defaults'
+import { defaultEnvironments, defaultGlobals } from '@shared/defaults'
 import { persist } from './persist'
 
 interface EnvState {
@@ -30,8 +30,8 @@ function withIds(vars: VariableDef[]): VariableDef[] {
 }
 
 export const useEnvironments = create<EnvState>((set, get) => ({
-  env: emptyEnvironments(),
-  globals: emptyGlobals(),
+  env: defaultEnvironments(),
+  globals: defaultGlobals(),
 
   hydrate: (env, globals) =>
     set({

@@ -211,7 +211,6 @@ input, textarea { background: none; border: none; outline: none; }
   background: var(--bg-3); color: var(--tx-1); border: 1px solid var(--line);
 }
 
-.divider-h { height: 1px; background: var(--line); width: 100%; }
 
 /* segmented control */
 .seg { display: inline-flex; background: var(--bg-3); border-radius: var(--radius); padding: 2px; border: 1px solid var(--line); gap: 2px; }

@@ -117,12 +117,6 @@
   color: var(--tx-3);
 }
 
-/* ---------- request settings / generic rows reused ---------- */
-.req-settings {
-  padding: 16px 14px;
-  max-width: 560px;
-}
-
 /* ---------- test results ---------- */
 .test-summary {
   display: flex;
@@ -331,24 +325,10 @@
   cursor: pointer;
 }
 
-/* ---------- var manager table reuse ---------- */
-.var-editor {
-  padding: 6px 0;
-}
 .section-title {
   font-size: 13px;
   font-weight: 600;
   padding: 12px 16px 6px;
-}
-
-/* unresolved variable url flag */
-.url-flag {
-  color: var(--s-4xx);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  margin-left: 8px;
 }
 
 /* ============================================================
@@ -843,51 +823,21 @@
 .example-row:hover { background: var(--bg-hover); }
 
 /* ============================================================
-   Console (request log) — bottom drawer
-   (features/console/ConsolePanel.tsx). Reuses .method-tag/.m-*,
-   .btn.ghost, .icon-btn + design tokens. Appended block.
+   Console (request log) — features/console/ConsolePanel.tsx.
+   A layer over the app body; docking lives in feat-console.css.
+   Reuses .method-tag/.m-*, .icon-btn + design tokens.
    ============================================================ */
 
-/* Bottom drawer: floats above content, just above the status bar.
-   Mounted near the app root; `position: fixed` keeps it pinned regardless. */
 .console-drawer {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0; /* pinned to the very bottom — there is no status bar to clear */
-  height: 38vh;
-  min-height: 200px;
-  max-height: 70vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-1);
-  border-top: 1px solid var(--line-2);
   box-shadow: var(--shadow-3);
   z-index: 90;
   animation: fadeUp 0.16s var(--ease-out);
 }
 
-/* header row */
-.console-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 38px;
-  padding: 0 8px 0 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-2);
-}
-.console-head-ico {
-  color: var(--accent);
-  flex: none;
-}
-.console-head-title {
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--tx-0);
-}
 .console-head-count {
   font-size: 10.5px;
   font-weight: 600;
@@ -898,17 +848,6 @@
   border-radius: 100px;
   padding: 1px 7px;
 }
-.console-head-spacer {
-  flex: 1;
-}
-.console-head-btn {
-  height: 28px;
-}
-.console-head-btn[disabled] {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 /* empty state */
 .console-empty {
   flex: 1;

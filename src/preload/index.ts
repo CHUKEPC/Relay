@@ -140,7 +140,6 @@ const api: RelayApi = {
   /* ---- send to terminal ---- */
   terminalTools: () => ipcRenderer.invoke(IPC.terminal.tools),
   terminalRun: (tool: string, spec: unknown, notes: string[]) => ipcRenderer.invoke(IPC.terminal.run, tool, spec, notes),
-  terminalPreview: (tool: string, spec: unknown) => ipcRenderer.invoke(IPC.terminal.preview, tool, spec),
 
   /* ---- feature plugins (bundled capability packs) ---- */
   featuresList: () => ipcRenderer.invoke(IPC.features.list),
@@ -207,7 +206,6 @@ const api: RelayApi = {
   closeWindow: () => ipcRenderer.invoke(IPC.app.close),
 
   /* ---- updates ---- */
-  getAppVersion: () => ipcRenderer.invoke(IPC.app.getVersion),
   checkUpdates: () => ipcRenderer.invoke(IPC.update.check),
 
   /* ---- misc ---- */

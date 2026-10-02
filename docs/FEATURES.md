@@ -475,6 +475,30 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       `jsonSchema` fails with «not supported» instead of passing.
 - [x] Every snippet of the `script-snippets` pack is run by a test against the runtime.
 
+## 1.3.4 — Console as a dock panel, leaner code
+
+- [x] **The console moves like the other panels**: its header (grip, «Console», the entry count,
+      the position buttons, clear, close) is the same strip the sidebar carries. Dragging it lights
+      up the four edges of the app body; the top edge is new. It stays a layer over the body rather
+      than taking room from the sidebar, the request or the response. Resized by the wall facing
+      the body (double-click resets), floated and resized by the corner grip like the sidebar.
+- [x] **A narrow console stays tidy**: separate width and height (the 1.3.3 single size seeds
+      both), a 280 px minimum width so the header controls fit, the header and the empty state clip
+      instead of spilling over the neighbouring panel, the title hides below 340 px, entries drop
+      the size and clock time below 520 px. The resize handle keeps both halves grabbable.
+- [x] A top/bottom wall drag shows the row-resize cursor over the whole window (it showed
+      col-resize over content).
+- [x] **Dead code removed**: the `app:platform`, `app:getVersion` and `terminal:preview` IPC
+      channels (95 left) with their handlers, preload entries and mocks; unused exports
+      (`APP_ID`, `AppSettings`, `DEFAULT_SETTINGS`, `COMMON_CONTENT_TYPES`, `NO_CAPABILITIES`,
+      `RealtimeKind`, `extractTokens`, `isCoreLanguage`, `coverage`, `cancelActiveRequest`,
+      `terminalPreviewFor`); 46 unused UI strings from `en.json` (47 from `de`/`es`); CSS rules no
+      element uses (`json-view`, `code-pre`, `url-flag`, `var-editor`, `req-settings`, …).
+- [x] **Copies merged**: one set of document defaults in `src/shared/defaults.ts` (main and renderer
+      each had one), one `formatBytes`, one OpenAPI/Swagger schema walker (`main/data/schema.ts`),
+      one realtime/gRPC message log (`store/message-log.ts`), one float grip and one wall drag for
+      the sidebar, the response, the console and the AI panel.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

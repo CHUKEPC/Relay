@@ -190,8 +190,8 @@ Outbound connections happen as part of user actions. The parts involved:
 
 ## Dockable panels (`src/renderer/lib/dock.tsx`)
 
-The sidebar, the response panel and the request console share one dock model: `left | right |
-bottom | top | float` (the console takes no top). `useDockDrag` turns a press on a panel header into
+The sidebar, the response panel, the request zone and the request console share one dock model:
+`left | right | bottom | top | float`. `useDockDrag` turns a press on a panel header into
 a drag session: the allowed edges of the container light up and a drop there docks the panel; a drop
 anywhere else cancels. Floating is a button only, and a floating panel dragged by its header just
 moves. The sidebar, the response and the request zone all offer the same four edges (`ALL_EDGES`)
@@ -200,7 +200,11 @@ request zone (`paneDockArea`). The request zone is dragged by its whole header r
 (`BuilderDockContext`) and puts the response on the opposite edge without touching the sidebar.
 `lib/dock-swap.ts` makes the sidebar and a moved response on the same edge trade places instead of
 stacking — only while the main window shows a single pane; with several panes each response moves
-inside its own pane and the sidebar stays put. `floatStyle` clamps a floating panel into its pane
+inside its own pane and the sidebar stays put. The console docks on the same edges of the app body
+but stays a layer above it (`position: fixed`, placed over the measured `.body` box) instead of taking
+room from the other panels; it never trades places with anything. `startFloatResize` and
+`trackWallResize` (`lib/drag.ts`) are the float grip and the wall drag every panel uses.
+`floatStyle` clamps a floating panel into its pane
 or the window in CSS, so a split or a smaller window never strands its header; a narrow
 `.pane-builder` (a container) wraps the URL bar into two rows. The sidebar's position lives in the UI store (localStorage). The
 response layout belongs to the tab: `PaneLeaf.respDock` / `respPct` / `respFloat` hold the layout of

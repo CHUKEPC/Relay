@@ -69,5 +69,3 @@ export const CORE_AUTH_TYPES = ['inherit', 'none', 'bearer', 'basic', 'apikey', 
 /** UI languages the base app always offers. */
 export const CORE_LOCALES = ['ru', 'en'] as const
 
-/** Capabilities of an app running with no plugins at all. */
-export const NO_CAPABILITIES: readonly Capability[] = []

@@ -1,7 +1,7 @@
 /*
- * Dockable panels: the sidebar, the response panel and the request zone (the
- * request console has carried its own four positions since 1.0). A panel is
- * dragged by its header; the landing zones say which edge it will take.
+ * Dockable panels: the sidebar, the response panel, the request zone and the
+ * request console. A panel is dragged by its header; the landing zones say
+ * which edge it will take.
  */
 
 /* One height for every panel header that can end up side by side — the request
@@ -11,8 +11,9 @@
   --panel-head-h: 43px;
 }
 
+/* Above every panel that can be dragged, the console layer included. */
 .dock-zones {
-  z-index: 60;
+  z-index: 96;
 }
 
 .dock-zone {
@@ -280,11 +281,6 @@
   width: auto;
   height: 6px;
   cursor: row-resize;
-}
-
-body.wall-resizing .wall-handle.top,
-body.wall-resizing .wall-handle.bottom {
-  cursor: row-resize !important;
 }
 
 /* ============================ response ============================ */

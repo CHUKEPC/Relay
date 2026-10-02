@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { CustomTheme, SettingsDoc, ThemePreset } from '@shared/types'
 import { STORAGE_VERSION } from '@shared/constants'
 import { themeVariant, USER_THEME_PACK, type PackTheme } from '@shared/pack-data'
-import { defaultSettingsDoc } from './defaults'
+import { defaultSettings } from '@shared/defaults'
 import { persist } from './persist'
 import { onPackThemes } from './features'
 import '@renderer/styles/feat-themes.css'
@@ -118,13 +118,13 @@ function applyAppearance(doc: SettingsDoc): 'light' | 'dark' {
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
-  settings: defaultSettingsDoc(),
+  settings: defaultSettings(),
   resolvedTheme: 'dark',
 
   hydrate: (doc) => {
     // Merge over defaults so a settings.json from an older version that lacks newer
     // keys doesn't yield `undefined` (which flips controlled inputs to uncontrolled).
-    const merged = { ...defaultSettingsDoc(), ...doc, version: STORAGE_VERSION }
+    const merged = { ...defaultSettings(), ...doc, version: STORAGE_VERSION }
     // 1.2 called it «Экономить видеопамять»; 1.3 turns that into low-power mode.
     if (doc.lowPowerMode === undefined && doc.disableHardwareAcceleration === true) merged.lowPowerMode = true
     delete merged.disableHardwareAcceleration

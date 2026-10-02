@@ -13,12 +13,8 @@ export type SettingsSection =
   | 'shortcuts'
   | 'help'
   | 'about'
-/** Positions the sidebar can take: every edge of the app body, or floating. */
+/** Positions the sidebar and the request console can take: every edge of the app body, or floating. */
 export type SideDock = DockMode
-/** Positions the request console can take (no top). */
-export type ConsoleDock = Exclude<DockMode, 'top'>
-
-export interface ConsoleFloatRect extends FloatRect {}
 
 /** A one-click fix a toast can offer (e.g. «Отключить проверку SSL»). */
 export interface ToastAction {
@@ -42,9 +38,12 @@ interface UiState {
   sidebarDock: SideDock
   sidebarFloat: FloatRect
   aiWidth: number
-  consoleDock: ConsoleDock
-  consoleSize: number
-  consoleFloat: ConsoleFloatRect
+  consoleDock: DockMode
+  /** width of the console docked left or right */
+  consoleWidth: number
+  /** height of the console docked at the top or the bottom */
+  consoleHeight: number
+  consoleFloat: FloatRect
   importOpen: boolean
   /** Headers tab: list the headers Relay adds by itself */
   showAutoHeaders: boolean
@@ -67,9 +66,10 @@ interface UiState {
   setSidebarDock: (d: SideDock) => void
   setSidebarFloat: (rect: FloatRect) => void
   setAiWidth: (px: number) => void
-  setConsoleDock: (d: ConsoleDock) => void
-  setConsoleSize: (px: number) => void
-  setConsoleFloat: (rect: ConsoleFloatRect) => void
+  setConsoleDock: (d: DockMode) => void
+  setConsoleWidth: (px: number) => void
+  setConsoleHeight: (px: number) => void
+  setConsoleFloat: (rect: FloatRect) => void
   setImportOpen: (v: boolean) => void
   setShowAutoHeaders: (v: boolean) => void
 }
@@ -86,9 +86,12 @@ interface UiPrefs {
   sidebarDock: SideDock
   sidebarFloat: FloatRect
   aiWidth: number
-  consoleDock: ConsoleDock
-  consoleSize: number
-  consoleFloat: ConsoleFloatRect
+  consoleDock: DockMode
+  consoleWidth: number
+  consoleHeight: number
+  consoleFloat: FloatRect
+  /** before 1.3.4 one size served both orientations */
+  consoleSize?: number
   showAutoHeaders: boolean
 }
 
@@ -114,7 +117,8 @@ function saveUiPrefs(s: UiState): void {
       sidebarFloat: s.sidebarFloat,
       aiWidth: s.aiWidth,
       consoleDock: s.consoleDock,
-      consoleSize: s.consoleSize,
+      consoleWidth: s.consoleWidth,
+      consoleHeight: s.consoleHeight,
       consoleFloat: s.consoleFloat,
       showAutoHeaders: s.showAutoHeaders
     }
@@ -125,8 +129,17 @@ function saveUiPrefs(s: UiState): void {
 }
 
 const prefs = loadUiPrefs()
-const DOCKS: ConsoleDock[] = ['bottom', 'left', 'right', 'float']
-const SIDE_DOCKS: SideDock[] = ['top', ...DOCKS]
+const DOCKS: DockMode[] = ['top', 'bottom', 'left', 'right', 'float']
+
+/** Console size limits; the width floor keeps its header controls in view. */
+export const CONSOLE_WIDTH = { min: 280, max: 900, initial: 460 }
+export const CONSOLE_HEIGHT = { min: 160, max: 800, initial: 340 }
+
+/** A stored size, else the single size 1.3.3 kept for both orientations, else the default — clamped. */
+function initialSize(stored: unknown, legacy: unknown, lim: { min: number; max: number; initial: number }): number {
+  const v = typeof stored === 'number' ? stored : typeof legacy === 'number' ? legacy : lim.initial
+  return clamp(v, lim.min, lim.max)
+}
 
 function initialFloat(f: FloatRect | undefined, fallback: FloatRect): FloatRect {
   if (f && typeof f.x === 'number' && typeof f.y === 'number' && typeof f.w === 'number' && typeof f.h === 'number') {
@@ -170,11 +183,12 @@ export const useUi = create<UiState>((set, get) => {
     toast: null,
     sidebarWidth: typeof prefs.sidebarWidth === 'number' ? clamp(prefs.sidebarWidth, 200, 460) : 270,
     sidebarHeight: typeof prefs.sidebarHeight === 'number' ? clamp(prefs.sidebarHeight, 140, 600) : 260,
-    sidebarDock: prefs.sidebarDock && SIDE_DOCKS.includes(prefs.sidebarDock) ? prefs.sidebarDock : 'left',
+    sidebarDock: prefs.sidebarDock && DOCKS.includes(prefs.sidebarDock) ? prefs.sidebarDock : 'left',
     sidebarFloat: initialFloat(prefs.sidebarFloat, { x: 60, y: 90, w: 320, h: 520 }),
     aiWidth: typeof prefs.aiWidth === 'number' ? clamp(prefs.aiWidth, 300, 640) : 384,
     consoleDock: prefs.consoleDock && DOCKS.includes(prefs.consoleDock) ? prefs.consoleDock : 'bottom',
-    consoleSize: typeof prefs.consoleSize === 'number' ? clamp(prefs.consoleSize, 160, 800) : 340,
+    consoleWidth: initialSize(prefs.consoleWidth, prefs.consoleSize, CONSOLE_WIDTH),
+    consoleHeight: initialSize(prefs.consoleHeight, prefs.consoleSize, CONSOLE_HEIGHT),
     consoleFloat: initialFloat(prefs.consoleFloat, { x: 80, y: 80, w: 720, h: 420 }),
     importOpen: false,
     // Hidden until the eye is clicked, then remembered.
@@ -225,8 +239,12 @@ export const useUi = create<UiState>((set, get) => {
       set({ consoleDock: d })
       persistPrefs()
     },
-    setConsoleSize: (px) => {
-      set({ consoleSize: clamp(px, 160, 800) })
+    setConsoleWidth: (px) => {
+      set({ consoleWidth: clamp(px, CONSOLE_WIDTH.min, CONSOLE_WIDTH.max) })
+      persistPrefs()
+    },
+    setConsoleHeight: (px) => {
+      set({ consoleHeight: clamp(px, CONSOLE_HEIGHT.min, CONSOLE_HEIGHT.max) })
       persistPrefs()
     },
     setConsoleFloat: (rect) => {

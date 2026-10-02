@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   resolveString,
   interpolate,
-  extractTokens,
   flattenVariables,
   resolveDynamic,
   DYNAMIC_VAR_NAMES
@@ -218,10 +217,6 @@ describe('variable interpolation', () => {
     const s: VariableScope = { environment: { a: '{{b}}', b: 'final' } }
     const r = resolveString('{{a}}', s)
     expect(r.tokens.find((t) => t.name === 'a')?.value).toBe('final')
-  })
-
-  it('extracts token names', () => {
-    expect(extractTokens('{{a}}/{{b}}')).toEqual(['a', 'b'])
   })
 
   it('flattens enabled variables only', () => {

@@ -11,7 +11,7 @@ import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { flattenVariables } from '@shared/interpolate'
 import { trf } from '@renderer/lib/i18n'
-import { emptyCollections } from './defaults'
+import { defaultCollections } from '@shared/defaults'
 import { persist } from './persist'
 
 export interface Located {
@@ -136,7 +136,7 @@ export const useCollections = create<CollectionsState>((set, get) => {
   const topLevel = () => get().doc.collections as CollectionNode[]
 
   return {
-    doc: emptyCollections(),
+    doc: defaultCollections(),
     hydrate: (doc) => set({ doc: { ...doc, version: STORAGE_VERSION } }),
     setAll: (collections) => commit(collections),
     addCollectionNode: (node) => commit([...get().doc.collections, node]),

@@ -149,9 +149,6 @@
   font-family: var(--font-mono); font-size: 13px; transition: border-color .14s, box-shadow .14s; overflow: hidden;
 }
 .url-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.url-bar .url-text { flex: 1; white-space: nowrap; overflow-x: auto; color: var(--tx-0); scrollbar-width: none; }
-.url-bar .url-text::-webkit-scrollbar { display: none; }
-.var-token { color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 1px 2px; }
 .send-btn { height: 38px; padding: 0 18px; font-size: 13px; font-weight: 600; }
 
 /* request tabs + table */
@@ -201,10 +198,6 @@
 
 /* code editor (body) */
 .code-editor { margin: 0 14px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--code-bg); overflow: hidden; }
-.code-editor .gutter-pre { display: flex; }
-.code-pre { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; padding: 12px 14px; white-space: pre; overflow-x: auto; flex: 1; tab-size: 2; }
-.lines { padding: 12px 0; text-align: right; color: var(--tx-3); user-select: none; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; border-right: 1px solid var(--line); min-width: 40px; }
-.lines div { padding: 0 12px; }
 
 /* ---------- DIVIDER ---------- */
 .divider {
@@ -250,16 +243,6 @@
 .resp-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .resp-tabs { display: flex; align-items: center; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); flex: none; }
 .resp-body { flex: 1; overflow: auto; min-height: 0; }
-
-/* JSON tree viewer */
-.json-view { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.75; padding: 12px 14px 24px; }
-.json-line { display: flex; }
-.json-gutter { width: 34px; flex: none; text-align: right; padding-right: 12px; color: var(--tx-3); user-select: none; }
-.json-content { white-space: pre; flex: 1; }
-.fold { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: -16px; margin-right: 2px; vertical-align: middle; color: var(--tx-3); cursor: pointer; border-radius: 3px; transition: .12s; }
-.fold:hover { background: var(--bg-hover); color: var(--tx-0); }
-.fold-stub { color: var(--tx-3); cursor: pointer; padding: 0 4px; }
-.fold-stub:hover { color: var(--accent); }
 
 /* headers/cookies table */
 .resp-table { width: 100%; border-collapse: collapse; font-size: 12px; }

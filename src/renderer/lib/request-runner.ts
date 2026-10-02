@@ -399,13 +399,6 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
   }
 }
 
-export function cancelActiveRequest(tabId?: string): void {
-  const tab = tabFor(tabId)
-  if (!tab) return
-  const resp = useResponse.getState().get(tab.id)
-  if (resp.requestId) void window.api.cancelRequest(resp.requestId)
-}
-
 /** Variable scope for a tab (defaults to active) — used by hover-resolution + AI context. */
 export function currentScope(tabId?: string): VariableScope {
   const tab = tabFor(tabId)
@@ -476,19 +469,4 @@ export async function sendToTerminal(tool: TerminalTool, tabId?: string): Promis
   } catch (err) {
     useUi.getState().showToast(trf('Не удалось открыть терминал: {error}', { error: (err as Error).message }), 'error')
   }
-}
-
-/** The command `sendToTerminal` would run, for the code dialog (no cookies, no files). */
-export async function terminalPreviewFor(tool: TerminalTool, tabId?: string): Promise<string> {
-  const tab = tabFor(tabId)
-  if (!tab) return ''
-  const collections = useCollections.getState()
-  const envStore = useEnvironments.getState()
-  const scope: VariableScope = {
-    collection: collections.collectionScopeFor(tab.savedRequestId),
-    environment: envStore.envScope(),
-    global: envStore.globalScope()
-  }
-  const { spec } = buildRequestSpec(tab.request, scope, settingsToRequestSettings(), collections.inheritedAuthFor(tab.savedRequestId))
-  return window.api.terminalPreview(tool, spec)
 }

@@ -29,9 +29,7 @@
 [data-low-power] .titlebar,
 [data-low-power] .sidebar,
 [data-low-power] .popover,
-[data-low-power] .modal,
-[data-low-power] .card,
-[data-low-power] .resp-head {
+[data-low-power] .modal {
   background-image: none !important;
 }
 
