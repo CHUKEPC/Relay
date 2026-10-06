@@ -285,6 +285,7 @@ export function UrlBar({ req, tabId }: { req: RequestModel; tabId: string }) {
             placeholder={MODE_PLACEHOLDER[mode]}
             ariaLabel="Request URL"
             onPaste={onPaste}
+            edgeNav
           />
         )}
       </div>

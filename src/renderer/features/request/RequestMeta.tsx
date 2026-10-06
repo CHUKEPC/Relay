@@ -3,6 +3,7 @@ import type { RequestModel, TabModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
 import { BuilderDockButtons, BuilderDockGrip, useBuilderGrab } from '@renderer/lib/dock'
 import { useTabs } from '@renderer/store/tabs'
+import { ShowResponseButton } from './ShowResponseButton'
 import { debounce } from '@renderer/lib/debounce'
 import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-reqmeta.css'
@@ -133,6 +134,7 @@ export function RequestMeta({ tab }: { tab: TabModel }): JSX.Element {
           <span className="reqmeta-desc-label">{tr('Описание')}</span>
           <Icon name={descOpen ? 'chevD' : 'chevR'} size={13} className="reqmeta-desc-chev" />
         </button>
+        <ShowResponseButton />
         <BuilderDockButtons />
       </div>
       {descOpen && (

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import {
 import { createPortal } from 'react-dom'
 import type { VariableScope } from '@shared/types'
 import { resolveString } from '@shared/interpolate'
+import { Icon } from './Icon'
 import { Tooltip } from './primitives'
 import { useSecretNames } from '@renderer/lib/hooks'
 import { applyVarSuggestion, suggestVars, varQueryAt, type VarQuery, type VarSuggestion } from '@renderer/lib/var-suggest'
@@ -71,6 +73,11 @@ export interface HighlightedInputProps {
   ariaLabel?: string
   /** Opt out of the `{{` suggestion list (read-only mirrors, filters, …). */
   noSuggest?: boolean
+  /**
+   * A value longer than the field gets «to the start» / «to the end» buttons at
+   * its clipped ends, and the mouse wheel scrolls it sideways (the URL bar).
+   */
+  edgeNav?: boolean
 }
 
 /** Single-line input that highlights {{variables}} via a mirror layer, flags
@@ -87,10 +94,52 @@ export function HighlightedInput({
   onKeyDown,
   onPaste,
   ariaLabel,
-  noSuggest = false
+  noSuggest = false,
+  edgeNav = false
 }: HighlightedInputProps) {
   const [scroll, setScroll] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  /** which ends of an over-long value are out of view (edgeNav) */
+  const [clipped, setClipped] = useState({ start: false, end: false })
+
+  const measureClip = useCallback(() => {
+    const el = inputRef.current
+    if (!el || !edgeNav) return
+    const max = el.scrollWidth - el.clientWidth
+    const start = max > 1 && el.scrollLeft > 1
+    const end = max > 1 && el.scrollLeft < max - 1
+    setClipped((p) => (p.start === start && p.end === end ? p : { start, end }))
+  }, [edgeNav])
+
+  useLayoutEffect(measureClip, [value, measureClip])
+
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el || !edgeNav) return
+    const ro = new ResizeObserver(measureClip)
+    ro.observe(el)
+    // The wheel scrolls a long value sideways; passive:false so the page does not scroll too.
+    const onWheel = (e: WheelEvent): void => {
+      if (el.scrollWidth <= el.clientWidth + 1) return
+      el.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+      e.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('wheel', onWheel)
+    }
+  }, [edgeNav, measureClip])
+
+  /** Put the caret at an end of the value; the field scrolls to show it. */
+  const jump = (to: 'start' | 'end'): void => {
+    const el = inputRef.current
+    if (!el) return
+    const pos = to === 'start' ? 0 : el.value.length
+    el.focus()
+    el.setSelectionRange(pos, pos)
+    el.scrollLeft = to === 'start' ? 0 : el.scrollWidth
+  }
   const segs = useMemo(() => parse(value, scope), [value, scope])
   const secrets = useSecretNames()
 
@@ -291,8 +340,37 @@ export function HighlightedInput({
         onBlur={close}
         onKeyDown={handleKeyDown}
         onPaste={onPaste}
-        onScroll={(e) => setScroll((e.target as HTMLInputElement).scrollLeft)}
+        onScroll={(e) => {
+          setScroll((e.target as HTMLInputElement).scrollLeft)
+          measureClip()
+        }}
       />
+      {clipped.start && (
+        <button
+          type="button"
+          className="hl-edge start"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => jump('start')}
+          title={tr('В начало адреса')}
+          aria-label={tr('В начало адреса')}
+        >
+          <Icon name="toStart" size={13} />
+        </button>
+      )}
+      {clipped.end && (
+        <button
+          type="button"
+          className="hl-edge end"
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => jump('end')}
+          title={tr('В конец адреса')}
+          aria-label={tr('В конец адреса')}
+        >
+          <Icon name="toEnd" size={13} />
+        </button>
+      )}
       {popup}
     </div>
   )

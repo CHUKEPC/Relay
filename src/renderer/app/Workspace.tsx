@@ -29,9 +29,11 @@ import {
   oppositeEdge,
   PaneDockContext,
   paneDockArea,
+  ResponseVisibilityContext,
   startFloatResize,
   useDockDrag,
-  type DockMode
+  type DockMode,
+  type ResponseVisibility
 } from '@renderer/lib/dock'
 import { dockResponse } from '@renderer/lib/dock-swap'
 import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
@@ -68,6 +70,7 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   const setRespFloat = usePanes((s) => s.setRespFloat)
   const tabId = leaf.tabId
   const mode = useTabs((s) => s.doc.tabs.find((t) => t.id === tabId)?.request.mode ?? 'http')
+  const toggleCombo = useSettings((s) => kbdCombo('paneToggleResponse', s.settings.keybindings))
   const wsRef = useRef<HTMLDivElement>(null)
   const singlePane = usePanes((s) => s.root.kind === 'leaf')
   const dock = leaf.respDock
@@ -109,6 +112,27 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   })
 
   if (!tabId) return <EmptyPane paneId={leaf.id} />
+
+  const visibility: ResponseVisibility = {
+    tabId,
+    hidden: leaf.respHidden === true,
+    setHidden: (hidden) => usePanes.getState().setRespHidden(leaf.id, hidden),
+    combo: toggleCombo
+  }
+
+  // Hidden response: the request zone takes the whole pane, and its header
+  // offers to bring the response back (with the last status beside it).
+  if (visibility.hidden) {
+    return (
+      <ResponseVisibilityContext.Provider value={visibility}>
+        <div className="workspace resp-hidden" ref={wsRef}>
+          <div className="pane-builder" style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <RequestBuilder tabId={tabId} />
+          </div>
+        </div>
+      </ResponseVisibilityContext.Provider>
+    )
+  }
 
   const onDividerDown = () => {
     trackDrag(
@@ -154,17 +178,19 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
   // Floating: the builder owns the whole pane and the response rides above it.
   if (dock === 'float') {
     return (
-      <div className="workspace" ref={wsRef} style={{ position: 'relative' }}>
-        <div className="pane-builder" style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {requestBuilder}
+      <ResponseVisibilityContext.Provider value={visibility}>
+        <div className="workspace" ref={wsRef} style={{ position: 'relative' }}>
+          <div className="pane-builder" style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {requestBuilder}
+          </div>
+          <div className="resp-float" style={floatStyle(leaf.respFloat, 'container')}
+            onMouseDownCapture={grabFromHead}
+          >
+            {response}
+            <div className="float-grip" onMouseDown={(e) => startFloatResize(e, leaf.respFloat, (rect) => setRespFloat(leaf.id, rect))} />
+          </div>
         </div>
-        <div className="resp-float" style={floatStyle(leaf.respFloat, 'container')}
-          onMouseDownCapture={grabFromHead}
-        >
-          {response}
-          <div className="float-grip" onMouseDown={(e) => startFloatResize(e, leaf.respFloat, (rect) => setRespFloat(leaf.id, rect))} />
-        </div>
-      </div>
+      </ResponseVisibilityContext.Provider>
     )
   }
 
@@ -212,11 +238,13 @@ export function PaneView({ leaf }: { leaf: PaneLeaf }) {
 
   const responseFirst = dock === 'left' || dock === 'top'
   return (
-    <div className={`workspace resp-dock-${dock}`} ref={wsRef} style={horizontal ? { flexDirection: 'row' } : undefined}>
-      {responseFirst ? [responseBox, divider, builder] : [builder, divider, responseBox]}
-      {overlay}
-      {builderDrag.overlay}
-    </div>
+    <ResponseVisibilityContext.Provider value={visibility}>
+      <div className={`workspace resp-dock-${dock}`} ref={wsRef} style={horizontal ? { flexDirection: 'row' } : undefined}>
+        {responseFirst ? [responseBox, divider, builder] : [builder, divider, responseBox]}
+        {overlay}
+        {builderDrag.overlay}
+      </div>
+    </ResponseVisibilityContext.Provider>
   )
 }
 
@@ -355,6 +383,14 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
             <PaneMenuItem icon="splitRight" label={tr('Добавить панель справа')} combo={kbdCombo('paneSplitRight', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('row') }} />
             <PaneMenuItem icon="splitDown" label={tr('Добавить панель снизу')} combo={kbdCombo('paneSplitDown', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('col') }} />
             <PaneMenuItem icon="swap" label={tr('Поменять местами с соседней группой')} combo={kbdCombo('paneFlip', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().flipActiveGroup() }} />
+            {leaf.tabId && (
+              <PaneMenuItem
+                icon={leaf.respHidden ? 'eye' : 'eyeOff'}
+                label={leaf.respHidden ? tr('Показать ответ') : tr('Скрыть ответ')}
+                combo={kbdCombo('paneToggleResponse', keybindings)}
+                onSelect={() => panes().toggleRespHidden(leaf.id)}
+              />
+            )}
             <DropdownMenu.Separator className="pop-sep" />
             <PaneMenuItem icon="close" label={tr('Закрыть панель')} combo={kbdCombo('paneClose', keybindings)} onSelect={() => panes().closePane(leaf.id)} />
           </DropdownMenu.Content>

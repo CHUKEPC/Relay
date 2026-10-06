@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import type { KV, RequestMode, RequestModel } from '@shared/types'
 import { COMMON_HEADER_NAMES } from '@shared/constants'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
 import { useRequestUi, type RequestSubTab } from '@renderer/store/request-ui'
@@ -16,6 +17,7 @@ import { ExamplesTab } from './ExamplesTab'
 import { RequestMeta } from './RequestMeta'
 import { CodeGenModal } from '@renderer/features/data/CodeGenModal'
 import { TerminalButton } from './TerminalButton'
+import { ShowResponseButton } from './ShowResponseButton'
 import { AutoHeaderRows, AutoHeadersToggle } from './AutoHeaders'
 
 import { tr } from '@renderer/lib/i18n'
@@ -65,6 +67,10 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
   if (mode === 'grpc') {
     return (
       <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', minHeight: 0 }} data-undo-tab={tab.id}>
+        {/* gRPC has no request header, so a hidden response is brought back from here. */}
+        <div className="grpc-show-resp">
+          <ShowResponseButton />
+        </div>
         <div style={{ display: 'contents' }} data-undo-field="url">
           <UrlBar req={req} tabId={tab.id} />
         </div>
@@ -113,7 +119,7 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
       <div style={{ display: 'contents' }} data-undo-field="url">
         <UrlBar req={req} tabId={tab.id} />
       </div>
-      <div className="req-tabs">
+      <HScroll className="req-tabs" revealKey={activeSubTab}>
         {tabs.map((t) => (
           <button key={t.id} className={`tab ${activeSubTab === t.id ? 'on' : ''}`} onClick={() => setSubTab(t.id)}>
             {t.label}
@@ -122,6 +128,7 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
           </button>
         ))}
         <div style={{ marginLeft: 'auto' }} />
+        {/* A narrow pane keeps only the icons of these buttons (feat-dock.css). */}
         <button
           className="btn primary"
           data-tour="save"
@@ -132,7 +139,8 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
           }}
           title={tr('Сохранить (⌘S / Ctrl+S)')}
         >
-          <Icon name="save" size={14} /> {tr('Сохранить')} </button>
+          <Icon name="save" size={14} /> <span className="req-save-label">{tr('Сохранить')}</span>
+        </button>
         <button
           className="btn ghost"
           style={{ height: 28 }}
@@ -142,7 +150,8 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
           }}
           title={tr('Сохранить как новый запрос в коллекции')}
         >
-          <Icon name="copy" size={14} /> {tr('Сохранить как…')} </button>
+          <Icon name="copy" size={14} /> <span className="req-act-label">{tr('Сохранить как…')}</span>
+        </button>
         {httpLike && (
           <button
             className="btn ghost"
@@ -154,10 +163,11 @@ export function RequestBuilder({ tabId }: { tabId?: string }) {
             }}
             title={tr('Сгенерировать код')}
           >
-            <Icon name="code2" size={14} /> {tr('Код')} </button>
+            <Icon name="code2" size={14} /> <span className="req-act-label">{tr('Код')}</span>
+          </button>
         )}
         {httpLike && <TerminalButton tabId={tab.id} beforeRun={activateThis} onShowCode={() => setCodeGenOpen(true)} />}
-      </div>
+      </HScroll>
       <CodeGenModal open={codeGenOpen} onOpenChange={setCodeGenOpen} />
       <div className="req-tab-body" data-undo-field={activeSubTab}>
         {activeSubTab === 'params' && (

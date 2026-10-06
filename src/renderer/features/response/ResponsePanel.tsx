@@ -10,7 +10,8 @@ import { Icon } from '@renderer/components/Icon'
 import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
 import { saveResponseExample } from '@renderer/lib/examples'
 import { statusColor } from '@renderer/lib/status-color'
-import { PaneDockControls } from '@renderer/lib/dock'
+import { PaneStatusBar } from '@renderer/lib/dock'
+import { HScroll } from '@renderer/components/HScroll'
 import { disableSslVerification, isCertificateError } from '@renderer/lib/tls-hint'
 import { sendActiveRequest } from '@renderer/lib/request-runner'
 import { kbd } from '@renderer/lib/platform'
@@ -433,7 +434,7 @@ function StatusBar({
   const sc = statusColor(result.status)
   const hasAi = useCap('ai')
   return (
-    <div className="resp-statusbar">
+    <PaneStatusBar>
       <span
         className="status-pill"
         style={{ color: sc, background: `color-mix(in oklch, ${sc} 14%, transparent)` }}
@@ -446,11 +447,10 @@ function StatusBar({
         <b>{result.timings.totalMs} ms</b>
         <span className="sep">•</span>
         <b>{formatBytes(result.body.sizeBytes)}</b>
-        <span className="sep">•</span>
-        <span>{result.headers.length} headers</span>
+        <span className="sep resp-meta-extra">•</span>
+        <span className="resp-meta-extra">{result.headers.length} headers</span>
       </div>
       <div className="resp-actions">
-        <PaneDockControls />
         {/* The status bar is a no-wrap row (and split view halves it), so at
             most 3 plugin buttons render inline; the rest go into a ⋯ menu. */}
         {pluginButtons.slice(0, 3).map(({ pluginId, pluginName, button }) => {
@@ -484,14 +484,15 @@ function StatusBar({
           />
         )}
         {hasAi && (
-          <button className="ask-ai-btn" onClick={onAskAI}>
-            <Icon name="sparkle" size={14} /> {tr('Спросить AI')} </button>
+          <button className="ask-ai-btn" onClick={onAskAI} title={tr('Спросить AI')}>
+            <Icon name="sparkle" size={14} /> <span className="ask-ai-label">{tr('Спросить AI')}</span>
+          </button>
         )}
         <IconButton icon={copied ? 'check' : 'copy'} title={tr('Копировать')} onClick={onCopy} />
         <IconButton icon="save" title={tr('Сохранить в файл')} onClick={onSave} />
         <IconButton icon="doc" title={tr('Сохранить как пример')} onClick={onSaveExample} />
       </div>
-    </div>
+    </PaneStatusBar>
   )
 }
 
@@ -532,7 +533,7 @@ function TabsRow({
   ]
 
   return (
-    <div className="resp-tabs">
+    <HScroll className="resp-tabs" revealKey={tab}>
       {tabs.map((t) => (
         <button key={t.id} className={`tab${tab === t.id ? ' on' : ''}`} onClick={() => onTab(t.id)}>
           {t.label}
@@ -566,7 +567,7 @@ function TabsRow({
           />
         </div>
       )}
-    </div>
+    </HScroll>
   )
 }
 
@@ -669,11 +670,7 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
       <div className="response" style={{ flex: 1 }}>
         {/* An empty response still carries the status bar, so the panel can be
             moved before the first request is ever sent. */}
-        <div className="resp-statusbar resp-statusbar-bare">
-          <div className="resp-actions">
-            <PaneDockControls />
-          </div>
-        </div>
+        <PaneStatusBar className="resp-statusbar-bare" />
         <div className="empty">
           <div className="empty-card">
             <div className="empty-ico">
@@ -692,13 +689,10 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
   if (r.status === 'loading') {
     return (
       <div className="response" style={{ flex: 1 }}>
-        <div className="resp-statusbar">
+        <PaneStatusBar>
           <div className="resp-meta">
             <Icon name="refresh" size={14} className="spin" /> {tr('Отправка запроса…')} </div>
-          <div className="resp-actions">
-            <PaneDockControls />
-          </div>
-        </div>
+        </PaneStatusBar>
         <div className="resp-body">
           <RespLoading />
         </div>

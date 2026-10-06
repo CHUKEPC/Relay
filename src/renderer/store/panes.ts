@@ -34,8 +34,10 @@ export interface PaneLeaf {
   respDock: DockMode
   /** Float geometry, relative to the pane box (px). */
   respFloat: FloatRect
+  /** The response panel is hidden; the request zone takes the whole pane. */
+  respHidden?: boolean
   /**
-   * The tab whose layout the three fields above hold. The layout belongs to the
+   * The tab whose layout the fields above hold. The layout belongs to the
    * tab, not the pane (see {@link syncTabLayouts}); `undefined` on a new leaf or
    * a layout saved before 1.3.1, whose fields are then taken as they are.
    */
@@ -47,6 +49,7 @@ export interface TabRespLayout {
   respPct: number
   respDock: DockMode
   respFloat: FloatRect
+  respHidden?: boolean
 }
 
 export interface PaneSplit {
@@ -103,7 +106,7 @@ export function newLeaf(tabId: string | null = null): PaneLeaf {
 const isVertical = (d: DockMode): boolean => d === 'bottom' || d === 'top'
 
 function layoutOf(leaf: PaneLeaf): TabRespLayout {
-  return { respPct: leaf.respPct, respDock: leaf.respDock, respFloat: leaf.respFloat }
+  return { respPct: leaf.respPct, respDock: leaf.respDock, respFloat: leaf.respFloat, respHidden: leaf.respHidden === true }
 }
 
 function split(dir: SplitDir, a: PaneNode, b: PaneNode, ratio = 0.5): PaneSplit {
@@ -256,7 +259,7 @@ export function syncTabLayouts(
       const saved = nextLayouts[leaf.tabId]
       const layout = saved ?? (leaf.layoutTab === undefined ? layoutOf(leaf) : DEFAULT_LAYOUT)
       if (!saved) nextLayouts = { ...nextLayouts, [leaf.tabId]: layout }
-      patch = { ...patch, ...layout, layout: isVertical(layout.respDock) ? 'split-v' : 'split-h' }
+      patch = { ...patch, ...layout, respHidden: layout.respHidden === true, layout: isVertical(layout.respDock) ? 'split-v' : 'split-h' }
     }
     nextRoot = updateLeaf(nextRoot, leaf.id, patch)
   }
@@ -301,6 +304,9 @@ interface PanesState {
   toggleLeafLayout: (paneId: string) => void
   setRespDock: (paneId: string, dock: DockMode) => void
   setRespFloat: (paneId: string, rect: FloatRect) => void
+  /** hide or show a pane's response panel (the active pane by default) */
+  setRespHidden: (paneId: string, hidden: boolean) => void
+  toggleRespHidden: (paneId?: string) => void
   /** load each pane's tab layout after its tab changed */
   syncLayouts: () => void
   toggleMaximize: (id?: string) => void
@@ -473,7 +479,7 @@ export const usePanes = create<PanesState>((set, get) => {
       const a = findLeaf(s.root, aId)
       const b = findLeaf(s.root, bId)
       if (!a || !b || a.id === b.id) return
-      const content = (l: PaneLeaf) => ({ tabId: l.tabId, respPct: l.respPct, layout: l.layout, respDock: l.respDock, respFloat: l.respFloat, layoutTab: l.layoutTab })
+      const content = (l: PaneLeaf) => ({ tabId: l.tabId, respPct: l.respPct, layout: l.layout, respDock: l.respDock, respFloat: l.respFloat, respHidden: l.respHidden, layoutTab: l.layoutTab })
       let root = replaceNode(s.root, a.id, { ...a, ...content(b) })
       root = replaceNode(root, b.id, { ...b, ...content(a) })
       // Focus follows the content that moved.
@@ -625,6 +631,15 @@ export const usePanes = create<PanesState>((set, get) => {
 
     setRespFloat: (paneId, rect) => patchLayout(paneId, { respFloat: rect }),
 
+    setRespHidden: (paneId, hidden) => patchLayout(paneId, { respHidden: hidden }),
+
+    toggleRespHidden: (paneId) => {
+      const s = get()
+      const id = paneId ?? (s.windowMode === 'detached' && s.root.kind === 'leaf' ? s.root.id : s.activeId)
+      const leaf = findLeaf(s.root, id)
+      if (leaf?.tabId) get().setRespHidden(id, !leaf.respHidden)
+    },
+
     syncLayouts: () => {
       const s = get()
       const next = syncTabLayouts(s.root, s.tabLayouts)
@@ -707,7 +722,12 @@ function readTabLayouts(value: unknown): Record<string, TabRespLayout> {
     const f = l?.respFloat
     if (!l || !num(l.respPct) || !DOCK_MODES.includes(l.respDock as DockMode)) continue
     if (!f || !num(f.x) || !num(f.y) || !num(f.w) || !num(f.h)) continue
-    out[tabId] = { respPct: clamp(l.respPct, 18, 82), respDock: l.respDock as DockMode, respFloat: { x: f.x, y: f.y, w: f.w, h: f.h } }
+    out[tabId] = {
+      respPct: clamp(l.respPct, 18, 82),
+      respDock: l.respDock as DockMode,
+      respFloat: { x: f.x, y: f.y, w: f.w, h: f.h },
+      respHidden: l.respHidden === true
+    }
   }
   return out
 }

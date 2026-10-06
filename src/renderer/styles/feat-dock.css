@@ -50,6 +50,28 @@
   background: var(--accent-soft);
 }
 
+/* One button with the current position and a menu, for a narrow panel. */
+.dock-btn.dock-compact {
+  display: none;
+  width: auto;
+  padding: 0 3px;
+  gap: 1px;
+  color: var(--accent);
+}
+
+/* A narrow request zone, response or console: five buttons would take most of
+   the header, the status of the response included. */
+@container (max-width: 420px) {
+  .dock-btn-group > .dock-btn:not(.dock-compact) {
+    display: none;
+  }
+
+  .dock-btn-group > .dock-btn.dock-compact {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
 /* ---- grips ---- */
 
 .dock-grip {
@@ -101,6 +123,36 @@
 
 .sidebar {
   position: relative;
+}
+
+/* A window narrower than the sidebar, the AI panel and the workspace together:
+   the side panels give up width before the workspace does, each down to a
+   usable minimum, and the workspace keeps at least 360 px. Without this a wide
+   sidebar plus a wide AI panel left the request panes a few pixels each. */
+.body > .main {
+  min-width: 360px;
+}
+
+.body > .sidebar.dock-left,
+.body > .sidebar.dock-right,
+.body > .ai-panel {
+  flex-shrink: 1;
+}
+
+.body > .sidebar.dock-left,
+.body > .sidebar.dock-right {
+  min-width: 200px;
+}
+
+.body > .ai-panel {
+  min-width: 280px;
+}
+
+/* Docked at the top or the bottom the sidebar leaves the row to the workspace
+   and the AI panel; the panel stops where the workspace minimum begins. */
+.body.side-dock-top > .ai-panel,
+.body.side-dock-bottom > .ai-panel {
+  max-width: calc(100vw - 360px);
 }
 
 /* Left is the default: the flex row already puts the sidebar first. On the
@@ -352,12 +404,68 @@
   }
 }
 
+/* A very narrow request zone (several panes beside a wide sidebar): the
+   protocol and method pickers drop their minimum width so they share the first
+   row, and the URL shares the second with Send — two rows, not four. */
+@container (max-width: 360px) {
+  .pane-builder .req-bar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .pane-builder .req-bar .method-select {
+    min-width: 0 !important;
+    padding: 0 8px;
+  }
+
+  .pane-builder .req-bar .url-bar {
+    flex-basis: 60px;
+  }
+}
+
+/* The request tab row needs ~950 px with every label, ~700 px with icons only.
+   Narrower than that, Save as, Code and cURL keep only their icons (their
+   titles still name them), then Save does too; the Scripts hint gives way to
+   the snippets button. Below ~700 px the row scrolls (HScroll). */
+@container (max-width: 980px) {
+  .pane-builder .req-act-label {
+    display: none;
+  }
+}
+
+@container (max-width: 860px) {
+  .pane-builder .scripts-hint {
+    display: none;
+  }
+}
+
+@container (max-width: 760px) {
+  .pane-builder .req-save-label {
+    display: none;
+  }
+}
+
+/* A floating response is a width container too, like the docked one. */
+.resp-float {
+  container-type: inline-size;
+}
+
+/* Narrow response: the header keeps the status, time and size; «Ask AI» keeps
+   its icon and the header count goes (the Headers tab shows it anyway). */
+@container (max-width: 700px) {
+  .response .ask-ai-label,
+  .response .resp-meta-extra {
+    display: none;
+  }
+}
+
 .reqmeta-desc-ico {
   display: none;
 }
 
 @container (max-width: 560px) {
   .reqmeta-desc-label,
+  .show-resp-label,
   .reqmeta-desc-chev {
     display: none;
   }

@@ -1,0 +1,93 @@
+/* ---------- HScroll: a toolbar row that scrolls sideways ----------
+   The row keeps its own class and look (req-tabs, resp-tabs, subbar, …); the
+   wrapper adds the edge arrows and a slim slider along the bottom edge. The
+   native scrollbar is hidden: it took a row of height and was drawn light on
+   some themes, and inside panes it had been switched off altogether. */
+
+.hscroll {
+  position: relative;
+  flex: none;
+  min-width: 0;
+  /* the surface the row sits on; the arrows fade into it */
+  --hscroll-bg: var(--bg-0);
+}
+
+.hscroll > .hscroll-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.hscroll > .hscroll-row::-webkit-scrollbar {
+  display: none;
+}
+
+.hscroll > .hscroll-row > * {
+  flex: none;
+}
+
+.hscroll-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  z-index: 3;
+  width: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  color: var(--tx-1);
+  cursor: pointer;
+}
+
+.hscroll-arrow.start {
+  left: 0;
+  justify-items: start;
+  padding-left: 4px;
+  background: linear-gradient(to right, var(--hscroll-bg) 55%, transparent);
+}
+
+.hscroll-arrow.end {
+  right: 0;
+  justify-items: end;
+  padding-right: 4px;
+  background: linear-gradient(to left, var(--hscroll-bg) 55%, transparent);
+}
+
+.hscroll-arrow svg {
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+
+.hscroll-arrow:hover svg {
+  background: var(--bg-hover);
+  color: var(--tx-0);
+}
+
+/* The slider: a thin line on the row's bottom edge, thicker under the mouse. */
+.hscroll-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  height: 6px;
+  cursor: pointer;
+}
+
+.hscroll-thumb {
+  position: absolute;
+  left: 0;
+  bottom: 1px;
+  height: 3px;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--tx-3) 75%, transparent);
+  transition: height 0.12s, background 0.12s;
+}
+
+.hscroll-track:hover .hscroll-thumb,
+.hscroll-track:active .hscroll-thumb {
+  height: 5px;
+  background: var(--tx-2);
+}

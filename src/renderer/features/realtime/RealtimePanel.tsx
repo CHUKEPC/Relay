@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MessageTemplate, RealtimeMessage, RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { PaneDockControls } from '@renderer/lib/dock'
+import { PaneStatusBar } from '@renderer/lib/dock'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useRealtime, type RealtimeStatus, type RtKind } from '@renderer/store/realtime'
@@ -149,7 +149,7 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
 
   return (
     <div className="response" style={{ flex: 1 }}>
-      <div className="resp-statusbar">
+      <PaneStatusBar>
         <span className="status-pill" style={{ color: sc, background: `color-mix(in oklch, ${sc} 14%, transparent)` }}>
           <span className="pulse" style={{ background: sc }} />
           {tr(STATUS_LABEL[rt.status])}
@@ -165,11 +165,10 @@ export function RealtimePanel({ tabId, kind }: { tabId: string; kind: RtKind }):
           </span>
         </div>
         <div className="resp-actions">
-          <PaneDockControls />
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
             <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>
-      </div>
+      </PaneStatusBar>
 
       {/* MQTT: per-request QoS + Last-Will config, persisted onto the request. */}
       {kind === 'mqtt' && (

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import type { GrpcConfig, GrpcMethodInfo, GrpcServiceInfo, RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { KVTable } from '@renderer/components/KVTable'
 import { Toggle } from '@renderer/components/primitives'
@@ -237,7 +238,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
       )}
 
       {/* Message / metadata tabs */}
-      <div className="req-tabs" style={{ marginTop: 2 }}>
+      <HScroll className="req-tabs" style={{ marginTop: 2 }}>
         <button className={`tab ${section === 'message' ? 'on' : ''}`} onClick={() => setSection('message')}> {tr('Сообщение')} </button>
         <button className={`tab ${section === 'metadata' ? 'on' : ''}`} onClick={() => setSection('metadata')}>
           Metadata
@@ -245,7 +246,7 @@ export function GrpcBuilder({ req, tabId }: { req: RequestModel; tabId: string }
             <span className="count">{grpc.metadata!.filter((m) => m.enabled && m.key).length}</span>
           )}
         </button>
-      </div>
+      </HScroll>
       {section === 'message' ? (
         <div style={{ height: 200, padding: '6px 14px 14px' }}>
           <CodeEditor value={grpc.message ?? '{}'} language="json" onChange={(message) => set({ message })} />

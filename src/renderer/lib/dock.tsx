@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { clamp } from '@renderer/lib/math'
 import { trackDrag } from '@renderer/lib/drag'
 import { tr } from '@renderer/lib/i18n'
@@ -233,6 +235,27 @@ export function DockButtons({
           <Icon name={DOCK_META[m].icon} size={13} />
         </button>
       ))}
+      {/* A narrow panel shows this one button — the current position and a
+          menu of the others — instead of the row above (feat-dock.css). */}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button type="button" className="icon-btn dock-btn dock-compact" title={tr('Положение панели')} aria-label={tr('Положение панели')}>
+            <Icon name={DOCK_META[dock].icon} size={13} />
+            <Icon name="chevDsm" size={10} />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="popover" align="end" sideOffset={4} collisionPadding={8} style={{ position: 'relative', minWidth: 200 }}>
+            {modes.map((m) => (
+              <DropdownMenu.Item key={m} className="pop-item" onSelect={() => onDock(m)}>
+                <Icon name={DOCK_META[m].icon} size={14} />
+                <span style={{ flex: 1 }}>{tr(DOCK_META[m].title)}</span>
+                {dock === m && <Icon name="check" size={14} className="tick" />}
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   )
 }
@@ -278,10 +301,32 @@ export function paneDockArea(pane: HTMLElement | null, singlePane: boolean): HTM
  */
 export const PaneDockContext = createContext<PaneDockValue | null>(null)
 
-/** Grip + position buttons for the response panel; nothing outside a pane. */
+/**
+ * Whether a pane shows its response. Provided by the pane around the request
+ * and the response, so the response header can hide the panel (like the
+ * sidebar's close button) and the request header can bring it back.
+ */
+export interface ResponseVisibility {
+  tabId: string
+  hidden: boolean
+  setHidden: (hidden: boolean) => void
+  /** the shortcut that toggles it, for the button titles ('' when unbound) */
+  combo: string
+}
+
+export const ResponseVisibilityContext = createContext<ResponseVisibility | null>(null)
+
+/** A title with the toggle shortcut appended when there is one. */
+export function withCombo(label: string, combo: string): string {
+  return combo ? `${label} (${combo})` : label
+}
+
+/** Grip + position buttons + hide for the response panel; nothing outside a pane. */
 export function PaneDockControls(): JSX.Element | null {
   const ctx = useContext(PaneDockContext)
+  const vis = useContext(ResponseVisibilityContext)
   if (!ctx) return null
+  const hideTitle = withCombo(tr('Скрыть ответ'), vis?.combo ?? '')
   return (
     <div className="resp-dock-ctl">
       <div
@@ -294,6 +339,25 @@ export function PaneDockControls(): JSX.Element | null {
         <Icon name="grip" size={12} />
       </div>
       <DockButtons dock={ctx.dock} onDock={ctx.setDock} modes={PANEL_DOCK_MODES} />
+      {vis && (
+        <button type="button" className="icon-btn dock-btn resp-hide-btn" onClick={() => vis.setHidden(true)} title={hideTitle} aria-label={hideTitle}>
+          <Icon name="close" size={13} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The header row of a response panel (HTTP, realtime, gRPC). Its content —
+ * status, timings, actions — scrolls sideways in a narrow pane, while the grip
+ * and the position buttons stay pinned at the end, always within reach.
+ */
+export function PaneStatusBar({ children, className = '' }: { children?: ReactNode; className?: string }): JSX.Element {
+  return (
+    <div className={`resp-statusbar ${className}`}>
+      <HScroll className="resp-status-row">{children}</HScroll>
+      <PaneDockControls />
     </div>
   )
 }

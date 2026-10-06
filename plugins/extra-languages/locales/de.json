@@ -1011,5 +1011,16 @@
   "Перетащите к краю, чтобы перенести запрос": "An einen Rand ziehen, um die Anfrage zu verschieben",
   "Показать автоматические заголовки": "Automatische Header anzeigen",
   "Скрыть автоматические заголовки": "Automatische Header ausblenden",
-  "Host, Content-Length, User-Agent и др. добавляются автоматически — глаз показывает их, снятая галочка убирает заголовок из запроса. Чтобы заменить значение, добавьте заголовок с тем же именем.": "Host, Content-Length, User-Agent und andere werden automatisch gesetzt — das Auge zeigt sie an, ein entferntes Häkchen lässt den Header weg. Um einen Wert zu ersetzen, fügen Sie einen Header mit demselben Namen hinzu."
+  "Host, Content-Length, User-Agent и др. добавляются автоматически — глаз показывает их, снятая галочка убирает заголовок из запроса. Чтобы заменить значение, добавьте заголовок с тем же именем.": "Host, Content-Length, User-Agent und andere werden automatisch gesetzt — das Auge zeigt sie an, ein entferntes Häkchen lässt den Header weg. Um einen Wert zu ersetzen, fügen Sie einen Header mit demselben Namen hinzu.",
+  "Прокрутить влево": "Nach links scrollen",
+  "Прокрутить вправо": "Nach rechts scrollen",
+  "В начало адреса": "Zum Anfang der URL",
+  "В конец адреса": "Zum Ende der URL",
+  "Положение панели": "Position des Bereichs",
+  "Если панель узкая, строки вкладок прокручиваются колесом мыши, стрелками по краям и ползунком под ними; у длинного адреса появляются кнопки «в начало» и «в конец», а кнопки положения панели сворачиваются в одну.": "In einem schmalen Bereich lassen sich die Tab-Leisten mit dem Mausrad, den Pfeilen an ihren Enden und dem Schieberegler darunter scrollen; eine lange URL erhält Schaltflächen „zum Anfang“ und „zum Ende“, und die Positionsschaltflächen eines Bereichs werden zu einer zusammengefasst.",
+  "Скрыть ответ": "Antwort ausblenden",
+  "Показать ответ": "Antwort anzeigen",
+  "ошибка": "Fehler",
+  "Скрыть / показать ответ в активной панели": "Antwort im aktiven Bereich aus-/einblenden",
+  "прячет ответ активной панели — запрос занимает всю панель, а в его заголовке появляется кнопка «Показать ответ» с кодом последнего ответа. То же делают крестик в заголовке ответа и меню панели; скрытый ответ запоминается для каждой вкладки.": "blendet die Antwort des aktiven Bereichs aus — die Anfrage nimmt den ganzen Bereich ein, und ihre Kopfzeile erhält die Schaltfläche „Antwort anzeigen“ mit dem Code der letzten Antwort. Dasselbe bewirken das Kreuz in der Kopfzeile der Antwort und das Bereichsmenü; eine ausgeblendete Antwort wird pro Tab gemerkt."
 }

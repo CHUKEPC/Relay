@@ -3,6 +3,7 @@ import type { RequestModel } from '@shared/types'
 import type { PackSnippet } from '@shared/pack-data'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { useTabs } from '@renderer/store/tabs'
 import { useCap, useFeatures } from '@renderer/store/features'
 
@@ -42,7 +43,7 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
 
   return (
     <div className="tab-fill">
-      <div className="subbar">
+      <HScroll className="subbar">
         <div className="seg">
           <button className={which === 'pre' ? 'on' : ''} onClick={() => setWhich('pre')}>
             Pre-request
@@ -51,7 +52,8 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
             Post-response
           </button>
         </div>
-        <span className="label">
+        {/* hidden in a narrow pane, so the snippets button stays in view (feat-dock.css) */}
+        <span className="label scripts-hint">
           {which === 'pre' ? tr('Выполняется ДО отправки') : tr('Выполняется ПОСЛЕ ответа (тесты)')} · API:{' '}
           <span className="mono">pm.test</span>, <span className="mono">pm.expect</span>, <span className="mono">pm.response</span>
         </span>
@@ -65,7 +67,7 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
             <Icon name="code2" size={13} /> {tr('Сниппеты')}
           </button>
         )}
-      </div>
+      </HScroll>
 
       <div className="scripts-row">
         <div className="code-editor grow" style={{ marginRight: panelOpen ? 8 : 14 }}>

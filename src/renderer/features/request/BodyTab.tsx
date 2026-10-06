@@ -4,6 +4,7 @@ import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { interpolate } from '@shared/interpolate'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
@@ -81,8 +82,8 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
 
   return (
     <div className="tab-fill">
-      <div className="subbar">
-        <div className="seg" style={{ flexWrap: 'wrap' }}>
+      <HScroll className="subbar" revealKey={body.type}>
+        <div className="seg">
           {BODY_TYPES.map((t) => (
             <button key={t.id} className={body.type === t.id ? 'on' : ''} onClick={() => changeType(t.id)}>
               {t.label}
@@ -106,7 +107,7 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
             )}
           </>
         )}
-      </div>
+      </HScroll>
 
       {body.type === 'none' && (
         <div style={{ padding: '30px 14px', textAlign: 'center', color: 'var(--tx-3)', fontSize: 12.5 }}> {tr('Тело запроса отсутствует')} </div>
@@ -189,7 +190,7 @@ function GraphqlBody({
 
   return (
     <div className="tab-fill">
-      <div className="subbar" style={{ gap: 8 }}>
+      <HScroll className="subbar" style={{ gap: 8 }}>
         <button className="btn ghost" style={{ height: 26 }} onClick={runIntrospect} disabled={status === 'loading'}>
           <Icon name="refresh" size={14} />
           {status === 'loading' ? tr('Загрузка схемы…') : tr('Интроспекция схемы')}
@@ -201,7 +202,7 @@ function GraphqlBody({
         {status === 'error' && entry?.error && (
           <span style={{ fontSize: 11.5, color: 'var(--danger, #e06)' }}>{entry.error}</span>
         )}
-      </div>
+      </HScroll>
 
       {docsOpen && entry?.schema && <SchemaDocs schema={entry.schema} />}
 

@@ -13,6 +13,12 @@ export function runPaneAction(id: KeyActionId): boolean {
   if (!id.startsWith('pane')) return false
   const p = usePanes.getState()
 
+  // The same in the main window and in a detached one: the pane shows its response or not.
+  if (id === 'paneToggleResponse') {
+    p.toggleRespHidden()
+    return true
+  }
+
   if (p.windowMode === 'detached') {
     const s = WINDOW_STEP
     const deltas: Partial<Record<KeyActionId, [number, number, number, number]>> = {

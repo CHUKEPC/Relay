@@ -212,9 +212,10 @@
 /* ---------- NARROW PANES: scroll, never wrap ----------
    A pane is only as wide as the user drags it, and a toolbar that wraps or
    silently clips puts controls out of reach (the Send button, the last request
-   tab). These rows keep their natural width and scroll sideways instead. The
-   scrollbar is the point: everything stays reachable at any pane width. */
-.req-bar, .req-tabs, .resp-tabs, .resp-statusbar, .subbar {
+   tab). These rows keep their natural width and scroll sideways instead: the
+   tab rows and sub-bars through HScroll (wheel, edge arrows, a slider — see
+   feat-hscroll.css), the URL row with a thin scrollbar of its own. */
+.req-bar {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
@@ -223,9 +224,14 @@
      across a dark theme. */
   scrollbar-color: var(--line-2) transparent;
 }
-.req-bar > *, .req-tabs > *, .resp-tabs > *, .resp-statusbar > *, .subbar > * { flex: none; }
+.req-bar > * { flex: none; }
 /* The URL is the one field worth giving the leftover width to. */
 .req-bar .url-bar { flex: 1 0 200px; min-width: 200px; }
+/* The response header: the scrolling part takes the room, the grip and the
+   position buttons stay at the end (PaneStatusBar). */
+.resp-statusbar > .hscroll { flex: 1 1 auto; align-self: stretch; }
+.resp-status-row { display: flex; align-items: center; gap: 14px; height: 100%; }
+.resp-statusbar > .resp-dock-ctl { flex: none; }
 .req-tabs .tab, .resp-tabs .tab, .subbar .label, .subbar .seg button { white-space: nowrap; }
 .resp-meta, .resp-meta b, .resp-meta .sep { white-space: nowrap; }
 /* Key/value rows have four columns; below this they are unreadable, so the

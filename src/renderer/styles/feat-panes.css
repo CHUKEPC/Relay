@@ -270,19 +270,6 @@ body.pane-dragging .pane .monaco-host {
   height: 26px;
 }
 
-/* Narrow panes: the builder sub-tab row scrolls on its own instead of widening
-   the whole builder (which showed a horizontal scrollbar under it). */
-.pane .req-tabs {
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.pane .req-tabs::-webkit-scrollbar {
-  display: none;
-}
-.pane .req-tabs > * {
-  flex: none;
-}
-
 /* Outer edge strips: dropping here splits the whole grid, VS Code style.
    Rendered only while a drop is in flight, so they never block the UI. */
 .pane-edge {

@@ -49,6 +49,7 @@ export type KeyActionId =
   | 'paneMaximize'
   | 'paneDetach'
   | 'paneFlip'
+  | 'paneToggleResponse'
 
 export type KeyActionGroup = 'general' | 'panes'
 
@@ -103,7 +104,9 @@ export const KEY_ACTIONS: KeyActionDef[] = [
   { id: 'paneResizeDown', label: 'Сдвинуть границу панели вниз', defaultCombo: 'mod+shift+alt+arrowdown', group: 'panes' },
   { id: 'paneMaximize', label: 'Развернуть / вернуть активную панель', defaultCombo: 'mod+shift+x', group: 'panes' },
   { id: 'paneDetach', label: 'Открыть панель в отдельном окне / вернуть', defaultCombo: 'mod+shift+d', group: 'panes' },
-  { id: 'paneFlip', label: 'Поменять местами с соседней группой', defaultCombo: 'mod+shift+y', group: 'panes' }
+  { id: 'paneFlip', label: 'Поменять местами с соседней группой', defaultCombo: 'mod+shift+y', group: 'panes' },
+  // The sidebar hides with Ctrl+B; the response of the active pane with Ctrl+Shift+B.
+  { id: 'paneToggleResponse', label: 'Скрыть / показать ответ в активной панели', defaultCombo: 'mod+shift+b', group: 'panes' }
 ]
 
 const MODIFIER_KEYS = new Set([

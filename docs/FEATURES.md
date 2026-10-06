@@ -499,6 +499,34 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       one realtime/gRPC message log (`store/message-log.ts`), one float grip and one wall drag for
       the sidebar, the response, the console and the AI panel.
 
+## 1.3.5 — Narrow panes stay usable, the response can be hidden
+
+- [x] **Hide the response** like the sidebar: the cross in the response header, the pane menu or
+      Ctrl/⌘+Shift+B (rebindable) hides the response panel of the active pane, and the request
+      takes the whole pane. While hidden, the request header carries «Show the response» with the
+      last status code (a spinner while a request runs); gRPC, which has no request header, gets the
+      button in a row of its own. Hidden or not is part of the tab's response layout: remembered
+      per tab, kept when the tab moves to another pane, saved with the layout; a floating response
+      comes back floating.
+
+- [x] **Rows that do not fit scroll sideways with visible controls**: the request tabs (Params…Examples,
+      Save, Save as, Code, cURL and its menu), the response tabs and body controls, the Body and Scripts
+      sub-bars and the gRPC tabs scroll with the mouse wheel, an arrow at each clipped end and a slider
+      along the bottom edge. Inside panes the scrollbar of the request tabs used to be hidden, so the
+      buttons past the edge could only be reached with Shift+wheel. The selected tab scrolls into view.
+- [x] **A long URL** gets «to the start» / «to the end» buttons at its clipped ends (the caret goes
+      there, ready to type), and the wheel scrolls it sideways.
+- [x] **The response header** (HTTP, realtime, gRPC) scrolls its status, time, size and actions, while
+      the grip and the position buttons stay pinned at its end.
+- [x] **Narrow panels fold**: below 980 px of request zone Save as, Code and cURL keep only their
+      icons, below 760 px Save does too, below 860 px the Scripts hint gives way to the snippets
+      button; a response below 700 px drops the «Ask AI» label and the header count; below 420 px the
+      five position buttons of the request, the response or the console fold into one button with a
+      menu; below 360 px the protocol and method share one row and the URL and Send the next.
+- [x] **The side panels give way**: when the sidebar and the AI panel together leave the workspace
+      less than 360 px, both shrink (down to 200 px and 280 px) instead of squeezing the request panes
+      to a sliver.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

@@ -79,3 +79,27 @@
 }
 .reqmeta-desc textarea:focus { border-color: var(--accent); }
 .reqmeta-desc textarea::placeholder { color: var(--tx-3); }
+
+/* «Show the response» — in the request header while the pane's response is
+   hidden, with the last status code (or a spinner) in front. */
+.show-resp-btn {
+  flex: none;
+  height: 26px;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.show-resp-status {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+/* gRPC has no request header: the button gets a row of its own, only while needed. */
+.grpc-show-resp {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px 0;
+}
+.grpc-show-resp:empty {
+  display: none;
+}

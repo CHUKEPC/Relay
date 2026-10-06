@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RealtimeMessage } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { PaneDockControls } from '@renderer/lib/dock'
+import { PaneStatusBar } from '@renderer/lib/dock'
 import { useGrpc, type GrpcStatus } from '@renderer/store/grpc'
 
 import { tr, trf } from '@renderer/lib/i18n'
@@ -70,7 +70,7 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
 
   return (
     <div className="response" style={{ flex: 1 }}>
-      <div className="resp-statusbar">
+      <PaneStatusBar>
         <span className="status-pill" style={{ color: sc, background: `color-mix(in oklch, ${sc} 14%, transparent)` }}>
           <span className="pulse" style={{ background: sc }} />
           {tr(STATUS_LABEL[g.status])}
@@ -81,11 +81,10 @@ export function GrpcResponse({ tabId }: { tabId: string }): JSX.Element {
           <span>{trf('ответов: {n}', { n: inCount })}</span>
         </div>
         <div className="resp-actions">
-          <PaneDockControls />
           <button className="btn ghost" style={{ height: 28 }} onClick={() => clear(tabId)} title={tr('Очистить лог')}>
             <Icon name="trash" size={13} /> {tr('Очистить')} </button>
         </div>
-      </div>
+      </PaneStatusBar>
 
       <div className="rt-log" ref={logRef}>
         {g.messages.length === 0 ? (

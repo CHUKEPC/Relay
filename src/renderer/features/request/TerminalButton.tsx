@@ -39,7 +39,7 @@ export function TerminalButton({ tabId, beforeRun, onShowCode }: { tabId: string
   return (
     <div className="split-btn" data-tour="terminal">
       <button className="btn ghost" style={{ height: 28 }} onClick={() => run('curl')} title={tr('Отправить в cURL: открыть терминал и выполнить запрос')}>
-        <Icon name="terminal" size={14} /> cURL
+        <Icon name="terminal" size={14} /> <span className="req-act-label">cURL</span>
       </button>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

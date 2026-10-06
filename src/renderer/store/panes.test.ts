@@ -340,3 +340,40 @@ describe('response layout follows the tab', () => {
     expect(panes.syncTabLayouts(next!.root, next!.layouts)).toBeNull()
   })
 })
+
+describe('hidden response', () => {
+  it('hides and shows the response of the active pane, per tab', () => {
+    const [a, b] = openTabs(2)
+    const pane = (P().root as PaneLeaf).id
+    tabs.useTabs.getState().setActive(a)
+    P().toggleRespHidden()
+    expect(leaves()[0]).toMatchObject({ tabId: a, respHidden: true })
+    expect(P().tabLayouts[a]?.respHidden).toBe(true)
+    // the next tab has its own layout: its response shows
+    tabs.useTabs.getState().setActive(b)
+    expect(leaves()[0]).toMatchObject({ tabId: b, respHidden: false })
+    tabs.useTabs.getState().setActive(a)
+    expect(leaves()[0].respHidden).toBe(true)
+    P().setRespHidden(pane, false)
+    expect(leaves()[0].respHidden).toBe(false)
+  })
+
+  it('travels with the tab to another pane and leaves an empty pane alone', () => {
+    openTabs(2)
+    P().applyPreset(2)
+    const [left, right] = leaves()
+    P().toggleRespHidden(left.id)
+    const moved = left.tabId
+    P().swapLeaves(left.id, right.id)
+    expect(leaves().find((l) => l.tabId === moved)?.respHidden).toBe(true)
+    panes.usePanes.setState({ root: panes.newLeaf(null) })
+    P().toggleRespHidden((P().root as PaneLeaf).id)
+    expect((P().root as PaneLeaf).respHidden).toBeFalsy()
+  })
+
+  it('a layout saved without the flag shows the response', () => {
+    const leaf: PaneLeaf = { ...panes.newLeaf('t-old'), respHidden: true, layoutTab: 't-other' }
+    const next = panes.syncTabLayouts(leaf, { 't-old': { respPct: 50, respDock: 'bottom', respFloat: { x: 0, y: 0, w: 400, h: 300 } } })
+    expect((next?.root as PaneLeaf).respHidden).toBe(false)
+  })
+})

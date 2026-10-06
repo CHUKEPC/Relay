@@ -206,7 +206,14 @@ room from the other panels; it never trades places with anything. `startFloatRes
 `trackWallResize` (`lib/drag.ts`) are the float grip and the wall drag every panel uses.
 `floatStyle` clamps a floating panel into its pane
 or the window in CSS, so a split or a smaller window never strands its header; a narrow
-`.pane-builder` (a container) wraps the URL bar into two rows. The sidebar's position lives in the UI store (localStorage). The
+`.pane-builder` (a container) wraps the URL bar into two rows. Tab rows and sub-bars that do not fit
+scroll sideways through `HScroll` (`components/HScroll.tsx`, geometry in `lib/hscroll.ts`): the wheel,
+an arrow at each clipped end and a slider along the bottom edge. `PaneStatusBar` scrolls a response
+header's content while the grip and the position buttons stay pinned at its end. Container queries
+fold labels to icons and five position buttons into one menu in narrow panels, and the side panels
+shrink before the workspace does (it keeps 360 px). `respHidden` in the tab's response layout hides the
+response panel; `ResponseVisibilityContext` (`lib/dock.tsx`) lets the response header hide it and the
+request header (`ShowResponseButton`) bring it back. The sidebar's position lives in the UI store (localStorage). The
 response layout belongs to the tab: `PaneLeaf.respDock` / `respPct` / `respFloat` hold the layout of
 the tab the pane shows (`layoutTab`), every change is recorded in `usePanes.tabLayouts`, and
 `syncTabLayouts` loads a tab's record whenever a pane switches tabs (persisted with the pane tree).

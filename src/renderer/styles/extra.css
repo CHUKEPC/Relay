@@ -103,6 +103,36 @@
 .hl-input input::placeholder {
   color: var(--tx-3);
 }
+/* «To the start» / «to the end» of a value longer than its field (the URL bar):
+   small buttons over the clipped end, fading the text that runs under them. */
+.hl-edge {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 24px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-3);
+  color: var(--tx-1);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.hl-edge:hover {
+  color: var(--tx-0);
+  border-color: var(--line-2);
+}
+.hl-edge.start {
+  left: -6px;
+  box-shadow: 10px 0 10px -2px var(--bg-2);
+}
+.hl-edge.end {
+  right: -6px;
+  box-shadow: -10px 0 10px -2px var(--bg-2);
+}
 .hl-mirror .tok {
   color: var(--accent);
   background: var(--accent-soft);

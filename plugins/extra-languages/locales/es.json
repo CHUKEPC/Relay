@@ -1011,5 +1011,16 @@
   "Перетащите к краю, чтобы перенести запрос": "Arrastre a un borde para mover la petición",
   "Показать автоматические заголовки": "Mostrar cabeceras automáticas",
   "Скрыть автоматические заголовки": "Ocultar cabeceras automáticas",
-  "Host, Content-Length, User-Agent и др. добавляются автоматически — глаз показывает их, снятая галочка убирает заголовок из запроса. Чтобы заменить значение, добавьте заголовок с тем же именем.": "Host, Content-Length, User-Agent y otras se añaden automáticamente — el ojo las muestra y al desmarcar una no se envía. Para sustituir un valor, añada una cabecera con el mismo nombre."
+  "Host, Content-Length, User-Agent и др. добавляются автоматически — глаз показывает их, снятая галочка убирает заголовок из запроса. Чтобы заменить значение, добавьте заголовок с тем же именем.": "Host, Content-Length, User-Agent y otras se añaden automáticamente — el ojo las muestra y al desmarcar una no se envía. Para sustituir un valor, añada una cabecera con el mismo nombre.",
+  "Прокрутить влево": "Desplazar a la izquierda",
+  "Прокрутить вправо": "Desplazar a la derecha",
+  "В начало адреса": "Al inicio de la URL",
+  "В конец адреса": "Al final de la URL",
+  "Положение панели": "Posición del panel",
+  "Если панель узкая, строки вкладок прокручиваются колесом мыши, стрелками по краям и ползунком под ними; у длинного адреса появляются кнопки «в начало» и «в конец», а кнопки положения панели сворачиваются в одну.": "En un panel estrecho, las filas de pestañas se desplazan con la rueda del ratón, las flechas de sus extremos y el control deslizante de debajo; una URL larga muestra los botones «al inicio» y «al final», y los botones de posición del panel se agrupan en uno.",
+  "Скрыть ответ": "Ocultar la respuesta",
+  "Показать ответ": "Mostrar la respuesta",
+  "ошибка": "error",
+  "Скрыть / показать ответ в активной панели": "Ocultar / mostrar la respuesta en el panel activo",
+  "прячет ответ активной панели — запрос занимает всю панель, а в его заголовке появляется кнопка «Показать ответ» с кодом последнего ответа. То же делают крестик в заголовке ответа и меню панели; скрытый ответ запоминается для каждой вкладки.": "oculta la respuesta del panel activo: la solicitud ocupa todo el panel y su cabecera muestra el botón «Mostrar la respuesta» con el código de la última respuesta. La cruz de la cabecera de la respuesta y el menú del panel hacen lo mismo; la respuesta oculta se recuerda para cada pestaña."
 }
