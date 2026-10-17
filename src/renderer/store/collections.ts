@@ -104,6 +104,11 @@ interface CollectionsState {
   updateRequest: (requestId: string, request: RequestModel) => void
   renameNode: (id: string, name: string) => void
   removeNode: (id: string) => void
+  /**
+   * Put a node back (trash restore): under `parentId` at `index`, or at the top
+   * level for a collection. Returns false when the parent no longer exists.
+   */
+  insertNode: (node: CollectionNode, parentId: string | null, index: number) => boolean
   moveNode: (id: string, newParentId: string | null, newIndex: number) => void
   duplicateNode: (id: string) => void
   updateFolderMeta: (id: string, patch: Partial<Pick<CollectionFolderNode, 'auth' | 'variables' | 'preRequestScript' | 'testScript' | 'description'>>) => void
@@ -178,6 +183,21 @@ export const useCollections = create<CollectionsState>((set, get) => {
     removeNode: (id) => {
       const next = mapTree(topLevel(), (n) => (n.id === id ? null : n))
       commit(next as CollectionFolderNode[])
+    },
+
+    insertNode: (node, parentId, index) => {
+      const roots = topLevel()
+      if (parentId === null) {
+        if (node.type !== 'collection') return false
+        const next = [...roots]
+        next.splice(Math.max(0, Math.min(index, next.length)), 0, node)
+        commit(next as CollectionFolderNode[])
+        return true
+      }
+      const parent = locate(roots, parentId)
+      if (!parent || parent.node.type === 'request' || node.type === 'collection') return false
+      commit(insertAt(roots, parentId, node, index) as CollectionFolderNode[])
+      return true
     },
 
     moveNode: (id, newParentId, newIndex) => {

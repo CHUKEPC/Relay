@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Auth, JwtAlg, OAuth2Grant, RequestModel } from '@shared/types'
+import type { Auth, JwtAlg, OAuth2Grant, RequestModel, VariableScope } from '@shared/types'
+import { interpolate } from '@shared/interpolate'
 import { Field, Segmented } from '@renderer/components/primitives'
 import { HighlightedInput } from '@renderer/components/HighlightedInput'
 import { useTabs } from '@renderer/store/tabs'
@@ -201,7 +202,7 @@ export function AuthTab({ req, tabId }: { req: RequestModel; tabId: string }) {
         </>
       )}
 
-      {auth.type === 'oauth2' && <OAuth2Fields auth={auth} setAuth={setAuth} />}
+      {auth.type === 'oauth2' && <OAuth2Fields auth={auth} setAuth={setAuth} scope={scope} />}
 
       {auth.type === 'jwt' && (
         <>
@@ -441,9 +442,21 @@ function codeFromInput(text: string): string {
   }
 }
 
-function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' }>; setAuth: (a: Auth) => void }) {
+function OAuth2Fields({
+  auth,
+  setAuth,
+  scope
+}: {
+  auth: Extract<Auth, { type: 'oauth2' }>
+  setAuth: (a: Auth) => void
+  /** variables of the request, for `{{baseUrl}}/oauth/token` and the like */
+  scope: VariableScope
+}) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  // The token endpoints are called from here, not through the request engine,
+  // so the {{variables}} in the fields are resolved here too.
+  const v = (s: string | undefined): string | undefined => (s === undefined ? undefined : interpolate(s, scope))
 
   const pkceOn = auth.codeVerifier !== undefined
 
@@ -456,14 +469,14 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
     setMsg(null)
     const res = await window.api.oauthToken({
       grant: auth.grant,
-      tokenUrl: auth.tokenUrl,
-      clientId: auth.clientId ?? '',
-      clientSecret: auth.clientSecret,
-      scope: auth.scope,
-      username: auth.username,
-      password: auth.password,
+      tokenUrl: v(auth.tokenUrl) ?? '',
+      clientId: v(auth.clientId) ?? '',
+      clientSecret: v(auth.clientSecret),
+      scope: v(auth.scope),
+      username: v(auth.username),
+      password: v(auth.password),
       code: codeOverride ?? auth.code,
-      redirectUri: auth.redirectUri,
+      redirectUri: v(auth.redirectUri),
       codeVerifier: auth.codeVerifier,
       refreshToken: auth.refreshToken,
       clientAuth: auth.clientAuth
@@ -491,9 +504,9 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
     setBusy(true)
     setMsg(null)
     const res = await window.api.oauthDevice({
-      deviceAuthUrl: auth.deviceAuthUrl,
-      clientId: auth.clientId ?? '',
-      scope: auth.scope
+      deviceAuthUrl: v(auth.deviceAuthUrl) ?? '',
+      clientId: v(auth.clientId) ?? '',
+      scope: v(auth.scope)
     })
     setBusy(false)
     if (res.ok && res.deviceCode) {
@@ -524,10 +537,10 @@ function OAuth2Fields({ auth, setAuth }: { auth: Extract<Auth, { type: 'oauth2' 
     setMsg(tr('Ожидаем вход в браузере…'))
     const codeChallenge = auth.codeVerifier ? await codeChallengeOf(auth.codeVerifier) : undefined
     const res = await window.api.oauthAuthorize({
-      authUrl: auth.authUrl,
-      clientId: auth.clientId,
-      redirectUri: auth.redirectUri,
-      scope: auth.scope,
+      authUrl: v(auth.authUrl) ?? '',
+      clientId: v(auth.clientId) ?? '',
+      redirectUri: v(auth.redirectUri),
+      scope: v(auth.scope),
       codeChallenge
     })
     setBusy(false)

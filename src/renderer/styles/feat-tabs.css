@@ -52,3 +52,195 @@
 .rtab.dragging {
   opacity: 0.45;
 }
+
+/* ---------- tab groups ---------- */
+
+/* Group colours. Mid-lightness hues read on both themes; the light theme gets
+   slightly deeper ones so the labels keep their contrast on white. */
+:root {
+  --tg-grey: oklch(0.68 0.02 264);
+  --tg-blue: oklch(0.68 0.15 255);
+  --tg-red: oklch(0.66 0.19 25);
+  --tg-yellow: oklch(0.8 0.15 85);
+  --tg-green: oklch(0.7 0.15 150);
+  --tg-pink: oklch(0.7 0.17 350);
+  --tg-purple: oklch(0.66 0.17 300);
+  --tg-cyan: oklch(0.74 0.12 205);
+  --tg-orange: oklch(0.73 0.16 55);
+}
+[data-theme='light'] {
+  --tg-grey: oklch(0.55 0.02 264);
+  --tg-blue: oklch(0.55 0.17 255);
+  --tg-red: oklch(0.56 0.2 25);
+  --tg-yellow: oklch(0.66 0.15 80);
+  --tg-green: oklch(0.56 0.15 150);
+  --tg-pink: oklch(0.58 0.19 350);
+  --tg-purple: oklch(0.54 0.19 300);
+  --tg-cyan: oklch(0.58 0.12 205);
+  --tg-orange: oklch(0.6 0.17 50);
+}
+
+/* The label in front of a group: click folds it, right-click edits it. */
+.tab-group-chip {
+  flex: 0 0 auto;
+  align-self: center;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  max-width: 160px;
+  margin: 0 2px 0 4px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--tg) 22%, transparent);
+  border: 1px solid color-mix(in oklch, var(--tg) 55%, transparent);
+  color: var(--tg);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+.tab-group-chip:hover {
+  background: color-mix(in oklch, var(--tg) 32%, transparent);
+}
+.tab-group-chip:focus-visible {
+  outline: 2px solid var(--tg);
+  outline-offset: 1px;
+}
+.tab-group-chip .tg-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* An unnamed group is a coloured dot, like in the browsers. */
+.tab-group-chip.unnamed {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  justify-content: center;
+  background: var(--tg);
+}
+.tab-group-chip.unnamed.collapsed {
+  width: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+}
+.tab-group-chip.unnamed .tg-count {
+  color: var(--bg-0);
+  background: transparent;
+}
+.tab-group-chip .tg-count {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  background: color-mix(in oklch, var(--tg) 30%, transparent);
+}
+.tab-group-chip.dragging {
+  opacity: 0.45;
+}
+
+/* Tabs of a group carry its colour as a line along the bottom of the strip;
+   the line runs through the gaps so the group reads as one block. */
+.rtab.in-group::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -4px;
+  height: 2px;
+  background: var(--tg);
+  pointer-events: none;
+}
+.rtab.in-group.group-last::after {
+  right: 0;
+  border-radius: 0 2px 2px 0;
+}
+.rtab.in-group.on {
+  box-shadow: var(--shadow-1), inset 0 0 0 1px color-mix(in oklch, var(--tg) 45%, transparent);
+}
+
+/* The group editor: name, colour, actions. */
+.tg-editor {
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tg-editor .input {
+  height: 30px;
+  margin: 2px 2px 6px;
+}
+.tg-editor .pop-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 12.5px;
+}
+.tg-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 4px 4px;
+}
+.tg-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: var(--tg);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow 0.12s;
+}
+.tg-swatch:hover {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--tg) 40%, transparent);
+}
+.tg-swatch.on {
+  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--tg);
+}
+.tg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--tg);
+}
+.pop-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pop-item.danger {
+  color: var(--s-5xx);
+}
+.pop-sub-chev {
+  margin-left: auto;
+  color: var(--tx-3);
+}
+/* Radix marks the keyboard-highlighted item and an open submenu trigger. */
+.pop-item[data-highlighted],
+.pop-item[data-state='open'] {
+  background: var(--bg-hover);
+  color: var(--tx-0);
+  outline: none;
+}
+
+/* A narrow window: the labels give way before the tabs do. */
+@media (max-width: 900px) {
+  .tab-group-chip {
+    max-width: 96px;
+  }
+}

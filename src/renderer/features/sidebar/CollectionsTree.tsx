@@ -12,6 +12,8 @@ import { ImportDialog } from '@renderer/features/data/ImportDialog'
 import { REQUEST_MIME } from '@renderer/lib/dnd'
 import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
 import { RequestTag } from '@renderer/components/RequestTag'
+import { trashAllCollections, trashNode } from '@renderer/lib/trash'
+import { openNodeAsGroup } from '@renderer/lib/tab-groups'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /** Where a dragged node will land relative to the row it is hovering. */
@@ -33,7 +35,6 @@ const dragState: { id: string | null } = { id: null }
 export function CollectionsTree({ query }: { query: string }) {
   const collections = useCollections((s) => s.doc.collections)
   const addCollection = useCollections((s) => s.addCollection)
-  const setAll = useCollections((s) => s.setAll)
   const [rename, setRename] = useState<RenameState | null>(null)
   // Global so the command palette can open the dialog too.
   const importOpen = useUi((s) => s.importOpen)
@@ -42,7 +43,7 @@ export function CollectionsTree({ query }: { query: string }) {
   const deleteAll = () => {
     const n = collections.length
     if (n === 0) return
-    if (window.confirm(trf('Удалить все коллекции ({n})? Это действие необратимо.', { n }))) setAll([])
+    if (window.confirm(trf('Удалить все коллекции ({n})? Их можно будет восстановить из корзины.', { n }))) trashAllCollections()
   }
 
   return (
@@ -290,7 +291,7 @@ function TreeNode({
         <ContextMenu.Item className="pop-item" onSelect={() => setRename({ id: node.id, isNew: false })}>
           <Icon name="doc" size={14} /> {tr('Переименовать')} </ContextMenu.Item>
         <ContextMenu.Separator className="pop-sep" />
-        <ContextMenu.Item className="pop-item" style={{ color: 'var(--s-5xx)' }} onSelect={() => store.removeNode(node.id)}>
+        <ContextMenu.Item className="pop-item" style={{ color: 'var(--s-5xx)' }} onSelect={() => trashNode(node.id)}>
           <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
       </>
     ) : (
@@ -322,6 +323,8 @@ function TreeNode({
         </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => useRunner.getState().openFor(node)}>
           <Icon name="play" size={14} /> {tr('Запустить')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => openNodeAsGroup(node)}>
+          <Icon name="tabGroup" size={14} /> {tr('Открыть запросы группой вкладок')} </ContextMenu.Item>
         {node.type === 'collection' && (
           <ContextMenu.Item className="pop-item" onSelect={() => setVarsOpen(true)}>
             <Icon name="env" size={14} /> {tr('Переменные коллекции')}
@@ -331,9 +334,7 @@ function TreeNode({
         <ContextMenu.Item
           className="pop-item"
           style={{ color: 'var(--s-5xx)' }}
-          onSelect={() => {
-            if (window.confirm(trf('Удалить «{name}» и всё содержимое?', { name: tr(node.name) }))) store.removeNode(node.id)
-          }}
+          onSelect={() => trashNode(node.id)}
         >
           <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
       </>

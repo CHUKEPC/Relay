@@ -461,6 +461,35 @@ export interface HistoryDoc extends DocEnvelope {
   entries: HistoryEntry[]
 }
 
+/** Where a deleted variable lived. */
+export type TrashVarScope = 'environment' | 'global' | 'collection'
+
+interface TrashEntryBase {
+  id: string
+  /** display name of what was deleted */
+  name: string
+  deletedAt: number
+  /** readable place it was deleted from («Acme / Products», an environment name) */
+  location?: string
+}
+
+/**
+ * Something the user deleted, kept with enough context to put it back where it
+ * was. One per deletion; the trash lives in the workspace's own document.
+ */
+export type TrashEntry = TrashEntryBase &
+  (
+    | { kind: 'node'; node: CollectionNode; parentId: string | null; index: number }
+    | { kind: 'environment'; environment: Environment; index: number; wasActive: boolean }
+    | { kind: 'variable'; variable: VariableDef; scope: TrashVarScope; ownerId: string | null; index: number }
+    | { kind: 'example'; example: ResponseExample; requestId: string; savedRequestId: string | null; index: number }
+    | { kind: 'history'; entries: HistoryEntry[] }
+  )
+
+export interface TrashDoc extends DocEnvelope {
+  entries: TrashEntry[]
+}
+
 export interface TabModel {
   id: string
   /** the open (possibly unsaved) request draft */
@@ -468,11 +497,31 @@ export interface TabModel {
   /** id of the saved request this tab is bound to, if any */
   savedRequestId: string | null
   dirty: boolean
+  /** the tab group this tab belongs to (see {@link TabGroup}) */
+  groupId?: string | null
+}
+
+/** Colours a tab group can take; drawn from the theme's `--tg-*` tokens. */
+export type TabGroupColor = 'grey' | 'blue' | 'red' | 'yellow' | 'green' | 'pink' | 'purple' | 'cyan' | 'orange'
+
+/**
+ * A named, coloured group of tabs in the tab strip, like browser tab groups.
+ * Its tabs always sit next to each other; a collapsed group shows only its
+ * label. Groups live in the workspace's tabs document and never leave the
+ * machine.
+ */
+export interface TabGroup {
+  id: string
+  name: string
+  color: TabGroupColor
+  collapsed: boolean
 }
 
 export interface TabsDoc extends DocEnvelope {
   tabs: TabModel[]
   activeTabId: string | null
+  /** tab groups, in no particular order (the tabs give the order) */
+  groups?: TabGroup[]
 }
 
 /**

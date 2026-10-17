@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormDataField, GraphqlSchema, GraphqlTypeInfo, RawLanguage, RequestBody, RequestModel, VariableScope } from '@shared/types'
 import { RAW_LANGUAGE_CONTENT_TYPE } from '@shared/constants'
 import { makeId } from '@shared/id'
@@ -10,7 +10,7 @@ import { KVTable } from '@renderer/components/KVTable'
 import { useTabs } from '@renderer/store/tabs'
 import { useSettings } from '@renderer/store/settings'
 import { useScope } from '@renderer/lib/hooks'
-import { beautify } from '@renderer/lib/beautify'
+import { beautify, hasLongLine } from '@renderer/lib/beautify'
 import { useGraphqlSchema } from '@renderer/store/graphql'
 
 import { tr } from '@renderer/lib/i18n'
@@ -33,6 +33,10 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
   const patch = (p: Partial<RequestModel>) => useTabs.getState().patchTab(tabId, p)
   const scope = useScope(tabId)
   const body = req.body
+  // A pasted one-line body (minified JSON, a long token) wraps instead of
+  // running off to the right; formatted bodies keep their own lines.
+  const rawText = body.type === 'raw' ? body.text : ''
+  const longLines = useMemo(() => hasLongLine(rawText), [rawText])
 
   const setBody = (b: RequestBody) => patch({ body: b })
 
@@ -115,7 +119,13 @@ export function BodyTab({ req, tabId }: { req: RequestModel; tabId: string }) {
 
       {body.type === 'raw' && (
         <div className="code-editor grow">
-          <CodeEditor value={body.text} language={monacoLang(body.language)} onChange={(text) => setBody({ ...body, text })} />
+          <CodeEditor
+            value={body.text}
+            language={monacoLang(body.language)}
+            onChange={(text) => setBody({ ...body, text })}
+            wordWrap={longLines}
+            viewKey={`${tabId}:body`}
+          />
         </div>
       )}
 

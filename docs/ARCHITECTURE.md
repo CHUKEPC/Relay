@@ -98,7 +98,8 @@ Local-first, **no native modules**:
 - The in-house **`JsonStore`** (`src/main/storage/json-store.ts`) writes one JSON document per key
   under `app.getPath('userData')/relay-data`:
   - app-level: `settings`, `providers`, `plugins`, `features`, `userThemes`;
-  - per workspace (`ws/<id>/`): `collections`, `environments`, `globals`, `history`, `tabs`, `cookies`.
+  - per workspace (`ws/<id>/`): `collections`, `environments`, `globals`, `history`, `tabs` (with the
+    tab groups), `cookies`, `trash` (deleted items, kept 30 days).
   - In-memory model + **debounced** atomic writes (write to temp, rename). A document that fails to
     parse is moved aside as `<key>.json.corrupt-<ts>` before anything is written over it, and every
     workspace folder keeps a `workspace.json` so a damaged workspace list can be rebuilt.
@@ -118,6 +119,21 @@ Local-first, **no native modules**:
 Suggested slices: `requestStore` (open tabs + active request draft), `collectionsStore`,
 `environmentsStore`, `historyStore`, `responseStore`, `aiStore`, `settingsStore`, `uiStore`
 (theme, panel layout). Persistence is delegated to main via IPC, not kept only in `localStorage`.
+
+- **Tab groups** live in the tabs store (`store/tabs.ts`): `TabsDoc.groups` and `TabModel.groupId`.
+  Every commit runs `normalizeGroups`, which drops unknown and empty groups and keeps the tabs of a
+  group contiguous, so the strip (`app/TabStrip.tsx`) can draw a label in front of each group and skip
+  the tabs of a collapsed one. `moveTab` decides membership from the slot a tab is dropped into;
+  `setActive`/`openSaved` unfold the group of a tab being shown.
+- **Trash**: user-facing deletes go through `lib/trash.ts`, which removes the item from its store and
+  records a `TrashEntry` (the item plus its parent, index and readable place) in `store/trash.ts`
+  (`trash` document). `restoreFromTrash` puts it back where it was, falling back to a «Restored»
+  collection or to the globals when the old parent is gone. Programmatic rewrites (backup restore,
+  scripts unsetting variables) still call the stores directly.
+- **View state per tab**: panels rebuilt on every tab switch keep their state outside themselves —
+  `store/request-ui.ts` holds the builder sub-tab and the response tab/view/filter per tab, and
+  `lib/view-memory.ts` the scroll positions (`CodeEditor` `viewKey`, `useRememberedScroll`). Both are
+  dropped when the tab closes.
 
 ## Keyboard shortcuts (`src/renderer/lib/keymap.ts`)
 

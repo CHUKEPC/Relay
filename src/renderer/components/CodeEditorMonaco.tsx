@@ -1,8 +1,9 @@
 import '../lib/monaco'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { ensureVarCompletion } from '../lib/var-completion'
+import { attachVarTrigger, ensureVarCompletion } from '../lib/var-completion'
 import { useEffect, useRef, useState } from 'react'
 import { makeId } from '@shared/id'
+import { recallScroll, rememberScroll } from '../lib/view-memory'
 
 export interface CodeEditorProps {
   value: string
@@ -13,6 +14,11 @@ export interface CodeEditorProps {
   minimal?: boolean
   wordWrap?: boolean
   placeholder?: string
+  /**
+   * Remember the scroll position under this key (see lib/view-memory): an editor
+   * rebuilt when its tab is shown again comes back where it was left.
+   */
+  viewKey?: string
 }
 
 function currentTheme(): 'relay-dark' | 'relay-light' {
@@ -20,9 +26,32 @@ function currentTheme(): 'relay-dark' | 'relay-light' {
 }
 
 /** Shared Monaco wrapper that tracks the app theme and matches the design. */
-export function CodeEditorMonaco({ value, language = 'json', onChange, readOnly = false, minimal = false, wordWrap = false }: CodeEditorProps) {
+export function CodeEditorMonaco({ value, language = 'json', onChange, readOnly = false, minimal = false, wordWrap = false, viewKey }: CodeEditorProps) {
   const [theme, setTheme] = useState(currentTheme)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
+  const viewKeyRef = useRef(viewKey)
+  viewKeyRef.current = viewKey
+  /** while a remembered position is being applied, scroll events are not saved */
+  const restoringRef = useRef(false)
+
+  /** Scroll to where `key` was left (the top for a key never seen). */
+  const restoreScroll = (editor: Parameters<OnMount>[0], key: string): void => {
+    const pos = recallScroll(key)
+    const apply = (): void => editor.setScrollPosition({ scrollTop: pos?.top ?? 0, scrollLeft: pos?.left ?? 0 })
+    restoringRef.current = true
+    apply()
+    // The first layout may not know the content height yet: apply once more after it.
+    requestAnimationFrame(() => {
+      apply()
+      restoringRef.current = false
+    })
+  }
+
+  // A new key on a mounted editor (another response in the same panel).
+  useEffect(() => {
+    if (editorRef.current && viewKey) restoreScroll(editorRef.current, viewKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey])
   // A unique model URI per instance — without `path`, every <Editor> resolves to
   // the SAME default model (Uri.parse("")) and they share/dispose one another's text.
   const pathRef = useRef<string>()
@@ -47,6 +76,12 @@ export function CodeEditorMonaco({ value, language = 'json', onChange, readOnly 
           editorRef.current = editor
           // `{{` completion, same variable list the request fields offer.
           ensureVarCompletion()
+          if (!readOnly) attachVarTrigger(editor)
+          if (viewKeyRef.current) restoreScroll(editor, viewKeyRef.current)
+          editor.onDidScrollChange((e) => {
+            const key = viewKeyRef.current
+            if (key && !restoringRef.current) rememberScroll(key, { top: e.scrollTop, left: e.scrollLeft })
+          })
         }}
         options={{
           readOnly,

@@ -19,6 +19,7 @@ import {
   defaultProviders,
   defaultSettings,
   defaultTabs,
+  defaultTrash,
   defaultUserThemes
 } from '@shared/defaults'
 
@@ -33,7 +34,8 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   cookies: defaultCookies,
   plugins: defaultPlugins,
   features: defaultFeatures,
-  userThemes: defaultUserThemes
+  userThemes: defaultUserThemes,
+  trash: defaultTrash
 }
 
 /**
@@ -43,7 +45,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
  */
 const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features', 'userThemes'])
 /** Per-workspace document keys (the isolated working data set). */
-const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies'] as const
+const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies', 'trash'] as const
 
 function isAppKey(key: StorageKey): boolean {
   return APP_KEYS.has(key)
@@ -56,7 +58,8 @@ const BLANK_WS: { [K in (typeof WS_KEYS)[number]]: () => StorageMap[K] } = {
   globals: () => ({ version: STORAGE_VERSION, variables: [] }),
   history: () => ({ version: STORAGE_VERSION, entries: [] }),
   tabs: () => ({ version: STORAGE_VERSION, tabs: [], activeTabId: null }),
-  cookies: () => ({ version: STORAGE_VERSION, cookies: [] })
+  cookies: () => ({ version: STORAGE_VERSION, cookies: [] }),
+  trash: () => ({ version: STORAGE_VERSION, entries: [] })
 }
 
 /**

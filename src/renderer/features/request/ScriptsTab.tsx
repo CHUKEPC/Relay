@@ -71,7 +71,12 @@ export function ScriptsTab({ req, tabId }: { req: RequestModel; tabId: string })
 
       <div className="scripts-row">
         <div className="code-editor grow" style={{ marginRight: panelOpen ? 8 : 14 }}>
-          <CodeEditor value={value} language="javascript" onChange={(v) => patch({ [field]: v } as Partial<RequestModel>)} />
+          <CodeEditor
+            value={value}
+            language="javascript"
+            onChange={(v) => patch({ [field]: v } as Partial<RequestModel>)}
+            viewKey={`${tabId}:script:${field}`}
+          />
         </div>
         {panelOpen && (
           <div className="snippet-panel">

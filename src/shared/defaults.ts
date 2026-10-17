@@ -8,7 +8,8 @@ import type {
   PluginsStateDoc,
   ProvidersDoc,
   SettingsDoc,
-  TabsDoc
+  TabsDoc,
+  TrashDoc
 } from './types'
 import type { FeaturePluginsDoc } from './ipc-contract'
 import type { UserThemesDoc } from './pack-data'
@@ -74,6 +75,10 @@ export function defaultSettings(): SettingsDoc {
     caPath: '',
     http2: false
   }
+}
+
+export function defaultTrash(): TrashDoc {
+  return { version: STORAGE_VERSION, entries: [] }
 }
 
 export function defaultCookies(): CookiesDoc {

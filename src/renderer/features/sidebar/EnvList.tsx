@@ -5,14 +5,14 @@ import { useEnvironments } from '@renderer/store/environments'
 import { EnvEditor, type EnvEditorTarget } from '@renderer/features/environments/EnvEditor'
 import { VarImportDialog, type VarTarget } from '@renderer/features/environments/VarImportDialog'
 import { VarExportDialog } from '@renderer/features/environments/VarExportDialog'
+import { trashEnvironment } from '@renderer/lib/trash'
 
-import { tr, trf } from '@renderer/lib/i18n'
+import { tr } from '@renderer/lib/i18n'
 export function EnvList() {
   const env = useEnvironments((s) => s.env)
   const setActiveEnv = useEnvironments((s) => s.setActiveEnv)
   const createEnv = useEnvironments((s) => s.createEnv)
   const duplicateEnv = useEnvironments((s) => s.duplicateEnv)
-  const deleteEnv = useEnvironments((s) => s.deleteEnv)
   const [editor, setEditor] = useState<EnvEditorTarget>(null)
   const [importOpen, setImportOpen] = useState(false)
   // null = closed; undefined = open without a preset source
@@ -87,9 +87,7 @@ export function EnvList() {
                 <ContextMenu.Item
                   className="pop-item"
                   style={{ color: 'var(--s-5xx)' }}
-                  onSelect={() => {
-                    if (window.confirm(trf('Удалить среду «{name}»?', { name: tr(e.name) }))) deleteEnv(e.id)
-                  }}
+                  onSelect={() => trashEnvironment(e.id)}
                 >
                   <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
               </ContextMenu.Content>

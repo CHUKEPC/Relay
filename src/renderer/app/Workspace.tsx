@@ -593,7 +593,7 @@ export function Workspace() {
   const maximized = maximizedId ? leaves.find((l) => l.id === maximizedId) : null
 
   return (
-    <div className="main">
+    <div className="app-main">
       <div className="panes">
         {/* A single pane keeps the classic header-less layout. */}
         {root.kind === 'leaf' ? (

@@ -30,6 +30,26 @@ function detailOf(s: VarSuggestion): string {
   return s.value ? `${s.source} · ${s.value.slice(0, 60)}` : s.source
 }
 
+/**
+ * Keep the list open while a reference is typed.
+ *
+ * Monaco does not suggest as you type inside strings (`quickSuggestions.strings`
+ * is off), and a JSON body puts nearly every `{{…}}` inside one: the list opened
+ * on `{` and closed again on the first letter, so `{{$ra` showed nothing. Asking
+ * for suggestions on every edit inside an open reference keeps it up.
+ */
+export function attachVarTrigger(editor: monaco.editor.IStandaloneCodeEditor): monaco.IDisposable {
+  return editor.onDidChangeModelContent((e) => {
+    if (e.isFlush || !editor.hasTextFocus()) return
+    const model = editor.getModel()
+    const pos = editor.getPosition()
+    if (!model || !pos) return
+    if (varQueryAt(model.getLineContent(pos.lineNumber), pos.column - 1)) {
+      editor.trigger('relay-vars', 'editor.action.triggerSuggest', {})
+    }
+  })
+}
+
 /** Register the `{{` completion provider exactly once. Safe to call repeatedly. */
 export function ensureVarCompletion(): void {
   if (registered) return

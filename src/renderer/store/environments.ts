@@ -13,6 +13,8 @@ interface EnvState {
   setActiveEnv: (id: string | null) => void
   createEnv: (name: string) => string
   addEnvironment: (env: Environment) => void
+  /** Put an environment back at `index` (trash restore), optionally making it active again. */
+  insertEnvironment: (env: Environment, index: number, activate?: boolean) => void
   duplicateEnv: (id: string) => void
   deleteEnv: (id: string) => void
   renameEnv: (id: string, name: string) => void
@@ -59,6 +61,15 @@ export const useEnvironments = create<EnvState>((set, get) => ({
 
   addEnvironment: (environment) => {
     const env = { ...get().env, environments: [...get().env.environments, environment] }
+    set({ env })
+    persist('environments', env)
+  },
+
+  insertEnvironment: (environment, index, activate = false) => {
+    const environments = [...get().env.environments]
+    environments.splice(Math.max(0, Math.min(index, environments.length)), 0, { ...environment, variables: withIds(environment.variables) })
+    const activeEnvironmentId = activate ? environment.id : get().env.activeEnvironmentId
+    const env = { ...get().env, environments, activeEnvironmentId }
     set({ env })
     persist('environments', env)
   },

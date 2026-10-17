@@ -40,6 +40,9 @@ are encrypted with the OS keychain.
   see the [plugin guide](docs/plugin-guide/README.md) ([по-русски](docs/plugin-guide/README.ru.md)).
 - **Find & replace across the workspace**: search collections, environments and variables by field
   group, then replace exactly the matches you confirm.
+- **Tab groups**: named, coloured groups of tabs that collapse to a label; a folder opens as a group.
+- **Trash**: deleted requests, folders, collections, environments, variables and examples stay
+  restorable for 30 days and go back where they were.
 - **Local storage**: everything persists as JSON in `userData`; API keys are encrypted via Electron
   `safeStorage`.
 

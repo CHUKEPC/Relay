@@ -4,6 +4,7 @@ import { useUi, type SideTab } from '@renderer/store/ui'
 import { useConsole } from '@renderer/store/console'
 import { useRunner } from '@renderer/store/runner'
 import { useFindReplace } from '@renderer/store/find-replace'
+import { useTrash } from '@renderer/store/trash'
 import { collectButtons, usePlugins } from '@renderer/store/plugins'
 import { kbd } from '@renderer/lib/platform'
 import { trackWallResize } from '@renderer/lib/drag'
@@ -14,6 +15,7 @@ import { HistoryList } from './HistoryList'
 import { EnvList } from './EnvList'
 import { tr } from '@renderer/lib/i18n'
 import '@renderer/styles/feat-resize.css'
+import '@renderer/styles/feat-trash.css'
 
 const NAV: { id: SideTab; label: string; icon: string }[] = [
   { id: 'collections', label: 'Коллекции', icon: 'collections' },
@@ -34,6 +36,7 @@ export function Sidebar() {
   const float = useUi((s) => s.sidebarFloat)
   const setFloat = useUi((s) => s.setSidebarFloat)
   const [query, setQuery] = useState('')
+  const trashCount = useTrash((s) => s.doc.entries.length)
   const asideRef = useRef<HTMLElement>(null)
   const pluginList = usePlugins((s) => s.plugins)
   const pluginBusy = usePlugins((s) => s.busy)
@@ -184,13 +187,25 @@ export function Sidebar() {
             <span className="name">{tr('Найти и заменить')}</span>
             <span className="kbd">{kbd('Shift+F')}</span>
           </button>
+          <button
+            className="tree-row"
+            style={{ width: '100%' }}
+            onClick={() => useUi.getState().setTrashOpen(true)}
+            title={tr('Удалённые запросы, среды и переменные — их можно восстановить')}
+          >
+            <span className="twirl">
+              <Icon name="trash" size={15} />
+            </span>
+            <span className="name">{tr('Корзина')}</span>
+            {trashCount > 0 && <span className="trash-badge">{trashCount}</span>}
+          </button>
           <button className="tree-row" data-tour="console" style={{ width: '100%' }} onClick={() => useConsole.getState().toggle()} title={tr('Консоль запросов')}>
             <span className="twirl">
               <Icon name="code2" size={15} />
             </span>
             <span className="name">{tr('Консоль')}</span>
           </button>
-          <button className="tree-row" data-tour="settings" style={{ width: '100%' }} onClick={() => openSettings()}>
+          <button className="tree-row" data-tour="settings" style={{ width: '100%' }} onClick={() => openSettings()} title={tr('Настройки')}>
             <span className="twirl">
               <Icon name="settings" size={15} />
             </span>

@@ -49,3 +49,110 @@ describe('moveTab (tab strip drag)', () => {
     expect(tabs.useTabs.getState().doc.activeTabId).toBe(a)
   })
 })
+
+describe('tab groups', () => {
+  const T = () => tabs.useTabs.getState()
+  const groupOf = (id: string) => T().doc.tabs.find((t) => t.id === id)?.groupId ?? null
+
+  it('gathers a new group where its first tab is and names a colour', () => {
+    const [a, b, c, d] = open(4)
+    const g = T().createGroup([b, d], { name: 'API' })
+    expect(order()).toEqual([a, b, d, c])
+    expect(groupOf(b)).toBe(g)
+    expect(groupOf(d)).toBe(g)
+    expect(T().doc.groups).toEqual([{ id: g, name: 'API', color: 'blue', collapsed: false }])
+    // The next group takes the next free colour.
+    const g2 = T().createGroup([c])
+    expect(T().doc.groups?.find((x) => x.id === g2)?.color).toBe('red')
+  })
+
+  it('adds a tab at the end of a group and takes it out right after it', () => {
+    const [a, b, c] = open(3)
+    const g = T().createGroup([b])
+    T().addToGroup(a, g)
+    expect(order()).toEqual([b, a, c])
+    T().removeFromGroup(b)
+    expect(order()).toEqual([a, b, c])
+    expect(groupOf(b)).toBeNull()
+    expect(groupOf(a)).toBe(g)
+  })
+
+  it('drops a group once its last tab closes', () => {
+    const [a, b] = open(2)
+    T().createGroup([b])
+    T().closeTab(b)
+    expect(T().doc.groups).toEqual([])
+    expect(order()).toEqual([a])
+  })
+
+  it('joins the group a tab is dragged into and leaves it when dragged out', () => {
+    const [a, b, c, d] = open(4)
+    const g = T().createGroup([b, c])
+    // a dropped between b and c joins the group
+    T().moveTab(a, 1)
+    expect(order()).toEqual([b, a, c, d])
+    expect(groupOf(a)).toBe(g)
+    // dragged to the far end, away from the rest of the group, it leaves
+    T().moveTab(a, 3)
+    expect(order()).toEqual([b, c, d, a])
+    expect(groupOf(a)).toBeNull()
+  })
+
+  it('lets the only tab of a group take the group along', () => {
+    const [a, b, c] = open(3)
+    const g = T().createGroup([a])
+    T().moveTab(a, 2)
+    expect(order()).toEqual([b, c, a])
+    expect(groupOf(a)).toBe(g)
+  })
+
+  it('collapsing moves the active tab out of the group; showing a hidden tab unfolds it', () => {
+    const [a, b, c] = open(3)
+    const g = T().createGroup([a, b])
+    T().setActive(b)
+    T().setGroupCollapsed(g, true)
+    expect(T().doc.activeTabId).toBe(c)
+    expect(T().doc.groups?.[0].collapsed).toBe(true)
+    T().setActive(a)
+    expect(T().doc.groups?.[0].collapsed).toBe(false)
+  })
+
+  it('closing a group closes its tabs; ungrouping keeps them', () => {
+    const [a, b, c] = open(3)
+    const g = T().createGroup([b, c])
+    T().ungroup(g)
+    expect(order()).toEqual([a, b, c])
+    expect(T().doc.groups).toEqual([])
+    const g2 = T().createGroup([a, b])
+    T().closeGroup(g2)
+    expect(order()).toEqual([c])
+    expect(T().doc.groups).toEqual([])
+  })
+
+  it('moves a whole group and never splits another one', () => {
+    const [a, b, c, d, e] = open(5)
+    const g1 = T().createGroup([a, b])
+    T().createGroup([c, d])
+    // Index 1 among the others (c, d, e) would land inside the c-d group: it steps past it.
+    T().moveGroup(g1, 1)
+    expect(order()).toEqual([c, d, a, b, e])
+  })
+
+  it('heals a document whose groups are inconsistent', () => {
+    const { tabs: fixed, groups } = tabs.normalizeGroups(
+      [
+        { id: 'x', request: {} as never, savedRequestId: null, dirty: false, groupId: 'g' },
+        { id: 'y', request: {} as never, savedRequestId: null, dirty: false },
+        { id: 'z', request: {} as never, savedRequestId: null, dirty: false, groupId: 'g' },
+        { id: 'w', request: {} as never, savedRequestId: null, dirty: false, groupId: 'gone' }
+      ],
+      [
+        { id: 'g', name: '', color: 'blue', collapsed: false },
+        { id: 'empty', name: '', color: 'red', collapsed: false }
+      ]
+    )
+    expect(fixed.map((t) => t.id)).toEqual(['x', 'z', 'y', 'w'])
+    expect(fixed[3].groupId).toBeNull()
+    expect(groups.map((g) => g.id)).toEqual(['g'])
+  })
+})

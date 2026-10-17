@@ -151,7 +151,7 @@ export function DetachedApp({ tabId }: { tabId: string }) {
         )}
       </div>
       <div className="body">
-        <div className="main">
+        <div className="app-main">
           <div className="panes">
             <div className="pane">
               <PaneView leaf={leaf} />

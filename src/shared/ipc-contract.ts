@@ -47,6 +47,7 @@ import type {
   SseConnectSpec,
   StoredCookie,
   TabsDoc,
+  TrashDoc,
   WorkspaceMeta,
   WsConnectSpec
 } from './types'
@@ -257,6 +258,7 @@ export interface StorageMap {
   plugins: PluginsStateDoc
   features: FeaturePluginsDoc
   userThemes: UserThemesDoc
+  trash: TrashDoc
 }
 
 export type StorageKey = keyof StorageMap

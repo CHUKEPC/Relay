@@ -68,6 +68,16 @@ export function CommandPalette() {
       { id: 'find-replace', title: tr('Найти и заменить'), icon: 'search', kbd: [MOD, 'Shift', 'F'], run: () => useFindReplace.getState().openDialog() },
       { id: 'runner', title: tr('Раннер коллекций'), icon: 'play', kbd: [MOD, 'Shift', 'R'], run: () => useRunner.getState().openPicker() },
       { id: 'console', title: tr('Консоль запросов'), icon: 'code2', run: () => useConsole.getState().setOpen(true) },
+      { id: 'trash', title: tr('Открыть корзину'), icon: 'trash', run: () => useUi.getState().setTrashOpen(true) },
+      {
+        id: 'group-tab',
+        title: tr('Добавить текущую вкладку в новую группу'),
+        icon: 'tabGroup',
+        run: () => {
+          const id = useTabs.getState().doc.activeTabId
+          if (id) useTabs.getState().createGroup([id])
+        }
+      },
       { id: 'import', title: tr('Импортировать…'), icon: 'download', run: () => {
         useUi.getState().setSideTab('collections') // ImportDialog lives in the collections tree
         useUi.getState().setImportOpen(true)

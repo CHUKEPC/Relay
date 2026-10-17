@@ -1,6 +1,7 @@
 import { Icon } from '@renderer/components/Icon'
 import { useHistory } from '@renderer/store/history'
 import { useTabs } from '@renderer/store/tabs'
+import { trashHistory } from '@renderer/lib/trash'
 
 import { tr, trf } from '@renderer/lib/i18n'
 function statusColor(s: number): string {
@@ -21,7 +22,6 @@ function timeAgo(at: number): string {
 
 export function HistoryList({ query }: { query: string }) {
   const entries = useHistory((s) => s.doc.entries)
-  const clear = useHistory((s) => s.clear)
   const openNew = useTabs((s) => s.openNew)
 
   const filtered = entries.filter((h) => h.url.toLowerCase().includes(query.toLowerCase()))
@@ -31,7 +31,7 @@ export function HistoryList({ query }: { query: string }) {
       <div className="side-section-head">
         <span>{tr('История')}</span>
         {entries.length > 0 && (
-          <button className="icon-btn" style={{ width: 22, height: 22 }} title={tr('Очистить историю')} onClick={() => clear()}>
+          <button className="icon-btn" style={{ width: 22, height: 22 }} title={tr('Очистить историю')} onClick={() => trashHistory()}>
             <Icon name="trash" size={14} />
           </button>
         )}

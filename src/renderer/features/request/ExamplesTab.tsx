@@ -1,8 +1,8 @@
 import type { RequestModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
-import { restoreExample, deleteExample } from '@renderer/lib/examples'
+import { restoreExample } from '@renderer/lib/examples'
+import { trashExample } from '@renderer/lib/trash'
 import { statusColor } from '@renderer/lib/status-color'
-import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 
 import { tr } from '@renderer/lib/i18n'
@@ -45,11 +45,7 @@ export function ExamplesTab({ req, tabId }: { req: RequestModel; tabId: string }
             <button
               className="icon-btn"
               style={{ width: 28, height: 28 }}
-              onClick={() => {
-                // deleteExample() edits the ACTIVE tab's request — activate ours first.
-                if (useTabs.getState().doc.activeTabId !== tabId) useTabs.getState().setActive(tabId)
-                deleteExample(ex.id)
-              }}
+              onClick={() => trashExample(tabId, ex.id)}
               title={tr('Удалить пример')}
             >
               <Icon name="trash" size={14} />

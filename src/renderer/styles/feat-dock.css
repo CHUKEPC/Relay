@@ -129,7 +129,7 @@
    the side panels give up width before the workspace does, each down to a
    usable minimum, and the workspace keeps at least 360 px. Without this a wide
    sidebar plus a wide AI panel left the request panes a few pixels each. */
-.body > .main {
+.body > .app-main {
   min-width: 360px;
 }
 

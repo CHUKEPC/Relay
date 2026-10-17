@@ -5,6 +5,8 @@ import { useSettings } from '@renderer/store/settings'
 import { useTabs } from '@renderer/store/tabs'
 import { useUi } from '@renderer/store/ui'
 import { useCap } from '@renderer/store/features'
+import { respViewOf, useRequestUi } from '@renderer/store/request-ui'
+import { useRememberedScroll } from '@renderer/lib/view-memory'
 import { CodeEditor } from '@renderer/components/CodeEditor'
 import { Icon } from '@renderer/components/Icon'
 import { Field, IconButton, Menu, Modal, Segmented } from '@renderer/components/primitives'
@@ -308,16 +310,21 @@ function BodyPane({
   result,
   view,
   wordWrap,
-  hostRef
+  hostRef,
+  viewKey
 }: {
   result: ResponseResult
   view: BodyView
   wordWrap: boolean
   hostRef: React.RefObject<HTMLDivElement>
+  /** prefix the scroll position of this response is remembered under */
+  viewKey: string | null
 }): JSX.Element {
   const text = result.body.text ?? ''
   const language = languageForContentType(result.body.contentType)
   const pretty = useMemo(() => prettyValue(text, language), [text, language])
+  const rawRef = useRef<HTMLDivElement>(null)
+  useRememberedScroll(rawRef, view === 'raw' && viewKey ? `${viewKey}:raw` : null)
 
   if (view === 'preview') {
     return (
@@ -329,7 +336,8 @@ function BodyPane({
 
   if (view === 'raw') {
     return (
-      <div ref={hostRef} style={{ height: '100%', overflow: 'auto' }}>
+      <div ref={hostRef} style={{ height: '100%' }}>
+        <div ref={rawRef} style={{ height: '100%', overflow: 'auto' }}>
         <pre
           style={{
             fontFamily: 'var(--font-mono)',
@@ -344,6 +352,7 @@ function BodyPane({
         >
           {text}
         </pre>
+        </div>
       </div>
     )
   }
@@ -351,7 +360,7 @@ function BodyPane({
   // Pretty — Monaco read-only editor; the host fills .resp-body (flex:1).
   return (
     <div ref={hostRef} style={{ height: '100%' }}>
-      <CodeEditor value={pretty} language={language} readOnly wordWrap={wordWrap} />
+      <CodeEditor value={pretty} language={language} readOnly wordWrap={wordWrap} viewKey={viewKey ? `${viewKey}:pretty` : undefined} />
     </div>
   )
 }
@@ -649,9 +658,20 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
     [pluginList]
   )
 
-  const [tab, setTab] = useState<RespTab>('body')
-  const [bodyView, setBodyView] = useState<BodyView>('pretty')
-  const [search, setSearch] = useState('')
+  // Kept per tab outside the panel (it is rebuilt on every tab switch), so a
+  // tab comes back on the response tab, view, filter and scroll it was left on.
+  const view = useRequestUi((s) => respViewOf(s, tabId))
+  const tab = view.tab as RespTab
+  const bodyView = view.bodyView as BodyView
+  const search = view.search
+  const setTab = (t: RespTab): void => useRequestUi.getState().setRespView(tabId, { tab: t })
+  const setBodyView = (v: BodyView): void => useRequestUi.getState().setRespView(tabId, { bodyView: v })
+  const setSearch = (q: string): void => useRequestUi.getState().setRespView(tabId, { search: q })
+  const respBodyRef = useRef<HTMLDivElement>(null)
+  // Scroll is remembered per response: a new one starts at the top.
+  const stamp = r.result?.timings.startedAt
+  const viewKey = stamp !== undefined ? `${tabId}:resp:${stamp}` : null
+  useRememberedScroll(respBodyRef, viewKey && `${viewKey}:${tab}`)
   const [copied, setCopied] = useState(false)
   const [cookieMgrOpen, setCookieMgrOpen] = useState(false)
   const [exampleOpen, setExampleOpen] = useState(false)
@@ -804,12 +824,12 @@ export function ResponsePanel({ tabId, onAskAI }: { tabId: string; onAskAI: () =
         }}
       />
 
-      <div className="resp-body">
+      <div className="resp-body" ref={respBodyRef}>
         {effectiveTab === 'body' &&
           (isError ? (
             <RespError result={result} onAskAI={onAskAI} tabId={tabId} />
           ) : (
-            <BodyPane result={result} view={bodyView} wordWrap={wordWrap} hostRef={bodyHostRef} />
+            <BodyPane result={result} view={bodyView} wordWrap={wordWrap} hostRef={bodyHostRef} viewKey={viewKey} />
           ))}
 
         {activePanel && effectiveTab === activePanel.tabId && (

@@ -8,6 +8,11 @@ import type { Config } from 'tailwindcss'
 export default {
   content: ['./src/renderer/index.html', './src/renderer/**/*.{ts,tsx}'],
   darkMode: ['class', '[data-theme="dark"]'],
+  // Tailwind generates a utility for every class-like word it finds in the
+  // sources, comments included. Monaco names a row of its suggestion list
+  // `.contents`; a global `.contents { display: contents }` collapsed those
+  // rows and hid every label in the `{{` completion of the editors.
+  blocklist: ['contents'],
   theme: {
     extend: {
       colors: {

@@ -45,6 +45,8 @@ interface UiState {
   consoleHeight: number
   consoleFloat: FloatRect
   importOpen: boolean
+  /** the trash dialog (deleted requests, environments, variables…) */
+  trashOpen: boolean
   /** Headers tab: list the headers Relay adds by itself */
   showAutoHeaders: boolean
   setSideTab: (t: SideTab) => void
@@ -71,6 +73,7 @@ interface UiState {
   setConsoleHeight: (px: number) => void
   setConsoleFloat: (rect: FloatRect) => void
   setImportOpen: (v: boolean) => void
+  setTrashOpen: (v: boolean) => void
   setShowAutoHeaders: (v: boolean) => void
 }
 
@@ -191,6 +194,7 @@ export const useUi = create<UiState>((set, get) => {
     consoleHeight: initialSize(prefs.consoleHeight, prefs.consoleSize, CONSOLE_HEIGHT),
     consoleFloat: initialFloat(prefs.consoleFloat, { x: 80, y: 80, w: 720, h: 420 }),
     importOpen: false,
+    trashOpen: false,
     // Hidden until the eye is clicked, then remembered.
     showAutoHeaders: prefs.showAutoHeaders === true,
     setSideTab: (t) => set({ sideTab: t }),
@@ -252,6 +256,7 @@ export const useUi = create<UiState>((set, get) => {
       persistPrefs()
     },
     setImportOpen: (v) => set({ importOpen: v }),
+    setTrashOpen: (v) => set({ trashOpen: v }),
     setShowAutoHeaders: (v) => {
       set({ showAutoHeaders: v })
       persistPrefs()

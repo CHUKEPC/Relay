@@ -10,6 +10,7 @@ import { useGrpc } from './grpc'
 import { useRunner } from './runner'
 import { usePlugins } from './plugins'
 import { useUserThemes } from './user-themes'
+import { useTrash } from './trash'
 import { useFeatures, wireFeatures } from './features'
 import { applyLanguage } from '../lib/i18n'
 import { flushPersist, persist } from './persist'
@@ -21,7 +22,8 @@ import {
   defaultGlobals,
   defaultHistory,
   defaultProviders,
-  defaultTabs
+  defaultTabs,
+  defaultTrash
 } from '@shared/defaults'
 
 let unloadWired = false
@@ -53,7 +55,7 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
 
   // Feature packs decide which UI even exists (protocols, AI, auth, languages),
   // so they are loaded with the documents, before the first render.
-  const [collections, environments, globals, history, tabs, settings, providers, userThemes, features] = await Promise.all([
+  const [collections, environments, globals, history, tabs, settings, providers, userThemes, features, trash] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
     window.api.storageLoad('globals'),
@@ -62,7 +64,8 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
     window.api.storageLoad('settings'),
     window.api.storageLoad('providers'),
     window.api.storageLoad('userThemes'),
-    window.api.featuresList().catch(() => [])
+    window.api.featuresList().catch(() => []),
+    window.api.storageLoad('trash').catch(() => null)
   ])
 
   useFeatures.getState().setPlugins(features)
@@ -75,6 +78,7 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
   useEnvironments.getState().hydrate(environments ?? defaultEnvironments(), globals ?? defaultGlobals())
   useHistory.getState().hydrate(history ?? defaultHistory())
   useTabs.getState().hydrate(tabs ?? defaultTabs())
+  useTrash.getState().hydrate(trash ?? defaultTrash())
   useAi.getState().hydrateProviders(providers ?? defaultProviders())
 
   // Reflect stored hasKey against the actual secret store (keys may have been
@@ -117,17 +121,19 @@ export async function reloadWorkspace(): Promise<void> {
   useRunner.getState().close()
   useRunner.setState({ targetId: null, targetName: '', results: [], current: null })
 
-  const [collections, environments, globals, history, tabs] = await Promise.all([
+  const [collections, environments, globals, history, tabs, trash] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
     window.api.storageLoad('globals'),
     window.api.storageLoad('history'),
-    window.api.storageLoad('tabs')
+    window.api.storageLoad('tabs'),
+    window.api.storageLoad('trash').catch(() => null)
   ])
 
   useCollections.getState().hydrate(collections ?? defaultCollections())
   useEnvironments.getState().hydrate(environments ?? defaultEnvironments(), globals ?? defaultGlobals())
   useHistory.getState().hydrate(history ?? defaultHistory())
   useTabs.getState().hydrate(tabs ?? defaultTabs())
+  useTrash.getState().hydrate(trash ?? defaultTrash())
   if (!useTabs.getState().doc.tabs.length) useTabs.getState().openNew()
 }

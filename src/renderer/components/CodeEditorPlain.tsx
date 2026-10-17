@@ -4,6 +4,7 @@ import { useSecretNames } from '@renderer/lib/hooks'
 import { currentScope } from '@renderer/lib/request-runner'
 import { applyVarSuggestion, suggestVars, varQueryAt, type VarQuery, type VarSuggestion } from '@renderer/lib/var-suggest'
 import { tr } from '@renderer/lib/i18n'
+import { useRememberedScroll } from '@renderer/lib/view-memory'
 import type { CodeEditorProps } from './CodeEditorMonaco'
 import '@renderer/styles/feat-varsuggest.css'
 
@@ -27,8 +28,9 @@ const POPUP_MAX_HEIGHT = 260
  * pure module the Monaco and single-line input completions use. What is lost is
  * decoration only: syntax colours, folding and the line-number gutter.
  */
-export function CodeEditorPlain({ value, onChange, readOnly = false, wordWrap = false, placeholder }: CodeEditorProps): JSX.Element {
+export function CodeEditorPlain({ value, onChange, readOnly = false, wordWrap = false, placeholder, viewKey }: CodeEditorProps): JSX.Element {
   const ref = useRef<HTMLTextAreaElement>(null)
+  useRememberedScroll(ref, viewKey ?? null)
   const secrets = useSecretNames()
   const [query, setQuery] = useState<VarQuery | null>(null)
   const [items, setItems] = useState<VarSuggestion[]>([])

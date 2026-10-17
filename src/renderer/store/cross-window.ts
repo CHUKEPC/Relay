@@ -5,6 +5,7 @@ import { useEnvironments } from './environments'
 import { useHistory } from './history'
 import { useSettings } from './settings'
 import { useAi } from './ai'
+import { useTrash } from './trash'
 
 let wired = false
 
@@ -43,6 +44,9 @@ export function wireStorageSync(): void {
         break
       case 'providers':
         useAi.getState().hydrateProviders(value as StorageMap['providers'])
+        break
+      case 'trash':
+        useTrash.getState().hydrate(value as StorageMap['trash'])
         break
     }
   })

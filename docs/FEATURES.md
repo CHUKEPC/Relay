@@ -527,6 +527,55 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       less than 360 px, both shrink (down to 200 px and 280 px) instead of squeezing the request panes
       to a sliver.
 
+## 1.4.0 — Tab groups, trash, the response as you left it
+
+- [x] **Tab groups**, like browser tab groups (local only — nothing is synced anywhere). Right-click a
+      tab → «Add to new group» / «Add to group» (submenu with the existing groups) / «Remove from group».
+      A group has a name and one of nine colours; its tabs always sit together, underlined in the group
+      colour, behind a label. Clicking the label collapses the group to the label and a tab count (the
+      active tab moves to the nearest tab outside it) and expands it again; showing a hidden tab — from
+      the sidebar, the palette or Ctrl+Tab — unfolds its group. Right-clicking the label opens the
+      editor: name, colour, «New tab in group», collapse/expand, «Ungroup», «Close group». Dragging a tab
+      between two tabs of a group puts it into the group, dragging it away takes it out; dragging the
+      label moves the whole group and never splits another one. «Open the requests as a tab group» in a
+      folder or collection menu opens all its requests as one named group. Groups are part of the
+      workspace's tabs document (`TabsDoc.groups`, `TabModel.groupId`), normalised on every change
+      (`normalizeGroups`: unknown groups dropped, empty groups removed, members kept contiguous) and
+      shared with detached pane windows.
+- [x] **Trash** for deleted items, per workspace (`trash` document). Requests, folders, collections,
+      environments, environment/global/collection variables, response examples and the cleared history
+      go to the trash instead of disappearing; each deletion shows a toast with «Restore». The Trash
+      dialog (sidebar footer, command palette) lists them with kind, place and time, filters them,
+      restores one or deletes it forever, and empties the trash. A restored item returns to its old
+      parent and index; when the parent is gone too it lands in a «Restored» collection (a variable of a
+      deleted environment or collection becomes global); ids taken again in the meantime are replaced.
+      Entries are kept 30 days (at most 300). Deleting a folder or an environment no longer asks for
+      confirmation — it can be undone.
+- [x] **The response comes back as it was left.** The response panel is rebuilt whenever its tab is
+      shown again; the selected response tab (Body, Headers, Cookies, Tests, Visualize, plugin panels),
+      the Pretty/Raw/Preview view, the filter and the scroll position are now kept per tab
+      (`store/request-ui.ts`, `lib/view-memory.ts`) and restored on return; a new response starts at
+      the top. The request body and the scripts editors keep their scroll per tab too. (The panel's
+      position, size and hidden state were already per tab since 1.3.1.)
+- [x] **`{{` hints in the code editors** (request body, scripts) were invisible: a global `.main`
+      layout class and a Tailwind `contents` utility collapsed the rows of Monaco's suggestion list, so
+      only the icons showed. The layout class is now `.app-main` and `contents` is blocklisted in
+      Tailwind. Inside JSON strings Monaco also closed the list on the first letter after `{{$`; the
+      editors now re-open it while the caret is inside a `{{…` reference, so dynamic variables
+      (`{{$randomInt}}`, `{{$guid}}`…) are offered as you type.
+- [x] **Long bodies wrap, Beautify is tolerant.** A raw body with a line longer than 120 characters
+      (a pasted minified JSON, a token) wraps automatically. Beautify formats JSON with unquoted
+      `{{variables}}` (masked, parsed, put back) and, when the text is not JSON at all — stray or
+      missing braces, comments, trailing commas — re-indents it by its brackets without dropping any
+      character.
+- [x] **OAuth 2.0 «Get token» resolves `{{variables}}`.** The token, device and browser sign-in calls are made
+      from the Authorization tab, not through the request engine, and used to send Token URL, Client ID,
+      secret, scope and the rest as typed — `{{baseUrl}}/oauth/token` failed. They are now resolved with the
+      request's variables.
+- [x] **Low windows:** below 620 px of height the footer of a side-docked sidebar folds into one row of
+      icons (Runner, Find & replace, Trash, Console, Settings — tooltips kept), so the collection tree
+      keeps its room.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

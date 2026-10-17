@@ -37,6 +37,7 @@ const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen').t
 const RunnerPanel = lazy(() => import('./features/runner/RunnerPanel').then((m) => ({ default: m.RunnerPanel })))
 const ConsolePanel = lazy(() => import('./features/console/ConsolePanel').then((m) => ({ default: m.ConsolePanel })))
 const FindReplaceDialog = lazy(() => import('./features/search/FindReplaceDialog').then((m) => ({ default: m.FindReplaceDialog })))
+const TrashDialog = lazy(() => import('./features/trash/TrashDialog').then((m) => ({ default: m.TrashDialog })))
 
 /**
  * Bootstrapping is per window, not per mount: changing the UI language remounts
@@ -54,6 +55,7 @@ export function App() {
   const settingsOpen = useUi((s) => s.settingsOpen)
   const paletteOpen = useUi((s) => s.paletteOpen)
   const saveOpen = useUi((s) => s.saveDialogOpen)
+  const trashOpen = useUi((s) => s.trashOpen)
   const toast = useUi((s) => s.toast)
 
   useEffect(() => {
@@ -116,7 +118,9 @@ export function App() {
         case 'nextTab':
         case 'prevTab': {
           const tabs = useTabs.getState()
-          const list = tabs.doc.tabs
+          // Tabs of a collapsed group are skipped, like in the browsers.
+          const folded = new Set((tabs.doc.groups ?? []).filter((g) => g.collapsed).map((g) => g.id))
+          const list = tabs.doc.tabs.filter((t) => t.id === tabs.doc.activeTabId || !t.groupId || !folded.has(t.groupId))
           if (list.length < 2) return
           e.preventDefault()
           const at = list.findIndex((t) => t.id === tabs.doc.activeTabId)
@@ -204,6 +208,7 @@ export function App() {
         <RunnerPanel />
         <ConsolePanel />
         <FindReplaceDialog />
+        {trashOpen && <TrashDialog />}
       </Suspense>
       <SaveDialog
         open={saveOpen}

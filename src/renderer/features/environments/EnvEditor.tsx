@@ -7,6 +7,7 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useCollections } from '@renderer/store/collections'
 import { VarImportDialog } from './VarImportDialog'
 import { VarExportDialog } from './VarExportDialog'
+import { trashVariable } from '@renderer/lib/trash'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /** `collection` edits the variables of a collection or folder (Postman's collection scope). */
@@ -71,7 +72,16 @@ export function EnvEditor({ target, onClose }: { target: EnvEditorTarget; onClos
           {tr('Действуют во всех запросах этой коллекции и важнее переменных окружения и глобальных с тем же именем. Выше них — только локальные переменные сценария (pm.variables).')}
         </div>
       )}
-      <VarTable vars={vars} onChange={commit} />
+      <VarTable
+        vars={vars}
+        onChange={commit}
+        onRemoved={(v, i) => {
+          // The row is gone from the table; the trash keeps it restorable.
+          if (isGlobals) trashVariable('global', null, v, i, tr('Глобальные переменные'))
+          else if (target.kind === 'collection') folder && trashVariable('collection', folder.id, v, i, folder.name)
+          else if (environment) trashVariable('environment', environment.id, v, i, environment.name)
+        }}
+      />
       <VarImportDialog open={importOpen} onOpenChange={setImportOpen} target={target} />
       <VarExportDialog open={exportOpen} onOpenChange={setExportOpen} target={target} />
     </Modal>
@@ -83,12 +93,25 @@ function withIds(vars: VariableDef[]): VariableDef[] {
   return vars.map((v) => (v.id ? v : { ...v, id: makeId('var') }))
 }
 
-function VarTable({ vars, onChange }: { vars: VariableDef[]; onChange: (v: VariableDef[]) => void }) {
+function VarTable({
+  vars,
+  onChange,
+  onRemoved
+}: {
+  vars: VariableDef[]
+  onChange: (v: VariableDef[]) => void
+  /** a row the user deleted, with the index it had */
+  onRemoved?: (v: VariableDef, index: number) => void
+}) {
   // Reveal state is keyed by row id (not array index) so deleting/reordering a
   // row can't expose the wrong variable's secret value.
   const [reveal, setReveal] = useState<Record<string, boolean>>({})
   const update = (i: number, patch: Partial<VariableDef>) => onChange(vars.map((v, idx) => (idx === i ? { ...v, ...patch } : v)))
-  const remove = (i: number) => onChange(vars.filter((_, idx) => idx !== i))
+  const remove = (i: number) => {
+    const removed = vars[i]
+    onChange(vars.filter((_, idx) => idx !== i))
+    if (removed) onRemoved?.(removed, i)
+  }
   const add = () => onChange([...vars, { id: makeId('var'), key: '', value: '', enabled: true }])
 
   return (
