@@ -27,8 +27,12 @@ interface TabsState {
   closeToLeft: (id: string) => void
   closeAll: () => void
   duplicateTab: (id: string) => void
-  /** Move a tab so it ends up at `toIndex` (tab strip drag). */
-  moveTab: (id: string, toIndex: number) => void
+  /**
+   * Move a tab so it ends up at `toIndex` (tab strip drag). `groupId` says which
+   * group it belongs to afterwards (null = none) — the strip passes the group
+   * under the pointer; left out, the neighbours of the new slot decide.
+   */
+  moveTab: (id: string, toIndex: number, groupId?: string | null) => void
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
   markSaved: (tabId: string, savedRequestId: string) => void
@@ -263,29 +267,38 @@ export const useTabs = create<TabsState>((set, get) => {
       commit({ tabs: [...prev.slice(0, idx + 1), tab, ...prev.slice(idx + 1)], activeTabId: tab.id })
     },
 
-    moveTab: (id, toIndex) => {
+    moveTab: (id, toIndex, target) => {
       const prev = get().doc.tabs
       const from = prev.findIndex((t) => t.id === id)
       if (from === -1) return
       const to = Math.max(0, Math.min(prev.length - 1, Math.round(toIndex)))
-      if (to === from) return
       const tabs = prev.slice()
       const [tab] = tabs.splice(from, 1)
       tabs.splice(to, 0, tab)
-      // Group membership follows the slot, like browser tab groups: dropped
-      // between two tabs of a group, the tab joins it; dragged away from the
-      // rest of its group, it leaves. The only tab of a group takes it along.
-      const left = tabs[to - 1]
-      const right = tabs[to + 1]
       let groupId = tab.groupId ?? null
-      if (left?.groupId && left.groupId === right?.groupId) groupId = left.groupId
-      else if (groupId) {
-        const others = tabs.some((t) => t.id !== id && t.groupId === groupId)
-        const beside = left?.groupId === groupId || right?.groupId === groupId
-        if (others && !beside) groupId = null
+      if (target !== undefined) {
+        // The strip decided from the pointer; an unknown group means none.
+        groupId = target && groups().some((g) => g.id === target) ? target : null
+      } else {
+        // Group membership follows the slot, like browser tab groups: dropped
+        // between two tabs of a group, the tab joins it; dragged away from the
+        // rest of its group, it leaves. The only tab of a group takes it along.
+        const left = tabs[to - 1]
+        const right = tabs[to + 1]
+        if (left?.groupId && left.groupId === right?.groupId) groupId = left.groupId
+        else if (groupId) {
+          const others = tabs.some((t) => t.id !== id && t.groupId === groupId)
+          const beside = left?.groupId === groupId || right?.groupId === groupId
+          if (others && !beside) groupId = null
+        }
       }
-      if (groupId !== (tab.groupId ?? null)) tabs[to] = { ...tab, groupId }
-      commit({ tabs })
+      const regrouped = groupId !== (tab.groupId ?? null)
+      if (to === from && !regrouped) return
+      if (regrouped) tabs[to] = { ...tab, groupId }
+      // A tab dropped into a folded group is meant to be in it: the group opens.
+      const joined = groupId ? groups().find((g) => g.id === groupId) : undefined
+      const unfold = regrouped && joined?.collapsed ? { groups: groups().map((g) => (g.id === groupId ? { ...g, collapsed: false } : g)) } : {}
+      commit({ tabs, ...unfold })
     },
 
     patchActive: (patch) => {

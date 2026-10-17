@@ -7,7 +7,8 @@ import { RequestTag } from '@renderer/components/RequestTag'
 import { TAB_GROUP_COLOR_LABEL, TAB_GROUP_COLORS, useTabs } from '@renderer/store/tabs'
 import { leavesOf, usePanes } from '@renderer/store/panes'
 import { MOD } from '@renderer/lib/platform'
-import { dragKind, TAB_MIME } from '@renderer/lib/dnd'
+import { dragKind, holdDragOnControls, REQUEST_MIME, TAB_MIME } from '@renderer/lib/dnd'
+import { useCollections } from '@renderer/store/collections'
 import { saveActiveRequest } from '@renderer/lib/save'
 import { exportRequestJson } from '@renderer/lib/export'
 import { tr, trf } from '@renderer/lib/i18n'
@@ -47,6 +48,8 @@ export function TabStrip() {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   /** the group whose name/colour editor is open */
   const [editing, setEditing] = useState<string | null>(null)
+  /** the group a dragged tab or request would land in (its label lights up) */
+  const [dropGroup, setDropGroup] = useState<string | null>(null)
 
   const groupById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
 
@@ -69,6 +72,7 @@ export function TabStrip() {
     draggingRef.current = null
     draggingGroupRef.current = null
     setDraggingId(null)
+    setDropGroup(null)
     document.body.classList.remove('pane-dragging')
   }
 
@@ -102,15 +106,51 @@ export function TabStrip() {
   }
 
   /**
+   * The group whose stretch of the strip — its label and its tabs, or just the
+   * label when it is folded — lies under the pointer.
+   */
+  const groupUnder = (clientX: number): string | null => {
+    const doc = useTabs.getState().doc
+    for (const g of doc.groups ?? []) {
+      const chip = chipRefs.current.get(g.id)?.getBoundingClientRect()
+      if (!chip) continue
+      let right = chip.right
+      if (!g.collapsed) {
+        for (const t of doc.tabs) {
+          if (t.groupId !== g.id) continue
+          const r = tabRefs.current.get(t.id)?.getBoundingClientRect()
+          if (r) right = Math.max(right, r.right)
+        }
+      }
+      if (clientX >= chip.left && clientX <= right) return g.id
+    }
+    return null
+  }
+
+  /**
    * Reorder like browser tabs: while a tab is dragged over the strip it takes
    * the slot under the pointer. The slot is counted against the midpoints of
    * the other tabs, so a wide tab passing a narrow one does not flip back and
    * forth. A dragged group label moves its whole group the same way.
+   *
+   * The group follows the pointer too: over a group's label or tabs (a folded
+   * group: its label) the dragged tab joins that group, away from every group it
+   * leaves its own — except the only tab of a group, which takes the group
+   * along. A request dragged from the sidebar opens here, in the group under
+   * the pointer if there is one.
    */
   const onStripDragOver = (e: DragEvent<HTMLDivElement>) => {
     const id = draggingRef.current
     const groupId = draggingGroupRef.current
     const isGroup = !!groupId && e.dataTransfer.types.includes(GROUP_MIME)
+    if (!isGroup && dragKind(e.dataTransfer) === 'request') {
+      e.preventDefault()
+      // The tree allows only «move» (like the pane grid); anything else refuses the drop.
+      e.dataTransfer.dropEffect = 'move'
+      const under = groupUnder(e.clientX)
+      if (under !== dropGroup) setDropGroup(under)
+      return
+    }
     if (!isGroup && (!id || dragKind(e.dataTransfer) !== 'tab')) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -121,8 +161,32 @@ export function TabStrip() {
       if (e.clientX < box.left + 32) scroller.scrollLeft -= 14
       else if (e.clientX > box.right - 32) scroller.scrollLeft += 14
     }
-    if (isGroup) useTabs.getState().moveGroup(groupId, slotAt(e.clientX, (t) => t.groupId === groupId))
-    else if (id) useTabs.getState().moveTab(id, slotAt(e.clientX, (t) => t.id === id))
+    if (isGroup) {
+      useTabs.getState().moveGroup(groupId, slotAt(e.clientX, (t) => t.groupId === groupId))
+      return
+    }
+    if (!id) return
+    const doc = useTabs.getState().doc
+    const own = doc.tabs.find((t) => t.id === id)?.groupId ?? null
+    let target = groupUnder(e.clientX)
+    if (!target && own && !doc.tabs.some((t) => t.id !== id && t.groupId === own)) target = own
+    useTabs.getState().moveTab(id, slotAt(e.clientX, (t) => t.id === id), target)
+    if (target !== dropGroup) setDropGroup(target)
+  }
+
+  /** A saved request dropped on the strip: open it there, in the group under the pointer. */
+  const dropRequest = (e: DragEvent<HTMLDivElement>): void => {
+    const nodeId = e.dataTransfer.getData(REQUEST_MIME)
+    const found = nodeId ? useCollections.getState().locate(nodeId) : null
+    const group = groupUnder(e.clientX)
+    const slot = slotAt(e.clientX, () => false)
+    setDropGroup(null)
+    if (!found || found.node.type !== 'request') return
+    e.preventDefault()
+    const tabs = useTabs.getState()
+    const tabId = tabs.openSaved(found.node.request, found.node.request.id)
+    if (group) tabs.addToGroup(tabId, group)
+    else useTabs.getState().moveTab(tabId, slot, null)
   }
 
   // Vertical wheel scrolls the strip horizontally. Native listener with
@@ -157,7 +221,7 @@ export function TabStrip() {
     <PopoverPrimitive.Root key={`g:${group.id}`} open={editing === group.id} onOpenChange={(o) => setEditing(o ? group.id : null)}>
       <PopoverPrimitive.Anchor asChild>
         <div
-          className={`tab-group-chip${group.collapsed ? ' collapsed' : ''}${group.name ? '' : ' unnamed'}${draggingId === `g:${group.id}` ? ' dragging' : ''}`}
+          className={`tab-group-chip${group.collapsed ? ' collapsed' : ''}${group.name ? '' : ' unnamed'}${draggingId === `g:${group.id}` ? ' dragging' : ''}${dropGroup === group.id ? ' drop-target' : ''}`}
           style={groupStyle(group)}
           ref={(el) => {
             if (el) chipRefs.current.set(group.id, el)
@@ -279,6 +343,7 @@ export function TabStrip() {
               else tabRefs.current.delete(t.id)
             }}
             draggable
+            onPointerDownCapture={holdDragOnControls}
             onDragStart={(e) => {
               e.dataTransfer.setData(TAB_MIME, t.id)
               e.dataTransfer.effectAllowed = 'move'
@@ -389,12 +454,17 @@ export function TabStrip() {
         className="tabstrip-scroll"
         ref={scrollerRef}
         onDragOver={onStripDragOver}
+        onDragLeave={(e) => {
+          if (!scrollerRef.current?.contains(e.relatedTarget as Node | null)) setDropGroup(null)
+        }}
         onDrop={(e) => {
           // Dropped back on the strip: the order is already in place.
           if (draggingRef.current || draggingGroupRef.current) {
             e.preventDefault()
             endDrag()
+            return
           }
+          if (dragKind(e.dataTransfer) === 'request') dropRequest(e)
         }}
       >
         {items.map((it) => (it.kind === 'group' ? renderGroup(it.group, it.count) : renderTab(it.tab, it.index, it.group, it.last)))}

@@ -298,3 +298,24 @@ body.pane-dragging .pane .monaco-host {
   inset: auto 44px 0 44px;
   height: 36px;
 }
+
+/* Each pane is a width container, so its header can give way when the pane is
+   narrow: maximize and «open in a window» move into the «…» menu (they are its
+   first items), then the grip goes; the menu and the close cross always stay. */
+.pane {
+  container: pane-box / inline-size;
+}
+@container pane-box (max-width: 300px) {
+  .pane-head .pane-act-max,
+  .pane-head .pane-act-detach {
+    display: none;
+  }
+}
+@container pane-box (max-width: 210px) {
+  .pane-head .pane-grip {
+    display: none;
+  }
+  .pane-head {
+    gap: 2px;
+  }
+}

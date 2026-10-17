@@ -576,6 +576,22 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       icons (Runner, Find & replace, Trash, Console, Settings — tooltips kept), so the collection tree
       keeps its room.
 
+## 1.4.1 — Drag tabs into groups, pane buttons that always click
+
+- [x] **Drag a tab into a group.** Drag and drop follows the pointer: a tab dragged over a group's label
+      or its tabs (a folded group: its label, which then unfolds) joins that group, and the label lights
+      up while it is the target; dragged away from every group it leaves — the only tab of a group takes
+      the group along. `moveTab` takes the target group from the strip (`groupUnder`), and without it the
+      neighbours of the slot still decide. A saved request dragged from the sidebar opens on the strip:
+      in the group whose label it is dropped on, elsewhere as a plain tab at that spot.
+- [x] **Pane header buttons always click.** The header is the handle that moves a pane, so it is
+      `draggable`: a hand moving 4 px or more while clicking started a pane drag and the click on
+      maximize, «open in a window» or close was lost (the tab close cross had the same problem). While a
+      control is pressed, the header or the tab stops being draggable (`holdDragOnControls`, lib/dnd.ts).
+      Each pane is a width container: below 300 px the header keeps only the «…» menu and the close
+      cross — maximize and «open in a window» are now the first items of the menu — and below 210 px the
+      grip goes too, so nothing is cut off.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

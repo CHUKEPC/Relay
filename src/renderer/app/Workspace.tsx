@@ -36,7 +36,7 @@ import {
   type ResponseVisibility
 } from '@renderer/lib/dock'
 import { dockResponse } from '@renderer/lib/dock-swap'
-import { dragId, dragKind, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
+import { dragId, dragKind, holdDragOnControls, isPaneDrop, PANE_MIME, type DragKind } from '@renderer/lib/dnd'
 import { buildContextSnapshot } from '@renderer/lib/ai-context'
 import { kbdCombo } from '@renderer/lib/keymap'
 import { interpolate } from '@shared/interpolate'
@@ -338,6 +338,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
     <div
       className="pane-head"
       draggable
+      onPointerDownCapture={holdDragOnControls}
       onDragStart={(e) => {
         if ((e.target as HTMLElement).closest('button')) {
           e.preventDefault()
@@ -357,7 +358,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
       <PaneTabPicker leaf={leaf} />
       <div className="grow" />
       <button
-        className="icon-btn pane-act"
+        className="icon-btn pane-act pane-act-max"
         title={`${maximized ? tr('Вернуть раскладку') : tr('Развернуть панель')} (${kbdCombo('paneMaximize', keybindings)})`}
         onClick={() => panes().toggleMaximize(leaf.id)}
       >
@@ -365,7 +366,7 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
       </button>
       {leaf.tabId && (
         <button
-          className="icon-btn pane-act"
+          className="icon-btn pane-act pane-act-detach"
           title={trf('Открыть в отдельном окне ({key})', { key: kbdCombo('paneDetach', keybindings) })}
           onClick={() => void panes().detachTab(leaf.tabId!)}
         >
@@ -380,6 +381,22 @@ function PaneHeader({ leaf, index, active, maximized }: { leaf: PaneLeaf; index:
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="popover" align="end" sideOffset={4} style={{ position: 'relative', minWidth: 250 }}>
+            {/* In a narrow pane the header keeps only this menu and the close cross. */}
+            <PaneMenuItem
+              icon={maximized ? 'restore' : 'maximize'}
+              label={maximized ? tr('Вернуть раскладку') : tr('Развернуть панель')}
+              combo={kbdCombo('paneMaximize', keybindings)}
+              onSelect={() => panes().toggleMaximize(leaf.id)}
+            />
+            {leaf.tabId && (
+              <PaneMenuItem
+                icon="floatWin"
+                label={tr('Открыть в отдельном окне')}
+                combo={kbdCombo('paneDetach', keybindings)}
+                onSelect={() => void panes().detachTab(leaf.tabId!)}
+              />
+            )}
+            <DropdownMenu.Separator className="pop-sep" />
             <PaneMenuItem icon="splitRight" label={tr('Добавить панель справа')} combo={kbdCombo('paneSplitRight', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('row') }} />
             <PaneMenuItem icon="splitDown" label={tr('Добавить панель снизу')} combo={kbdCombo('paneSplitDown', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().splitActive('col') }} />
             <PaneMenuItem icon="swap" label={tr('Поменять местами с соседней группой')} combo={kbdCombo('paneFlip', keybindings)} onSelect={() => { panes().focusPane(leaf.id); panes().flipActiveGroup() }} />

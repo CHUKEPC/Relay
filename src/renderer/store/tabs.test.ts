@@ -98,6 +98,26 @@ describe('tab groups', () => {
     expect(groupOf(a)).toBeNull()
   })
 
+  it('takes the group the strip found under the pointer', () => {
+    const [a, b, c] = open(3)
+    const g = T().createGroup([c])
+    T().setGroupCollapsed(g, true)
+    // Dropped on the label of a folded group: a joins it, right where it is, and the group opens.
+    T().moveTab(a, 0, g)
+    expect(groupOf(a)).toBe(g)
+    // The group gathers where its first tab now is.
+    expect(order()).toEqual([a, c, b])
+    expect(T().doc.groups?.find((x) => x.id === g)?.collapsed).toBe(false)
+    // Same slot, away from every group: it leaves without moving.
+    const before = order()
+    T().moveTab(a, order().indexOf(a), null)
+    expect(groupOf(a)).toBeNull()
+    expect(order()).toEqual(before)
+    // An unknown group means none.
+    T().moveTab(b, 0, 'no-such-group')
+    expect(groupOf(b)).toBeNull()
+  })
+
   it('lets the only tab of a group take the group along', () => {
     const [a, b, c] = open(3)
     const g = T().createGroup([a])

@@ -244,3 +244,11 @@
     max-width: 96px;
   }
 }
+
+/* While a tab or a request is dragged over a group, its label lights up: that
+   is the group the drop lands in. */
+.tab-group-chip.drop-target {
+  outline: 2px solid var(--tg);
+  outline-offset: 2px;
+  background: color-mix(in oklch, var(--tg) 38%, transparent);
+}
