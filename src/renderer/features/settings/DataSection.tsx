@@ -8,8 +8,10 @@ import { useEnvironments } from '@renderer/store/environments'
 import { useHistory } from '@renderer/store/history'
 import { useSettings } from '@renderer/store/settings'
 import { useUi } from '@renderer/store/ui'
+import { keepFresh, TRASH_DAYS_CHOICES, useTrash } from '@renderer/store/trash'
 import { useCap } from '@renderer/store/features'
 import { tr, trf } from '@renderer/lib/i18n'
+import { trashPeriodLabel } from '@renderer/lib/trash'
 import {
   BACKUP_FILE,
   base64ToBytes,
@@ -94,6 +96,75 @@ function replaceSnapshot(snapshot: WorkspaceSnapshot): void {
 }
 
 type ImportMode = 'merge' | 'replace'
+
+/**
+ * How long the trash keeps deleted items. A shorter period that would drop
+ * items already in the trash asks first: those are gone for good.
+ */
+function TrashRetentionRow(): JSX.Element {
+  const days = useSettings((s) => s.settings.trashRetentionDays)
+  const [pending, setPending] = useState<{ days: number; drops: number } | null>(null)
+
+  const apply = (next: number): void => {
+    useSettings.getState().update({ trashRetentionDays: next })
+    const dropped = useTrash.getState().prune()
+    setPending(null)
+    if (dropped) useUi.getState().showToast(trf('Удалено из корзины: {n}', { n: dropped }))
+  }
+
+  const choose = (next: number): void => {
+    const entries = useTrash.getState().doc.entries
+    const drops = entries.length - keepFresh(entries, Date.now(), next).length
+    if (drops > 0) setPending({ days: next, drops })
+    else apply(next)
+  }
+
+  return (
+    <>
+      <div className="set-row">
+        <div className="label">
+          <div className="t">{tr('Срок хранения в корзине')}</div>
+          <div className="d">{tr('Сколько удалённые элементы можно восстановить. У каждого рабочего пространства своя корзина, срок для всех один.')}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn" onClick={() => useUi.getState().setTrashOpen(true)}>
+            <Icon name="trash" size={14} /> {tr('Открыть корзину')}
+          </button>
+          <select
+            className="input"
+            style={{ width: 200 }}
+            aria-label={tr('Срок хранения в корзине')}
+            value={pending?.days ?? days}
+            onChange={(e) => choose(Number(e.target.value))}
+          >
+            {TRASH_DAYS_CHOICES.map((d) => (
+              <option key={d} value={d}>
+                {trashPeriodLabel(d)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {pending && (
+        <div className="set-row" role="alert">
+          <div className="label">
+            <div className="d" style={{ color: 'var(--danger, #d14343)' }}>
+              {trf('В корзине есть элементы старше нового срока ({n}) — они будут удалены навсегда.', { n: pending.drops })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={() => setPending(null)}>
+              {tr('Отмена')}
+            </button>
+            <button className="btn primary" onClick={() => apply(pending.days)}>
+              {tr('Применить')}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
 
 export function DataSection(): JSX.Element {
   const showToast = useUi((s) => s.showToast)
@@ -238,6 +309,9 @@ export function DataSection(): JSX.Element {
           {tr('Нажмите ещё раз, чтобы заменить все данные рабочего пространства.')}
         </div>
       )}
+
+      <div className="set-group-label">{tr('Корзина')}</div>
+      <TrashRetentionRow />
     </div>
   )
 }

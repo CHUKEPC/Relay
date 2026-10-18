@@ -245,10 +245,25 @@
   }
 }
 
+/* A folded group that holds the request on screen (nothing else was left to
+   show when it was folded): its label reads as the active tab. An outline,
+   not a shadow, so low-power mode (no shadows) keeps it. */
+.tab-group-chip.holds-active {
+  outline: 2px solid var(--tg);
+  outline-offset: 2px;
+}
+
 /* While a tab or a request is dragged over a group, its label lights up: that
    is the group the drop lands in. */
 .tab-group-chip.drop-target {
   outline: 2px solid var(--tg);
   outline-offset: 2px;
   background: color-mix(in oklch, var(--tg) 38%, transparent);
+}
+
+/* Two groups side by side get a wider gap, so the place between them — where
+   a dropped tab joins neither — can be seen and hit. */
+.rtab.in-group + .tab-group-chip,
+.tab-group-chip.collapsed + .tab-group-chip {
+  margin-left: 12px;
 }

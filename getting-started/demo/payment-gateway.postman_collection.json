@@ -1,0 +1,172 @@
+{
+  "info": {
+    "_postman_id": "col_demo_c",
+    "name": "Платёжный шлюз (песочница)",
+    "description": "Авторизация OAuth 2.0 (Client Credentials): на вкладке Authorization запроса нажмите «Получить токен», затем «Отправить». Token URL {{baseUrl}}/oauth/token, клиент relay-desktop / demo-secret.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "Создание платежа",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Статус 201', () => pm.response.to.have.status(201));",
+              "const payment = pm.response.json();",
+              "pm.test('Платёж принят в обработку', () => pm.expect(payment.status).to.eql('pending'));",
+              "pm.environment.set('paymentId', payment.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/pay/v1/payments",
+          "query": [],
+          "variable": []
+        },
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            {
+              "key": "accessToken",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "string"
+            },
+            {
+              "key": "accessTokenUrl",
+              "value": "{{baseUrl}}/oauth/token",
+              "type": "string"
+            },
+            {
+              "key": "authUrl",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "key": "clientId",
+              "value": "relay-desktop",
+              "type": "string"
+            },
+            {
+              "key": "clientSecret",
+              "value": "demo-secret",
+              "type": "string"
+            },
+            {
+              "key": "scope",
+              "value": "payments",
+              "type": "string"
+            },
+            {
+              "key": "headerPrefix",
+              "value": "Bearer",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"amount\": 78770,\n  \"currency\": \"RUB\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Статус платежа",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+              "pm.test('Платёж обработан или в обработке', () => pm.expect(['pending', 'succeeded']).to.include(pm.response.json().status));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "disabled": false
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/pay/v1/payments/{{paymentId}}",
+          "query": [],
+          "variable": []
+        },
+        "auth": {
+          "type": "oauth2",
+          "oauth2": [
+            {
+              "key": "accessToken",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "string"
+            },
+            {
+              "key": "accessTokenUrl",
+              "value": "{{baseUrl}}/oauth/token",
+              "type": "string"
+            },
+            {
+              "key": "authUrl",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "key": "clientId",
+              "value": "relay-desktop",
+              "type": "string"
+            },
+            {
+              "key": "clientSecret",
+              "value": "demo-secret",
+              "type": "string"
+            },
+            {
+              "key": "scope",
+              "value": "payments",
+              "type": "string"
+            },
+            {
+              "key": "headerPrefix",
+              "value": "Bearer",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -6,6 +6,14 @@
 **Electron + React + TypeScript**. Данные хранятся локально в JSON в пользовательском каталоге;
 секреты шифруются хранилищем ключей ОС.
 
+## Скачать
+
+- **Готовые установщики** последней версии лежат на [Google Диске][gdrive] и в
+  [GitHub Releases](https://github.com/CHUKEPC/Relay/releases) — собирать ничего не нужно.
+- **Собрать самому, по шагам**, даже если вы никогда этого не делали: [инструкция «С чего начать»](getting-started/README.ru.md)
+  ([in English](getting-started/README.md)) с готовыми скриптами для Windows, macOS и Linux и демо-сервисом,
+  на котором можно сразу проверить программу.
+
 ## Основные возможности
 
 - **HTTP-движок без CORS** в главном процессе Electron: все методы, все типы тела
@@ -43,7 +51,7 @@
   выбором групп полей и замена ровно тех совпадений, которые вы подтвердили.
 - **Группы вкладок**: именованные цветные группы, сворачиваемые до ярлыка; папка открывается группой.
 - **Корзина**: удалённые запросы, папки, коллекции, среды, переменные и примеры можно восстановить в течение
-  30 дней — они возвращаются на прежнее место.
+  выбранного срока (по умолчанию 30 дней) — они возвращаются на прежнее место.
 - **Локальное хранение**: все данные сохраняются в JSON в `userData`; API-ключи шифруются через Electron
   `safeStorage`.
 
@@ -51,6 +59,7 @@
 
 | | English | Русский |
 |---|---|---|
+| С чего начать: скачать, собрать, проверить | [getting-started/README.md](getting-started/README.md) | [getting-started/README.ru.md](getting-started/README.ru.md) |
 | Возможности и их статус | [docs/FEATURES.md](docs/FEATURES.md) | [docs/FEATURES.ru.md](docs/FEATURES.ru.md) |
 | Архитектура | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [docs/ARCHITECTURE.ru.md](docs/ARCHITECTURE.ru.md) |
 | Система плагинов | [docs/PLUGINS.md](docs/PLUGINS.md) | [docs/PLUGINS.ru.md](docs/PLUGINS.ru.md) |
@@ -130,3 +139,5 @@ npm run lint                   # eslint + tsc --noEmit
 - Эталон дизайна: [`design/`](design)
 
 Все руководства на английском и русском — в таблице раздела «Документация» выше.
+
+[gdrive]: https://drive.google.com/drive/folders/1p9DhgqohWKuRfj-_BfzINBKZbihDD0Zu?usp=sharing

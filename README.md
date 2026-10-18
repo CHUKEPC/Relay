@@ -6,6 +6,14 @@ A cross-platform desktop client for API testing on **Windows, macOS, and Linux**
 **Electron + React + TypeScript**. Data is stored locally as JSON in the user directory; secrets
 are encrypted with the OS keychain.
 
+## Download
+
+- **Ready-made installers** of the latest version are on [Google Drive][gdrive] and in
+  [GitHub Releases](https://github.com/CHUKEPC/Relay/releases) — no need to build anything.
+- **Build it yourself, step by step**, even if you have never built a program: the
+  [getting-started guide](getting-started/README.md) ([по-русски](getting-started/README.ru.md)) with
+  ready scripts for Windows, macOS and Linux and a demo service to try the app on.
+
 ## Highlights
 
 - **CORS-free HTTP engine** in the Electron main process: all methods, every body type
@@ -42,7 +50,7 @@ are encrypted with the OS keychain.
   group, then replace exactly the matches you confirm.
 - **Tab groups**: named, coloured groups of tabs that collapse to a label; a folder opens as a group.
 - **Trash**: deleted requests, folders, collections, environments, variables and examples stay
-  restorable for 30 days and go back where they were.
+  restorable for the period you choose (30 days by default) and go back where they were.
 - **Local storage**: everything persists as JSON in `userData`; API keys are encrypted via Electron
   `safeStorage`.
 
@@ -50,6 +58,7 @@ are encrypted with the OS keychain.
 
 | | English | Русский |
 |---|---|---|
+| Getting started: download, build, try | [getting-started/README.md](getting-started/README.md) | [getting-started/README.ru.md](getting-started/README.ru.md) |
 | Features and status | [docs/FEATURES.md](docs/FEATURES.md) | [docs/FEATURES.ru.md](docs/FEATURES.ru.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [docs/ARCHITECTURE.ru.md](docs/ARCHITECTURE.ru.md) |
 | Plugin system | [docs/PLUGINS.md](docs/PLUGINS.md) | [docs/PLUGINS.ru.md](docs/PLUGINS.ru.md) |
@@ -129,3 +138,5 @@ For local models (Ollama/LM Studio), add a custom provider with base URL e.g.
 - Design source of truth: [`design/`](design)
 
 See the [Documentation](#documentation) table above for every guide in English and Russian.
+
+[gdrive]: https://drive.google.com/drive/folders/1p9DhgqohWKuRfj-_BfzINBKZbihDD0Zu?usp=sharing

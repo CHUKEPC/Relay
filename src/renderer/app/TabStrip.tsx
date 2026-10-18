@@ -107,22 +107,31 @@ export function TabStrip() {
 
   /**
    * The group whose stretch of the strip — its label and its tabs, or just the
-   * label when it is folded — lies under the pointer.
+   * label when it is folded — lies under the pointer. The edges of a stretch
+   * belong to no group: the left half of the label (a quarter on each side of
+   * a folded one) and the right third of the last tab. A tab or a request can
+   * so land between two neighbour groups, or right after one, without joining.
    */
   const groupUnder = (clientX: number): string | null => {
     const doc = useTabs.getState().doc
     for (const g of doc.groups ?? []) {
       const chip = chipRefs.current.get(g.id)?.getBoundingClientRect()
       if (!chip) continue
+      let left = chip.left + chip.width / 2
       let right = chip.right
-      if (!g.collapsed) {
+      if (g.collapsed) {
+        left = chip.left + chip.width / 4
+        right = chip.right - chip.width / 4
+      } else {
+        let last: DOMRect | undefined
         for (const t of doc.tabs) {
           if (t.groupId !== g.id) continue
           const r = tabRefs.current.get(t.id)?.getBoundingClientRect()
-          if (r) right = Math.max(right, r.right)
+          if (r && (!last || r.right > last.right)) last = r
         }
+        if (last) right = last.right - Math.min(last.width / 3, 48)
       }
-      if (clientX >= chip.left && clientX <= right) return g.id
+      if (clientX >= left && clientX <= right) return g.id
     }
     return null
   }
@@ -179,14 +188,14 @@ export function TabStrip() {
     const nodeId = e.dataTransfer.getData(REQUEST_MIME)
     const found = nodeId ? useCollections.getState().locate(nodeId) : null
     const group = groupUnder(e.clientX)
-    const slot = slotAt(e.clientX, () => false)
     setDropGroup(null)
     if (!found || found.node.type !== 'request') return
     e.preventDefault()
-    const tabs = useTabs.getState()
-    const tabId = tabs.openSaved(found.node.request, found.node.request.id)
-    if (group) tabs.addToGroup(tabId, group)
-    else useTabs.getState().moveTab(tabId, slot, null)
+    const tabId = useTabs.getState().openSaved(found.node.request, found.node.request.id)
+    // Right where it was dropped, in or out of the group under the pointer. The
+    // strip has not re-rendered yet: the slot is counted on what is on screen,
+    // without this tab (an already open one moves here).
+    useTabs.getState().moveTab(tabId, slotAt(e.clientX, (t) => t.id === tabId), group)
   }
 
   // Vertical wheel scrolls the strip horizontally. Native listener with
@@ -217,11 +226,13 @@ export function TabStrip() {
     setTimeout(() => setEditing(id), 0)
   }
 
+  const activeGroupId = tabs.find((t) => t.id === activeTabId)?.groupId ?? null
+
   const renderGroup = (group: TabGroup, count: number) => (
     <PopoverPrimitive.Root key={`g:${group.id}`} open={editing === group.id} onOpenChange={(o) => setEditing(o ? group.id : null)}>
       <PopoverPrimitive.Anchor asChild>
         <div
-          className={`tab-group-chip${group.collapsed ? ' collapsed' : ''}${group.name ? '' : ' unnamed'}${draggingId === `g:${group.id}` ? ' dragging' : ''}${dropGroup === group.id ? ' drop-target' : ''}`}
+          className={`tab-group-chip${group.collapsed ? ' collapsed' : ''}${group.name ? '' : ' unnamed'}${draggingId === `g:${group.id}` ? ' dragging' : ''}${dropGroup === group.id ? ' drop-target' : ''}${group.collapsed && activeGroupId === group.id ? ' holds-active' : ''}`}
           style={groupStyle(group)}
           ref={(el) => {
             if (el) chipRefs.current.set(group.id, el)

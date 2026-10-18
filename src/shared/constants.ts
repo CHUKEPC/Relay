@@ -4,7 +4,7 @@
  */
 export const APP_NAME = 'Relay'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.4.1'
+export const APP_VERSION = '1.4.2'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'

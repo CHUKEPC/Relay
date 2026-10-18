@@ -137,6 +137,34 @@ describe('tab groups', () => {
     expect(T().doc.groups?.[0].collapsed).toBe(false)
   })
 
+  it('folding one of two neighbour groups leaves the other as it was', () => {
+    const [a, b, c, d] = open(4)
+    const g1 = T().createGroup([a, b])
+    const g2 = T().createGroup([c, d])
+    const folded = (g: string) => T().doc.groups?.find((x) => x.id === g)?.collapsed
+    T().setGroupCollapsed(g2, true)
+    T().setActive(a)
+    // Nothing else is on view: the active tab stays put, g2 stays folded.
+    T().setGroupCollapsed(g1, true)
+    expect(folded(g1)).toBe(true)
+    expect(folded(g2)).toBe(true)
+    expect(T().doc.activeTabId).toBe(a)
+    // Unfolding g2 does not touch g1, and folding it again moves nothing either.
+    T().setGroupCollapsed(g2, false)
+    expect(folded(g1)).toBe(true)
+    expect(folded(g2)).toBe(false)
+    T().setActive(c)
+    T().setGroupCollapsed(g2, true)
+    expect(folded(g1)).toBe(true)
+    expect(T().doc.activeTabId).toBe(c)
+    // An ungrouped tab on view takes over, past the folded neighbour.
+    const e = T().openNew()
+    T().setActive(c)
+    T().setGroupCollapsed(g2, true)
+    expect(T().doc.activeTabId).toBe(e)
+    expect(folded(g1)).toBe(true)
+  })
+
   it('closing a group closes its tabs; ungrouping keeps them', () => {
     const [a, b, c] = open(3)
     const g = T().createGroup([b, c])

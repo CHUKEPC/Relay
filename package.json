@@ -1,6 +1,6 @@
 {
   "name": "relay-api-client",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Relay — cross-platform desktop client for API testing.",
   "productName": "Relay",
   "author": {
@@ -67,5 +67,10 @@
     "vite": "^5.4.11",
     "vitest": "^2.1.8",
     "zustand": "^4.5.5"
+  },
+  "allowScripts": {
+    "electron@31.7.7": true,
+    "esbuild@0.21.5": true,
+    "protobufjs@7.6.2": true
   }
 }

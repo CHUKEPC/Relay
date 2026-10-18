@@ -99,7 +99,7 @@ Local-first, **no native modules**:
   under `app.getPath('userData')/relay-data`:
   - app-level: `settings`, `providers`, `plugins`, `features`, `userThemes`;
   - per workspace (`ws/<id>/`): `collections`, `environments`, `globals`, `history`, `tabs` (with the
-    tab groups), `cookies`, `trash` (deleted items, kept 30 days).
+    tab groups), `cookies`, `trash` (deleted items, kept for `settings.trashRetentionDays` — 30 by default, 0 = until emptied).
   - In-memory model + **debounced** atomic writes (write to temp, rename). A document that fails to
     parse is moved aside as `<key>.json.corrupt-<ts>` before anything is written over it, and every
     workspace folder keeps a `workspace.json` so a damaged workspace list can be rebuilt.
@@ -123,12 +123,15 @@ Suggested slices: `requestStore` (open tabs + active request draft), `collection
 - **Tab groups** live in the tabs store (`store/tabs.ts`): `TabsDoc.groups` and `TabModel.groupId`.
   Every commit runs `normalizeGroups`, which drops unknown and empty groups and keeps the tabs of a
   group contiguous, so the strip (`app/TabStrip.tsx`) can draw a label in front of each group and skip
-  the tabs of a collapsed one. `moveTab` decides membership from the slot a tab is dropped into;
-  `setActive`/`openSaved` unfold the group of a tab being shown.
+  the tabs of a collapsed one. `moveTab` decides membership from the slot a tab is dropped into, or takes
+  the group the strip found under the pointer (`groupUnder`, whose stretch edges belong to no group);
+  `setActive`/`openSaved` unfold the group of a tab being shown, and folding a group hands the active
+  tab only to a tab still on view.
 - **Trash**: user-facing deletes go through `lib/trash.ts`, which removes the item from its store and
   records a `TrashEntry` (the item plus its parent, index and readable place) in `store/trash.ts`
   (`trash` document). `restoreFromTrash` puts it back where it was, falling back to a «Restored»
-  collection or to the globals when the old parent is gone. Programmatic rewrites (backup restore,
+  collection or to the globals when the old parent is gone. `keepFresh` drops entries past the
+  retention period on load, on every add and when the period is shortened (`prune`). Programmatic rewrites (backup restore,
   scripts unsetting variables) still call the stores directly.
 - **View state per tab**: panels rebuilt on every tab switch keep their state outside themselves —
   `store/request-ui.ts` holds the builder sub-tab and the response tab/view/filter per tab, and

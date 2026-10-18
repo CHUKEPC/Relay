@@ -592,6 +592,36 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       cross — maximize and «open in a window» are now the first items of the menu — and below 210 px the
       grip goes too, so nothing is cut off.
 
+## 1.4.2 — Neighbour groups, trash retention, a getting-started kit
+
+- [x] **Neighbour groups fold on their own.** Folding a group that holds the active tab used to hand
+      the tab to its right-hand neighbour and unfold that group, so two groups side by side always
+      flipped together. `setGroupCollapsed` now passes the active tab only to a tab still on view
+      (ungrouped or in an unfolded group); with none, the request stays on screen and the folded label
+      is outlined (`holds-active`).
+- [x] **A drop between two groups joins neither.** `groupUnder` leaves the edges of every group's
+      stretch to no group — the left half of the label (a quarter on each side of a folded one) and the
+      right third of the last tab, at most 48 px — and two groups side by side get a 12 px gap. A
+      request dropped from the sidebar onto a group opens right at the drop spot instead of at the
+      group's end.
+- [x] **Trash retention setting.** Settings → Data → «Срок хранения в корзине»: 1, 3, 7, 14, 30
+      (default), 60, 90 or 180 days, a year, or until the trash is emptied (`trashRetentionDays`, 0).
+      A shorter period that would drop items already in the trash asks first; the trash dialog and the
+      help follow the setting. The row also opens the trash.
+- [x] **Low-power mode with the new features.** Checked in low-power mode: `{{` and `{{$` hints,
+      wrapping of long pasted lines and Beautify in the plain editor, the response kept per tab
+      (scroll and sub-tab), tab groups and the trash. The marks that were drawn with a shadow alone —
+      the active pane's line, a tab shown in another pane, the chosen group colour, the lit drop edge,
+      the outline of a folded group — come back as outlines or flat strips, since the mode turns
+      shadows off.
+- [x] **Getting-started kit.** `getting-started/` holds a step-by-step guide for beginners
+      ([EN](../getting-started/README.md) · [RU](../getting-started/README.ru.md)), numbered scripts
+      for Windows, macOS and Linux (install, start, demo service, tests, installer) behind one
+      `helper.mjs`, and the demo service with ready-made collections, environments and runner data files.
+- [x] **Help in German and Spanish.** The Help screen was never translated for the «Дополнительные
+      языки» pack and fell back to English; its 71 strings are now in `de.json` and `es.json`, together
+      with 12 UI labels the help refers to (low-power mode, My themes, Navigation, three plugin names…).
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

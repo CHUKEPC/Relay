@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import type { TrashEntry } from '@shared/types'
 import { Modal } from '@renderer/components/primitives'
 import { Icon } from '@renderer/components/Icon'
-import { useTrash, TRASH_RETENTION_DAYS } from '@renderer/store/trash'
+import { useTrash } from '@renderer/store/trash'
+import { useSettings } from '@renderer/store/settings'
 import { useUi } from '@renderer/store/ui'
 import { useI18n, tr, trf } from '@renderer/lib/i18n'
-import { emptyTrash, purgeFromTrash, restoreFromTrash, trashKindLabel } from '@renderer/lib/trash'
+import { emptyTrash, purgeFromTrash, restoreFromTrash, trashKindLabel, trashPeriodLabel } from '@renderer/lib/trash'
 import '@renderer/styles/feat-trash.css'
 
 function iconOf(e: TrashEntry): string {
@@ -47,6 +48,7 @@ export function TrashDialog(): JSX.Element {
   const open = useUi((s) => s.trashOpen)
   const entries = useTrash((s) => s.doc.entries)
   const lang = useI18n((s) => s.lang)
+  const days = useSettings((s) => s.settings.trashRetentionDays)
   const [query, setQuery] = useState('')
 
   const shown = useMemo(() => {
@@ -65,7 +67,10 @@ export function TrashDialog(): JSX.Element {
   return (
     <Modal open={open} onOpenChange={(o) => useUi.getState().setTrashOpen(o)} width={620} title={tr('Корзина')}>
       <div className="trash-sub">
-        {trf('Удалённые запросы, папки, коллекции, среды, переменные и примеры ответов хранятся {n} дней. Восстановленный элемент возвращается на прежнее место.', { n: TRASH_RETENTION_DAYS })}
+        {days === 0
+          ? tr('Удалённые запросы, папки, коллекции, среды, переменные и примеры ответов хранятся, пока вы не удалите их сами. Восстановленный элемент возвращается на прежнее место.')
+          : trf('Удалённые запросы, папки, коллекции, среды, переменные и примеры ответов хранятся {period}. Восстановленный элемент возвращается на прежнее место.', { period: trashPeriodLabel(days) })}{' '}
+        {tr('Срок хранения меняется в настройках, раздел «Данные».')}
       </div>
 
       {entries.length > 0 && (

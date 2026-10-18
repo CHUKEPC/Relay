@@ -567,6 +567,8 @@ export interface SettingsDoc extends DocEnvelope {
   maxRedirects: number
   rejectUnauthorized: boolean
   maxHistory: number
+  /** days a deleted item stays in the trash; 0 = until the trash is emptied */
+  trashRetentionDays: number
   wordWrapResponse: boolean
   sendAiContext: boolean
   autoApplyAiTools: boolean

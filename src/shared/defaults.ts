@@ -66,6 +66,7 @@ export function defaultSettings(): SettingsDoc {
     maxRedirects: 10,
     rejectUnauthorized: true,
     maxHistory: 200,
+    trashRetentionDays: 30,
     wordWrapResponse: false,
     sendAiContext: true,
     autoApplyAiTools: false,

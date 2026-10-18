@@ -1,0 +1,284 @@
+{
+  "info": {
+    "_postman_id": "col_demo_1",
+    "name": "Интернет-магазин API",
+    "description": "Демонстрационная коллекция из ВКР: вход с выдачей токена, каталог, заказы и проверка доступности. 7 запросов, 13 тестов. Сервис запускается командой «node demo-server.mjs», окружения — «Локальный стенд» и «Тестовый стенд». Авторизация Bearer {{token}} задана на коллекции и наследуется запросами; токен сохраняет сценарий запроса «Вход по паролю».",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "apiVersion",
+      "value": "v1"
+    },
+    {
+      "key": "productId",
+      "value": "101"
+    }
+  ],
+  "item": [
+    {
+      "name": "Авторизация",
+      "item": [
+        {
+          "name": "Вход по паролю",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Выдан токен доступа', () => pm.expect(body.access_token).to.be.a('string'));",
+                  "pm.test('Срок жизни — час', () => pm.expect(body.expires_in).to.eql(3600));",
+                  "pm.environment.set('token', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "query": [],
+              "variable": []
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"{{userLogin}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Каталог",
+      "item": [
+        {
+          "name": "Список товаров",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Не больше 5 позиций', () => pm.expect(body.items.length).to.be.at.most(5));",
+                  "pm.test('Только категория electronics', () => body.items.forEach((p) => pm.expect(p.category).to.eql('electronics')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/products?category=electronics&limit=5",
+              "query": [
+                {
+                  "key": "category",
+                  "value": "electronics",
+                  "disabled": false,
+                  "description": "категория каталога"
+                },
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "disabled": false,
+                  "description": "не больше N позиций"
+                }
+              ],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "Карточка товара",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Карточка нужного товара', () => pm.expect(pm.response.json().id).to.eql(Number(pm.variables.get('productId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/products/{{productId}}",
+              "query": [],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Заказы",
+      "item": [
+        {
+          "name": "Создание заказа",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('Сумма заказа посчитана', () => pm.expect(order.total).to.eql(order.items.reduce((s, i) => s + i.price * i.quantity, 0)));",
+                  "pm.environment.set('orderId', String(order.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/orders",
+              "query": [],
+              "variable": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"productId\": 101,\n      \"quantity\": 1\n    },\n    {\n      \"productId\": 104,\n      \"quantity\": 2\n    }\n  ],\n  \"comment\": \"Доставка до двери\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Получение заказа",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Тот же заказ', () => pm.expect(pm.response.json().id).to.eql(Number(pm.environment.get('orderId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "disabled": false
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/orders/{{orderId}}",
+              "query": [],
+              "variable": []
+            }
+          }
+        },
+        {
+          "name": "Отмена заказа",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Статус 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/{{apiVersion}}/orders/{{orderId}}",
+              "query": [],
+              "variable": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Проверка доступности",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "query": [],
+          "variable": []
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      }
+    }
+  ]
+}

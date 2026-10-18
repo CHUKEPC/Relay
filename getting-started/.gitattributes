@@ -1,0 +1,5 @@
+# Line endings the scripts need, whatever the checkout settings (GitHub ZIP downloads follow this too).
+*.cmd      text eol=crlf
+*.sh       text eol=lf
+*.command  text eol=lf
+*.mjs      text eol=lf

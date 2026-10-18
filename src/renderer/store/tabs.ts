@@ -379,19 +379,17 @@ export const useTabs = create<TabsState>((set, get) => {
       const { tabs, activeTabId } = get().doc
       const active = tabs.find((t) => t.id === activeTabId)
       if (collapsed && active?.groupId === groupId) {
-        // The active tab cannot hide: the nearest tab outside the group takes
-        // over (to the right first, like the browsers), unless there is none.
+        // The nearest tab still on view takes over (to the right first, like
+        // the browsers). Tabs of other folded groups are skipped: opening one of
+        // them would fold this group and unfold the neighbour at one click.
+        // With nothing on view the request stays shown and its label says so.
         const range = groupRange(tabs, groupId)
-        const outside = (t: TabModel) => t.groupId !== groupId
-        const after = range ? tabs.slice(range[1] + 1).find(outside) : undefined
-        const before = range ? tabs.slice(0, range[0]).reverse().find(outside) : undefined
+        const folded = new Set(next.groups!.filter((g) => g.collapsed).map((g) => g.id))
+        const onView = (t: TabModel) => !t.groupId || !folded.has(t.groupId)
+        const after = range ? tabs.slice(range[1] + 1).find(onView) : undefined
+        const before = range ? tabs.slice(0, range[0]).reverse().find(onView) : undefined
         const target = after ?? before
-        if (target) {
-          next.activeTabId = target.id
-          // Its own group may be folded too; it opens, the one just folded stays shut.
-          const own = target.groupId ? next.groups!.find((g) => g.id === target.groupId) : undefined
-          if (own?.collapsed) next.groups = next.groups!.map((g) => (g.id === own.id ? { ...g, collapsed: false } : g))
-        }
+        if (target) next.activeTabId = target.id
       }
       commit(next)
     },

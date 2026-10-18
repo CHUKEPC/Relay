@@ -17,7 +17,7 @@ import { useTabs } from '../store/tabs'
 import { useTrash } from '../store/trash'
 import { useUi } from '../store/ui'
 import { deleteExample } from './examples'
-import { tr, trf } from './i18n'
+import { tr, trf, trp } from './i18n'
 
 /** What a caller supplies; the id and the time are stamped here. */
 type NewEntry = TrashEntry extends infer E ? (E extends TrashEntry ? Omit<E, 'id' | 'deletedAt'> : never) : never
@@ -57,6 +57,13 @@ export function trashKindLabel(entry: TrashEntry): string {
     case 'history':
       return 'История'
   }
+}
+
+/** A retention period as the settings and the trash dialog spell it: «7 дней», «1 год». */
+export function trashPeriodLabel(days: number): string {
+  if (days === 0) return tr('Пока корзину не очистят')
+  if (days === 365) return tr('1 год')
+  return `${days} ${trp(days, 'день', 'дня', 'дней')}`
 }
 
 /* ============================================================

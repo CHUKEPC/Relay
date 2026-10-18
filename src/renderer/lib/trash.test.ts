@@ -128,5 +128,21 @@ describe('trash', () => {
     const old = { id: 'old', kind: 'history' as const, entries: [], name: 'x', deletedAt: Date.now() - 40 * 86400000 }
     const fresh = { ...old, id: 'fresh', deletedAt: Date.now() }
     expect(trashStore.keepFresh([old, fresh]).map((e) => e.id)).toEqual(['fresh'])
+    // The period comes from the settings; 0 keeps everything.
+    expect(trashStore.keepFresh([old, fresh], Date.now(), 60).map((e) => e.id)).toEqual(['fresh', 'old'])
+    expect(trashStore.keepFresh([old, fresh], Date.now(), 0)).toHaveLength(2)
+  })
+
+  it('prunes to a shorter period chosen in the settings', async () => {
+    const settings = await import('../store/settings')
+    const day = 86400000
+    const at = (id: string, ago: number) => ({ id, kind: 'history' as const, entries: [], name: id, deletedAt: Date.now() - ago * day })
+    settings.useSettings.getState().update({ trashRetentionDays: 0 })
+    trashStore.useTrash.getState().hydrate({ version: 1, entries: [at('d2', 2), at('d10', 10), at('d400', 400)] })
+    expect(entries()).toHaveLength(3)
+    settings.useSettings.getState().update({ trashRetentionDays: 7 })
+    expect(trashStore.useTrash.getState().prune()).toBe(2)
+    expect(entries().map((e) => e.id)).toEqual(['d2'])
+    settings.useSettings.getState().update({ trashRetentionDays: 30 })
   })
 })
