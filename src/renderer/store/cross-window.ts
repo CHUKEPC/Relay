@@ -6,6 +6,8 @@ import { useHistory } from './history'
 import { useSettings } from './settings'
 import { useAi } from './ai'
 import { useTrash } from './trash'
+import { useUserThemes } from './user-themes'
+import { useUserIcons } from './user-icons'
 
 let wired = false
 
@@ -47,6 +49,12 @@ export function wireStorageSync(): void {
         break
       case 'trash':
         useTrash.getState().hydrate(value as StorageMap['trash'])
+        break
+      case 'userThemes':
+        useUserThemes.getState().hydrate(value as StorageMap['userThemes'])
+        break
+      case 'userIcons':
+        useUserIcons.getState().hydrate(value as StorageMap['userIcons'])
         break
     }
   })

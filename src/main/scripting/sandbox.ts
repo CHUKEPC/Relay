@@ -6,7 +6,7 @@
  * (the only `node:vm` escape vector) — so even a hostile imported-collection
  * script cannot reach Node APIs, the main process, or its decrypted secrets.
  */
-import { createContext, runInContext } from 'node:vm'
+import { createContext, runInContext, Script } from 'node:vm'
 import type {
   HttpMethod,
   KV,
@@ -22,6 +22,7 @@ import type {
   VisualizerPayload
 } from '@shared/types'
 import { runRequest } from '../http/engine'
+import { interpolate } from '@shared/interpolate'
 
 class AssertionError extends Error {}
 
@@ -932,6 +933,31 @@ type SendRequestBody =
       options?: { raw?: { language?: string } }
     }
 
+/**
+ * `await` at the top level of a script — `const r = await pm.sendRequest(...)`,
+ * as newer Postman allows — is a syntax error in a plain script. Such a script
+ * is run as the body of an async function instead; every other script runs as
+ * it is, so its line numbers and its last expression stay what they were.
+ */
+export function usesTopLevelAwait(code: string): boolean {
+  try {
+    new Script(code)
+    return false
+  } catch (err) {
+    if (!(err instanceof SyntaxError) || !/await is only valid/.test(err.message)) return false
+    try {
+      new Script(`(async () => {\n${code}\n})()`)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
+function asScript(code: string): string {
+  return usesTopLevelAwait(code) ? `(async () => {\n${code}\n})()` : code
+}
+
 /** A request accepted by pm.sendRequest (string URL or a Postman-like object). */
 type SendRequestInput =
   | string
@@ -1189,7 +1215,7 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   const iterationData: Record<string, string> = Object.assign(Object.create(null), payload.iterationData ?? {})
   // Ephemeral, highest-precedence scope written by pm.variables.set during the
   // run (Postman 'local' vars). NOT persisted; affects merged() only this run.
-  const local: Record<string, string> = Object.create(null)
+  const local: Record<string, string> = Object.assign(Object.create(null), payload.local ?? {})
   // Precedence mirrors the interpolation resolver: local > data > collection > environment > global.
   const merged = (): Record<string, string> =>
     Object.assign(Object.create(null), globals, env, collection, iterationData, local)
@@ -1261,7 +1287,11 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       },
       unset: (k: string) => {
         delete local[k]
-      }
+      },
+      // {{name}} (and {{$dynamic}}) resolved against every scope of this run.
+      replaceIn: (template: unknown) =>
+        interpolate(String(template ?? ''), { local: { ...iterationData, ...local }, collection, environment: env, global: globals }),
+      toObject: () => ({ ...merged() })
     },
     collectionVariables: {
       get: (k: string) => collection[k],
@@ -1377,7 +1407,10 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
 
   // Disallow eval / new Function inside the sandbox realm (defense in depth on
   // top of the process-level --disallow-code-generation-from-strings flag).
-  const context = createContext({ pm, console: sandboxConsole }, { codeGeneration: { strings: false, wasm: false } })
+  // atob / btoa as in Postman's sandbox (binary strings, like the browser ones).
+  const atob = (s: unknown): string => Buffer.from(String(s ?? ''), 'base64').toString('latin1')
+  const btoa = (s: unknown): string => Buffer.from(String(s ?? ''), 'latin1').toString('base64')
+  const context = createContext({ pm, console: sandboxConsole, atob, btoa }, { codeGeneration: { strings: false, wasm: false } })
 
   // Surface collection-variable / cookie mutations (only when non-empty so the
   // result stays compact and the renderer can skip a no-op write).
@@ -1393,7 +1426,8 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
       environmentUpdates: envUpdates,
       globalUpdates,
       requestPatch,
-      visualizer
+      visualizer,
+      localVariables: { ...local }
     }
     if (Object.keys(collectionUpdates).length) result.collectionUpdates = collectionUpdates
     if (cookieUpdates.set?.length || cookieUpdates.remove?.length) result.cookieUpdates = cookieUpdates
@@ -1406,7 +1440,12 @@ export async function runSandbox(payload: ScriptRunRequest): Promise<ScriptRunRe
   }
 
   try {
-    runInContext(payload.code, context, { timeout: 3000, displayErrors: true })
+    const ret = runInContext(asScript(payload.code), context, { timeout: 3000, displayErrors: true })
+    // A script with a top-level `await` runs as an async function: wait for it
+    // like for any other pending work of the run.
+    if (ret && typeof (ret as PromiseLike<unknown>).then === 'function' && usesTopLevelAwait(payload.code)) {
+      pendingRequests.push(Promise.resolve(ret).catch((err) => void recordAsyncScriptError(err instanceof Error ? err.message : String(err))))
+    }
   } catch (err) {
     // A script that fired a request and then threw leaves that request running.
     pendingWork = pendingRequests.length > 0 || pendingTests.length > 0

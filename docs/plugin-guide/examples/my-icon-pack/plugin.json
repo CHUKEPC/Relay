@@ -1,0 +1,9 @@
+{
+  "id": "my-icon-pack",
+  "name": "My Icon Pack",
+  "description": "Two example app icons: Lagoon and Initials.",
+  "version": "1.0.0",
+  "capabilities": [
+    "icons.extra"
+  ]
+}

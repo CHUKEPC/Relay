@@ -535,6 +535,9 @@ plugins/
 ├── theme-pack/
 │   ├── plugin.json                → themes.extra
 │   └── themes.json
+├── icon-pack/
+│   ├── plugin.json                → icons.extra
+│   └── icons.json
 └── extra-languages/
     ├── plugin.json                → i18n.extra
     └── locales/{de,es}.json
@@ -564,6 +567,7 @@ plugins/
 | UI настроек | `src/renderer/features/settings/FeaturePacks.tsx` |
 | движок перевода | `src/renderer/lib/i18n.ts`, `src/renderer/locales/en.json` |
 | файлы данных сниппетов / тем: разбор, белый список цветов, варианты | `src/shared/pack-data.ts` (покрыт модульными тестами на встроенных комплектах) |
+| файлы иконок приложения (`icons.json`), готовые иконки, файлы иконок | `src/shared/app-icon.ts` (с юнит-тестами на встроенном паке); отрисовка — `src/renderer/lib/app-icon-render.ts`, применение — `src/main/app-icon.ts` |
 | применение тем, палитра Monaco | `src/renderer/store/settings.ts`, `src/renderer/lib/monaco.ts` |
 
 Комплекты **включаются явно (opt-in)**: комплект, который ни разу не включали, остаётся выключенным, поэтому свежая установка —

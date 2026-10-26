@@ -10,6 +10,7 @@ import { useGrpc } from './grpc'
 import { useRunner } from './runner'
 import { usePlugins } from './plugins'
 import { useUserThemes } from './user-themes'
+import { useUserIcons } from './user-icons'
 import { useTrash } from './trash'
 import { useFeatures, wireFeatures } from './features'
 import { applyLanguage } from '../lib/i18n'
@@ -55,7 +56,7 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
 
   // Feature packs decide which UI even exists (protocols, AI, auth, languages),
   // so they are loaded with the documents, before the first render.
-  const [collections, environments, globals, history, tabs, settings, providers, userThemes, features, trash] = await Promise.all([
+  const [collections, environments, globals, history, tabs, settings, providers, userThemes, features, trash, userIcons] = await Promise.all([
     window.api.storageLoad('collections'),
     window.api.storageLoad('environments'),
     window.api.storageLoad('globals'),
@@ -65,12 +66,14 @@ export async function bootstrap(opts: { detached?: boolean } = {}): Promise<void
     window.api.storageLoad('providers'),
     window.api.storageLoad('userThemes'),
     window.api.featuresList().catch(() => []),
-    window.api.storageLoad('trash').catch(() => null)
+    window.api.storageLoad('trash').catch(() => null),
+    window.api.storageLoad('userIcons').catch(() => null)
   ])
 
   useFeatures.getState().setPlugins(features)
   // Before the settings hydrate: a user theme may be the active one.
   useUserThemes.getState().hydrate(userThemes)
+  useUserIcons.getState().hydrate(userIcons)
   useSettings.getState().hydrate(settings ?? defaultSettings())
   // Language depends on the packs above (a plugin language needs its pack on).
   await applyLanguage(useSettings.getState().settings.language || 'ru')

@@ -4,6 +4,7 @@ import { BrowserWindow, ipcMain, nativeTheme, type IpcMainEvent, type IpcMainInv
 import { APP_NAME } from '@shared/constants'
 import { IPC } from '@shared/ipc-contract'
 import { mt } from './i18n'
+import { savedAppIcon } from './app-icon'
 
 export interface AppWindowOptions {
   width: number
@@ -33,6 +34,8 @@ export function createAppWindow(opts: AppWindowOptions): BrowserWindow {
     trafficLightPosition: { x: -100, y: -100 },
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#161619' : '#fbfbfc',
     title: opts.title,
+    // The icon picked in Settings → Appearance, from the first frame (undefined = the original).
+    icon: savedAppIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

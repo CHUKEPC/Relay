@@ -445,6 +445,26 @@
   }
 }
 
+/* A request zone narrower than ~300 px (16 panes in a small window): the name
+   keeps its room — the pencil goes (a click on the name still renames it) and
+   the name may take the whole row instead of half of it. */
+@container (max-width: 300px) {
+  .pane-builder .reqmeta-edit {
+    display: none;
+  }
+
+  .pane-builder .reqmeta-name {
+    flex: 0 1 auto;
+    min-width: 24px;
+    max-width: none;
+  }
+
+  .pane-builder .reqmeta-row {
+    gap: 4px;
+    padding: 6px 8px;
+  }
+}
+
 /* A floating response is a width container too, like the docked one. */
 .resp-float {
   container-type: inline-size;

@@ -17,6 +17,37 @@
   display: none;
 }
 
+/* The scroller sits in an HScroll wrapper: it fills the strip, and an
+   overflowing strip gets the edge arrows and the slider along its bottom edge
+   (the tabs are 30px in a 38px strip, so the slider has room under them). */
+.tabstrip-hscroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  --hscroll-bg: var(--bg-1);
+}
+.tabstrip-hscroll > .tabstrip-scroll {
+  flex: 1 1 auto;
+}
+/* HScroll keeps its items at their natural width; tabs still shrink first. */
+.tabstrip-hscroll > .hscroll-row > .rtab {
+  flex: 0 1 auto;
+}
+.tabstrip-hscroll .hscroll-arrow {
+  bottom: 6px;
+}
+.tabstrip-hscroll .hscroll-track {
+  height: 7px;
+}
+.tabstrip-hscroll .hscroll-thumb {
+  bottom: 1px;
+  height: 4px;
+}
+.tabstrip-hscroll .hscroll-track:hover .hscroll-thumb,
+.tabstrip-hscroll .hscroll-track:active .hscroll-thumb {
+  height: 6px;
+}
+
 /* Tabs shrink down to a readable floor, then the scroller takes over. */
 .rtab {
   flex: 0 1 auto;
@@ -33,6 +64,15 @@
 .rtab.is-dirty:not(:hover) .x {
   opacity: 0;
   pointer-events: none;
+}
+/* They swap at once: with the X fading (0.12s) while the dot showed up
+   immediately, the two were drawn over each other for a moment — when the
+   pointer left a dirty tab and on the first edit of the active one. */
+.rtab.is-dirty .x {
+  transition: none;
+}
+.rtab.is-dirty:hover .dirty {
+  visibility: hidden;
 }
 
 .tabstrip-add {

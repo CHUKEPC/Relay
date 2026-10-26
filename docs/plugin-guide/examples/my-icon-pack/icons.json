@@ -1,0 +1,27 @@
+{
+  "icons": [
+    {
+      "id": "lagoon",
+      "name": "Lagoon",
+      "shape": "circle",
+      "background": [
+        "#38c6e8",
+        "#1d5fd6"
+      ],
+      "glyph": "send",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "initials",
+      "name": "Initials",
+      "shape": "squircle",
+      "background": [
+        "#ff9a4d",
+        "#e8467c"
+      ],
+      "glyph": "letter",
+      "letter": "AB",
+      "glyphColor": "#ffffff"
+    }
+  ]
+}

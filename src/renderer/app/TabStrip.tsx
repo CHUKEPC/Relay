@@ -3,6 +3,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import type { TabGroup, TabModel } from '@shared/types'
 import { Icon } from '@renderer/components/Icon'
+import { HScroll } from '@renderer/components/HScroll'
 import { RequestTag } from '@renderer/components/RequestTag'
 import { TAB_GROUP_COLOR_LABEL, TAB_GROUP_COLORS, useTabs } from '@renderer/store/tabs'
 import { leavesOf, usePanes } from '@renderer/store/panes'
@@ -38,7 +39,7 @@ export function TabStrip() {
   const paneRoot = usePanes((s) => s.root)
   const shownInPanes = useMemo(() => (paneRoot.kind === 'leaf' ? null : new Set(leavesOf(paneRoot).map((l) => l.tabId))), [paneRoot])
 
-  const scrollerRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
   const chipRefs = useRef(new Map<string, HTMLDivElement>())
   // The tab (or group) being dragged from this strip. dragover cannot read the
@@ -191,33 +192,18 @@ export function TabStrip() {
     setDropGroup(null)
     if (!found || found.node.type !== 'request') return
     e.preventDefault()
-    const tabId = useTabs.getState().openSaved(found.node.request, found.node.request.id)
+    const request = found.node.request
+    // A tab of the request already in that spot (the same group, or outside
+    // groups) moves to the drop slot. One in another group stays there: the
+    // request gets a tab of its own, so the two groups do not share it.
+    const here = useTabs.getState().doc.tabs.find((t) => t.savedRequestId === request.id && (t.groupId ?? null) === group)
+    const tabId = here ? here.id : useTabs.getState().openSaved(request, request.id, { fresh: true })
+    if (here) useTabs.getState().setActive(here.id)
     // Right where it was dropped, in or out of the group under the pointer. The
     // strip has not re-rendered yet: the slot is counted on what is on screen,
-    // without this tab (an already open one moves here).
+    // without this tab.
     useTabs.getState().moveTab(tabId, slotAt(e.clientX, (t) => t.id === tabId), group)
   }
-
-  // Vertical wheel scrolls the strip horizontally. Native listener with
-  // passive:false — React's synthetic onWheel can't preventDefault reliably.
-  useEffect(() => {
-    const el = scrollerRef.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        el.scrollLeft += e.deltaY
-        e.preventDefault()
-      }
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-
-  // Keep the active tab visible when it changes (e.g. opened from the sidebar).
-  useEffect(() => {
-    if (!activeTabId) return
-    tabRefs.current.get(activeTabId)?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
-  }, [activeTabId])
 
   /** New group for one tab; its editor opens so it can be named right away. */
   const groupTab = (tabId: string): void => {
@@ -461,9 +447,12 @@ export function TabStrip() {
 
   return (
     <div className="tabstrip">
-      <div
+      <HScroll
         className="tabstrip-scroll"
-        ref={scrollerRef}
+        wrapClassName="tabstrip-hscroll"
+        rowRef={scrollerRef}
+        // The active tab is scrolled into view when it changes (opened from the sidebar, a shortcut).
+        revealKey={activeTabId}
         onDragOver={onStripDragOver}
         onDragLeave={(e) => {
           if (!scrollerRef.current?.contains(e.relatedTarget as Node | null)) setDropGroup(null)
@@ -479,7 +468,7 @@ export function TabStrip() {
         }}
       >
         {items.map((it) => (it.kind === 'group' ? renderGroup(it.group, it.count) : renderTab(it.tab, it.index, it.group, it.last)))}
-      </div>
+      </HScroll>
       <button className="icon-btn tabstrip-add" onClick={() => openNew()} title={trf('Новый запрос ({key})', { key: `${MOD}N` })}>
         <Icon name="plus" size={16} />
       </button>

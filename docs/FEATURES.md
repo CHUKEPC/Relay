@@ -622,6 +622,70 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not yet. Updated to reflect the imp
       языки» pack and fell back to English; its 71 strings are now in `de.json` and `es.json`, together
       with 12 UI labels the help refers to (low-power mode, My themes, Navigation, three plugin names…).
 
+## 1.5.0 — Selecting several items, the app icon, copies, independent groups
+
+- [x] **Ticking rows in the collections tree.** The tick button in the Collections header, or
+      Ctrl/⌘+click on a row, turns selecting on: every collection, folder and request gets a checkbox
+      and a click on a row ticks it. A ticked folder covers what is inside it; unticking a row ticked
+      through its folder ticks its siblings instead (`toggleTick`, `src/renderer/lib/tree-select.ts`).
+      The bar under the tree (`SelectionBar`) shows the count and acts on the top-most ticks: open in
+      tabs, open as one tab group, duplicate, move into a folder, export as one Postman v2.1 file, run
+      in the runner (the requests ticked in its list), delete to the trash (asks first, every item
+      restorable on its own). The same actions are in the context menu of a ticked row, ticked rows
+      drag together (`moveNodes`), and Esc ends selecting — but not the Esc that closes a dialog, a
+      menu or a field's suggestion list.
+- [x] **Exporting a selection.** One collection (whole, or cut down to the ticks with its folder
+      structure, auth, variables and scripts) passes through; ticks in several collections become their
+      folders in one file, their variables merged (`selectionExport`).
+- [x] **Copies ask for a name and a place.** «Duplicate…» in the sidebar opens a dialog: «Name (копия)»
+      or one's own name, and where the copy goes — right after the original by default, or any folder
+      (a folder never into itself; a collection stays at the top level). Several ticks are copied next
+      to their originals or all into one folder. Only the copied node is renamed; what is inside a
+      copied folder keeps its names. A duplicated tab remembers its original (`copyOf`): saving it
+      asks the same question and offers the original's folder; Save As on a saved request offers its
+      own folder (`saveDefaults`, `src/renderer/lib/copy-target.ts`).
+- [x] **Independent tab groups.** «Open requests as a tab group» gives the group tabs of its own
+      (`openSaved(..., { fresh: true })`): a request already open in another group or outside groups
+      keeps its tab, and closing the new group never takes that tab along. Opening the same folder
+      again returns to its group (`sourceId`) and adds only the requests it lacks. A sidebar click
+      reuses the tab nearest to the active one (`pickOpenTab`); a request dropped onto a group opens a
+      tab there instead of pulling one out of another group. Saving a request updates its clean tabs
+      in other groups; renaming it in the sidebar updates every tab of it (`renameSaved`).
+- [x] **The app icon.** Settings → Appearance → «App icon»: nine presets, «Create your own» (shape,
+      two background colours, one of 15 glyphs or one or two letters, glyph colour), icons from the new
+      «App icon pack» plugin (`plugins/icon-pack`, capability `icons.extra`, 18 icons) and «My icons» —
+      a picture (PNG, JPEG, SVG, WebP, GIF, BMP, ICO, fitted into 256×256) or a JSON icon description
+      ([icon guide](ICONS.md)). The renderer draws the icon on a canvas and hands a PNG to the main
+      process (`src/main/app-icon.ts`), which sets it on every window and the Dock and keeps it in
+      `userData` for the next start. On Windows an option also re-points the installed app's shortcuts
+      (desktop, Start menu, taskbar pin) at a generated `.ico`; «Relay» puts the original back. Pack and
+      file icons are validated like themes (colour allowlist, PNG data URLs only).
+- [x] **A slider on the tab strip.** The strip is an `HScroll` row now: arrows at the clipped ends,
+      a slider along the bottom edge that can be dragged, the wheel, and the open tab kept in view.
+- [x] **The unsaved-changes dot.** It swapped with the close cross through a 0.12 s fade, so both were
+      drawn at once for a moment (on leaving a dirty tab, on the first edit of the active one); they
+      swap at once now. A tab is dirty only while its request differs from the saved one — an edit
+      taken back by hand or by Ctrl+Z clears the dot; a blank tab typed in and erased stays clean
+      (`requestsDiffer`).
+- [x] **Postman parity in scripts.** `pm.variables.set` used to stay inside the script that called it:
+      a value set in a pre-request script never reached the request's `{{variables}}`, the next script
+      or the tests. The local scope now travels through every script of a send (folder pre-request →
+      request pre-request → tests) and resolves the request, in a tab and in the runner
+      (`ScriptRunResult.localVariables`). Added `pm.variables.replaceIn`, `pm.variables.toObject`,
+      `atob`/`btoa` and a top-level `await` (such a script runs as an async function). The runner also
+      reads collection variables after the pre-request scripts, so one set there applies to the same
+      request.
+- [x] **Narrow panes.** A request zone narrower than 300 px (16 panes in a small window) drops the
+      rename pencil and lets the name take the row instead of one letter.
+- [x] **Licence file.** `LICENSE` (MIT) at the repository root, matching `package.json`.
+- [x] **Verified end to end** in the built app over the DevTools protocol: 35 checks of the new
+      features, 32 layout checks (four window sizes × 1/2/4/8/16 panes, the navigation and the response
+      on every edge, the new dialogs and settings at 940×600 — no covered or off-window control), and
+      41 checks of the core: a 35-request runner pass against a local service (all methods and body
+      types, Basic, Bearer, inherited, API key in a header and the query, Digest, OAuth 2.0 client
+      credentials, AWS SigV4, Hawk, JWT, OAuth 1.0, pre-request and test scripts, pm.sendRequest,
+      collection and environment variables, cookies, redirects), WebSocket and SSE.
+
 ## Out of scope (needs a hosted backend)
 
 - Cloud sync, team workspaces, sharing links, mock servers, monitors, in-cloud history.

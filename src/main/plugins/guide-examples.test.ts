@@ -11,6 +11,7 @@ import { parseManifest } from './manifest'
 import { runPluginEvent } from './sandbox'
 import { validateManifest } from '../features/pack-source'
 import { parseSnippets, parseThemes } from '@shared/pack-data'
+import { parseIcons } from '@shared/app-icon'
 import type { PluginRunRequest } from '@shared/types'
 
 const dir = join(__dirname, '..', '..', '..', 'docs', 'plugin-guide', 'examples')
@@ -77,6 +78,13 @@ describe('plugin guide examples', () => {
     const themes = parseThemes(JSON.parse(read('my-theme-pack', 'themes.json')), 'my-theme-pack')
     expect(themes.map((t) => t.id)).toEqual(['my-theme-pack/mint', 'my-theme-pack/paper'])
     expect(Object.keys(themes[0].variants.dark ?? {})).toHaveLength(20)
+  })
+
+  it('my-icon-pack is a valid icon pack', () => {
+    expect(validateManifest(join(dir, 'my-icon-pack'))).toMatchObject({ id: 'my-icon-pack' })
+    const icons = parseIcons(JSON.parse(read('my-icon-pack', 'icons.json')), 'my-icon-pack')
+    expect(icons.map((i) => i.id)).toEqual(['my-icon-pack/lagoon', 'my-icon-pack/initials'])
+    expect(icons[1]).toMatchObject({ glyph: 'letter', letter: 'AB' })
   })
 
   it('my-snippets is a valid snippet pack', () => {

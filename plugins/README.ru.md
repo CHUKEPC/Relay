@@ -32,6 +32,7 @@ HTTP-запросов, шести распространённых схем ав
 | `backup.extra` | резервные копии в ZIP и SQLite |
 | `snippets` | панель сниппетов на вкладке Scripts, заполняемая из `snippets.json` комплекта |
 | `themes.extra` | цветовые темы в Настройки → Внешний вид, из `themes.json` комплекта |
+| `icons.extra` | иконки приложения в Настройки → Внешний вид → Иконка приложения, из `icons.json` комплекта ([руководство](../docs/ICONS.ru.md)) |
 | `codegen.extra` | ещё двенадцать языков в окне «Код» (Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie, wget) |
 
 Комплекты сниппетов и тем хранят свои данные рядом с манифестом; форматы,

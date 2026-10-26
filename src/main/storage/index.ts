@@ -20,6 +20,7 @@ import {
   defaultSettings,
   defaultTabs,
   defaultTrash,
+  defaultUserIcons,
   defaultUserThemes
 } from '@shared/defaults'
 
@@ -35,6 +36,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
   plugins: defaultPlugins,
   features: defaultFeatures,
   userThemes: defaultUserThemes,
+  userIcons: defaultUserIcons,
   trash: defaultTrash
 }
 
@@ -43,7 +45,7 @@ const SEEDS: { [K in StorageKey]: () => StorageMap[K] } = {
  * settings, AI provider config (+ their safeStorage secrets). Everything else is
  * isolated per workspace.
  */
-const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features', 'userThemes'])
+const APP_KEYS = new Set<StorageKey>(['settings', 'providers', 'plugins', 'features', 'userThemes', 'userIcons'])
 /** Per-workspace document keys (the isolated working data set). */
 const WS_KEYS = ['collections', 'environments', 'globals', 'history', 'tabs', 'cookies', 'trash'] as const
 

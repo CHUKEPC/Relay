@@ -1,0 +1,65 @@
+/* «Save as “Name (копия)”» / one's own name — the Save dialog for a duplicated
+   tab and the sidebar's Duplicate dialog. */
+
+.name-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nc-opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-0);
+  color: var(--tx-1);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+/* the field label above styles every <label> in a .field; these are rows */
+.field .nc-opt {
+  display: flex;
+  margin-bottom: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--tx-1);
+}
+.field .nc-opt.on {
+  color: var(--tx-0);
+}
+.nc-opt:hover {
+  border-color: var(--line-2);
+}
+.nc-opt.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--tx-0);
+}
+.nc-opt input[type='radio'] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.nc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nc-name {
+  font-weight: 600;
+  color: var(--tx-0);
+}
+.nc-own {
+  margin-left: 30px;
+  width: calc(100% - 30px);
+}
+
+[data-low-power] .nc-opt {
+  transition: none;
+}

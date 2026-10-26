@@ -16,6 +16,10 @@ import { mt } from '../i18n'
 import { readInstallChoice } from './install'
 import { MANIFEST, MANIFEST_MAX_BYTES, stageSource, validateManifest } from './pack-source'
 import { PACK_DATA_MAX_BYTES, parseSnippets, parseThemes, SNIPPETS_FILE, THEMES_FILE, type PackSnippet, type PackTheme } from '@shared/pack-data'
+import { parseIcons, type AppIconDef } from '@shared/app-icon'
+
+/** App icons of an `icons.extra` pack. */
+const ICONS_FILE = 'icons.json'
 
 const LOCALE_MAX_BYTES = 512 * 1024
 const LOCALE_CODE = /^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/
@@ -256,6 +260,11 @@ export class FeatureRegistry {
     return this.readPackData('themes.extra', THEMES_FILE, parseThemes)
   }
 
+  /** App icons of all enabled icon packs, ids namespaced by pack. */
+  icons(): AppIconDef[] {
+    return this.readPackData('icons.extra', ICONS_FILE, parseIcons)
+  }
+
   /**
    * 1.2 moved built-in things into packs: the script snippets, the Postman /
    * Insomnia themes and most code-generation languages. Someone upgrading must
@@ -354,6 +363,10 @@ export function registerFeatureHandlers(
   ipcMain.handle(IPC.features.themes, async () => {
     if (!registry.isLoaded()) await registry.load()
     return registry.themes()
+  })
+  ipcMain.handle(IPC.features.icons, async () => {
+    if (!registry.isLoaded()) await registry.load()
+    return registry.icons()
   })
   ipcMain.handle(IPC.features.install, async (): Promise<PickResult | null> => {
     // The path always comes from a native dialog, never from the renderer. It

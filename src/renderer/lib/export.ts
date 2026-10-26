@@ -1,6 +1,7 @@
 import type { CollectionFolderNode, RequestModel } from '@shared/types'
 import { useUi } from '@renderer/store/ui'
 import { tr, trf } from '@renderer/lib/i18n'
+import { selectionExport } from '@renderer/lib/tree-select'
 
 /** Strip path-hostile characters so the name is safe as a file name on every OS. */
 function sanitizeFileName(name: string): string {
@@ -53,4 +54,15 @@ export async function exportRequestJson(request: RequestModel): Promise<boolean>
     children: [{ id: request.id, type: 'request', request }]
   }
   return exportNodeAsCollection(wrapped, tr('Запрос экспортирован'))
+}
+
+/**
+ * Export a sidebar selection as one Postman v2.1 collection: one collection
+ * (whole or cut down to what is ticked, folders kept) passes through; ticks in
+ * several collections become their folders in one file.
+ */
+export async function exportSelectionJson(roots: CollectionFolderNode[], ids: readonly string[]): Promise<boolean> {
+  const node = selectionExport(roots, ids, tr('Выбранные коллекции'), (name) => trf('{name} (выборка)', { name }))
+  if (!node) return false
+  return exportNodeAsCollection(node, tr('Выбранное экспортировано'))
 }

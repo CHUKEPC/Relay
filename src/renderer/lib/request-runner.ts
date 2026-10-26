@@ -234,6 +234,9 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
   const settings = settingsToRequestSettings()
 
   let workingReq: RequestModel = structuredClone(tab.request)
+  // pm.variables set by the scripts of this send: carried from one script to the
+  // next and used to resolve the request (Postman's local scope).
+  let locals: Record<string, string> = {}
 
   // 1) pre-request scripts (P1): collection/folder scripts top-down, then own.
   for (const code of preScriptBodies(workingReq, tab.savedRequestId)) {
@@ -244,7 +247,8 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
         request: workingReq,
         environment: envStore.envScope(),
         globals: envStore.globalScope(),
-        collection: collections.collectionScopeFor(tab.savedRequestId),
+        collection: useCollections.getState().collectionScopeFor(tab.savedRequestId),
+        local: locals,
         cookies: await cookieSnapshotFor(workingReq.url),
         url: workingReq.url,
         // pm.sendRequest goes through the same engine, so it needs the same
@@ -253,6 +257,7 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
       })
       persistVarUpdates(result.environmentUpdates, result.globalUpdates)
       applyScriptSideEffects(tab.savedRequestId, result)
+      if (result.localVariables) locals = result.localVariables
       // Pre-request scripts have no results pane — surface a failure so it isn't
       // silently dropped (e.g. a sandbox timeout that skipped an auth header).
       // A certificate refusal inside pm.sendRequest usually reaches the result
@@ -277,7 +282,8 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
 
   // 2) build the resolved spec (scopes recomputed post-script)
   const scope: VariableScope = {
-    collection: collections.collectionScopeFor(tab.savedRequestId),
+    local: locals,
+    collection: useCollections.getState().collectionScopeFor(tab.savedRequestId),
     environment: useEnvironments.getState().envScope(),
     global: useEnvironments.getState().globalScope()
   }
@@ -379,13 +385,15 @@ export async function sendActiveRequest(tabId?: string): Promise<void> {
           response: result,
           environment: useEnvironments.getState().envScope(),
           globals: useEnvironments.getState().globalScope(),
-          collection: collections.collectionScopeFor(tab.savedRequestId),
+          collection: useCollections.getState().collectionScopeFor(tab.savedRequestId),
+          local: locals,
           cookies,
           url: workingReq.url,
           settings
         })
         persistVarUpdates(scriptRes.environmentUpdates, scriptRes.globalUpdates)
         applyScriptSideEffects(tab.savedRequestId, scriptRes)
+        if (scriptRes.localVariables) locals = scriptRes.localVariables
         allTests.push(...scriptRes.tests)
         allLogs.push(...scriptRes.logs)
         if (scriptRes.visualizer) visualizer = scriptRes.visualizer

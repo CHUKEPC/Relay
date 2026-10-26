@@ -25,6 +25,7 @@ export const CAPABILITIES = [
   'backup.extra',
   'snippets',
   'themes.extra',
+  'icons.extra',
   'codegen.extra'
 ] as const
 

@@ -147,6 +147,7 @@ const api: RelayApi = {
   featuresLocale: (code: string) => ipcRenderer.invoke(IPC.features.locale, code),
   featuresSnippets: () => ipcRenderer.invoke(IPC.features.snippets),
   featuresThemes: () => ipcRenderer.invoke(IPC.features.themes),
+  featuresIcons: () => ipcRenderer.invoke(IPC.features.icons),
   featuresOpenFolder: () => ipcRenderer.invoke(IPC.features.openFolder),
   featuresInstall: () => ipcRenderer.invoke(IPC.features.install),
   featuresRemove: (id: string) => ipcRenderer.invoke(IPC.features.remove, id),
@@ -210,6 +211,7 @@ const api: RelayApi = {
 
   /* ---- misc ---- */
   openExternal: (url: string) => ipcRenderer.invoke(IPC.app.openExternal, url),
+  setAppIcon: (png: string | null, shortcuts: boolean) => ipcRenderer.invoke(IPC.app.setIcon, png, shortcuts),
   onNativeThemeChange: (cb: (theme: 'light' | 'dark') => void) => {
     const handler = (_e: unknown, theme: 'light' | 'dark') => cb(theme)
     ipcRenderer.on(IPC.app.themeChanged, handler)

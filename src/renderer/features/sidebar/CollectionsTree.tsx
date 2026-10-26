@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EnvEditor } from '@renderer/features/environments/EnvEditor'
 import type { DragEvent } from 'react'
 import type { CollectionNode } from '@shared/types'
@@ -10,10 +10,17 @@ import { useUi } from '@renderer/store/ui'
 import { useRunner } from '@renderer/store/runner'
 import { ImportDialog } from '@renderer/features/data/ImportDialog'
 import { REQUEST_MIME } from '@renderer/lib/dnd'
+import { MOD } from '@renderer/lib/platform'
 import { exportFolderJson, exportRequestJson } from '@renderer/lib/export'
 import { RequestTag } from '@renderer/components/RequestTag'
 import { trashAllCollections, trashNode } from '@renderer/lib/trash'
 import { openNodeAsGroup } from '@renderer/lib/tab-groups'
+import { useTreeSelection } from '@renderer/store/tree-selection'
+import { tickStates, topSelected, type TickState } from '@renderer/lib/tree-select'
+import { deleteSelected, exportSelected, openSelected, openSelectedAsGroup, runSelected } from '@renderer/lib/bulk-actions'
+import { SelectionBar } from './SelectionBar'
+import { DuplicateDialog, MoveDialog } from './BulkDialogs'
+import '@renderer/styles/feat-select.css'
 
 import { tr, trf } from '@renderer/lib/i18n'
 /** Where a dragged node will land relative to the row it is hovering. */
@@ -29,8 +36,12 @@ interface RenameState {
  * Id of the node currently being dragged. A module-level ref is the most
  * reliable cross-row channel during a native HTML5 drag (dataTransfer.getData
  * is unreadable during dragover, only on drop), and it survives re-renders.
+ * `ids` holds the whole selection when a ticked row is dragged.
  */
-const dragState: { id: string | null } = { id: null }
+const dragState: { id: string | null; ids: string[] } = { id: null, ids: [] }
+
+/** Checkbox states of the rows while the tree is in selection mode (null otherwise). */
+type Ticks = Map<string, TickState> | null
 
 export function CollectionsTree({ query }: { query: string }) {
   const collections = useCollections((s) => s.doc.collections)
@@ -39,6 +50,9 @@ export function CollectionsTree({ query }: { query: string }) {
   // Global so the command palette can open the dialog too.
   const importOpen = useUi((s) => s.importOpen)
   const setImportOpen = useUi((s) => s.setImportOpen)
+  const selecting = useTreeSelection((s) => s.active)
+  const ticked = useTreeSelection((s) => s.ids)
+  const ticks = useMemo<Ticks>(() => (selecting ? tickStates(collections, ticked) : null), [selecting, collections, ticked])
 
   const deleteAll = () => {
     const n = collections.length
@@ -51,6 +65,17 @@ export function CollectionsTree({ query }: { query: string }) {
       <div className="side-section-head">
         <span>{tr('Коллекции')}</span>
         <div style={{ display: 'flex', gap: 2 }}>
+          {collections.length > 0 && (
+            <button
+              className={`icon-btn${selecting ? ' on' : ''}`}
+              style={{ width: 22, height: 22 }}
+              title={selecting ? tr('Закончить выбор (Esc)') : trf('Выбрать несколько ({key}+клик)', { key: MOD })}
+              aria-pressed={selecting}
+              onClick={() => useTreeSelection.getState().setActive(!selecting)}
+            >
+              <Icon name="checks" size={14} />
+            </button>
+          )}
           {collections.length > 0 && (
             <button
               className="icon-btn"
@@ -78,14 +103,17 @@ export function CollectionsTree({ query }: { query: string }) {
         </div>
       </div>
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
-      <div className="tree">
+      <div className={`tree${selecting ? ' selecting' : ''}`}>
         {collections.map((n) => (
-          <TreeNode key={n.id} node={n} depth={0} query={query} rename={rename} setRename={setRename} />
+          <TreeNode key={n.id} node={n} depth={0} query={query} rename={rename} setRename={setRename} ticks={ticks} />
         ))}
         {collections.length === 0 && (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--tx-3)', fontSize: 12 }}>{tr('Нет коллекций')}</div>
         )}
       </div>
+      {selecting && <SelectionBar />}
+      <DuplicateDialog />
+      <MoveDialog />
     </>
   )
 }
@@ -149,13 +177,15 @@ function TreeNode({
   depth,
   query,
   rename,
-  setRename
+  setRename,
+  ticks
 }: {
   node: CollectionNode
   depth: number
   query: string
   rename: RenameState | null
   setRename: (r: RenameState | null) => void
+  ticks: Ticks
 }) {
   const [open, setOpen] = useState(depth < 2)
   // Where a dragged node would land relative to this row (drives the indicator).
@@ -174,9 +204,19 @@ function TreeNode({
   const isContainer = node.type !== 'request'
 
   const commitRename = (value: string) => {
-    if (value.trim()) store.renameNode(node.id, value.trim())
+    if (value.trim()) {
+      store.renameNode(node.id, value.trim())
+      // Open tabs of the request show the new name too.
+      if (node.type === 'request') useTabs.getState().renameSaved(node.request.id, value.trim())
+    }
     setRename(null)
   }
+
+  const tick = ticks?.get(node.id) ?? null
+  const isTicked = tick === 'on' || tick === 'implied'
+  /** Several rows ticked and this is one of them: its menu and drag act on all of them. */
+  const bulk = tick === 'on' && useTreeSelection.getState().ids.length > 1
+  const toggleTick = () => useTreeSelection.getState().toggle(node.id)
 
   const cancelRename = () => {
     if (rename?.isNew) store.removeNode(node.id)
@@ -192,6 +232,8 @@ function TreeNode({
     }
     e.stopPropagation()
     dragState.id = node.id
+    // A ticked row takes the whole selection along.
+    dragState.ids = bulk ? topSelected(store.doc.collections, useTreeSelection.getState().ids).map((n) => n.id) : [node.id]
     e.dataTransfer.setData('text/plain', node.id)
     // A saved request can also be dropped onto the pane grid to open it there.
     if (node.type === 'request') {
@@ -206,6 +248,12 @@ function TreeNode({
     if (!draggedId || draggedId === node.id) return null
     const dragged = store.locate(draggedId)
     if (!dragged) return null
+    // Never into (or next to something inside) any of the dragged nodes.
+    for (const id of dragState.ids) {
+      if (id === node.id) return null
+      const other = id === draggedId ? dragged : store.locate(id)
+      if (other && isWithin(other.node, node.id)) return null
+    }
     const raw = intentFromPointer(e, isContainer)
     return resolveIntent(dragged.node, node, raw)
   }
@@ -231,11 +279,26 @@ function TreeNode({
   const handleDrop = (e: DragEvent) => {
     const intent = computeIntent(e)
     const draggedId = dragState.id ?? e.dataTransfer.getData('text/plain')
+    const many = dragState.ids.length > 1 ? dragState.ids : null
     setDropIntent(null)
     dragState.id = null
+    dragState.ids = []
     if (!intent || !draggedId || draggedId === node.id) return
     e.preventDefault()
     e.stopPropagation()
+
+    if (many) {
+      // The whole selection, in tree order; what the target cannot take stays.
+      if (intent === 'into') {
+        store.moveNodes(many, node.id)
+        setOpen(true)
+      } else {
+        const ancestors = store.locate(node.id)?.ancestors ?? []
+        const parent = ancestors[ancestors.length - 1] ?? null
+        store.moveNodes(many, parent ? parent.id : null, { id: node.id, side: intent })
+      }
+      return
+    }
 
     if (intent === 'into') {
       // Append to the end of this container, then reveal it.
@@ -263,6 +326,7 @@ function TreeNode({
 
   const handleDragEnd = () => {
     dragState.id = null
+    dragState.ids = []
     setDropIntent(null)
     document.body.classList.remove('pane-dragging')
   }
@@ -279,17 +343,48 @@ function TreeNode({
   const dropClass =
     dropIntent === 'into' ? ' drop-into' : dropIntent === 'before' ? ' drop-before' : dropIntent === 'after' ? ' drop-after' : ''
 
-  const menuItems =
+  const selectItem = (
+    <ContextMenu.Item className="pop-item" onSelect={toggleTick}>
+      <Icon name="checks" size={14} /> {isTicked ? tr('Снять отметку') : tr('Отметить')}
+    </ContextMenu.Item>
+  )
+
+  const bulkItems = (
+    <>
+      <div className="pop-caption">{trf('Выбрано: {n}', { n: topSelected(store.doc.collections, useTreeSelection.getState().ids).length })}</div>
+      <ContextMenu.Item className="pop-item" onSelect={() => openSelected()}>
+        <Icon name="arrowR" size={14} /> {tr('Открыть во вкладках')} </ContextMenu.Item>
+      <ContextMenu.Item className="pop-item" onSelect={() => openSelectedAsGroup()}>
+        <Icon name="tabGroup" size={14} /> {tr('Открыть группой вкладок')} </ContextMenu.Item>
+      <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('duplicate', useTreeSelection.getState().ids)}>
+        <Icon name="copy" size={14} /> {tr('Дублировать…')} </ContextMenu.Item>
+      <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('move', useTreeSelection.getState().ids)}>
+        <Icon name="folderMove" size={14} /> {tr('Переместить…')} </ContextMenu.Item>
+      <ContextMenu.Item className="pop-item" onSelect={() => exportSelected()}>
+        <Icon name="upload" size={14} /> {tr('Экспорт')} </ContextMenu.Item>
+      <ContextMenu.Item className="pop-item" onSelect={() => runSelected()}>
+        <Icon name="play" size={14} /> {tr('Запустить в раннере')} </ContextMenu.Item>
+      {selectItem}
+      <ContextMenu.Separator className="pop-sep" />
+      <ContextMenu.Item className="pop-item" style={{ color: 'var(--s-5xx)' }} onSelect={() => deleteSelected()}>
+        <Icon name="trash" size={14} /> {tr('Удалить выбранное')} </ContextMenu.Item>
+    </>
+  )
+
+  const menuItems = bulk ? bulkItems :
     node.type === 'request' ? (
       <>
         <ContextMenu.Item className="pop-item" onSelect={() => openSaved(node.request, node.request.id)}>
           <Icon name="arrowR" size={14} /> {tr('Открыть')} </ContextMenu.Item>
-        <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
-          <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('duplicate', [node.id])}>
+          <Icon name="copy" size={14} /> {tr('Дублировать…')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('move', [node.id])}>
+          <Icon name="folderMove" size={14} /> {tr('Переместить…')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => void exportRequestJson(node.request)}>
           <Icon name="download" size={14} /> {tr('Экспорт')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => setRename({ id: node.id, isNew: false })}>
           <Icon name="doc" size={14} /> {tr('Переименовать')} </ContextMenu.Item>
+        {selectItem}
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item className="pop-item" style={{ color: 'var(--s-5xx)' }} onSelect={() => trashNode(node.id)}>
           <Icon name="trash" size={14} /> {tr('Удалить')} </ContextMenu.Item>
@@ -316,8 +411,12 @@ function TreeNode({
           <Icon name="folder" size={14} /> {tr('Новая папка')} </ContextMenu.Item>
         <ContextMenu.Item className="pop-item" onSelect={() => setRename({ id: node.id, isNew: false })}>
           <Icon name="doc" size={14} /> {tr('Переименовать')} </ContextMenu.Item>
-        <ContextMenu.Item className="pop-item" onSelect={() => store.duplicateNode(node.id)}>
-          <Icon name="copy" size={14} /> {tr('Дублировать')} </ContextMenu.Item>
+        <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('duplicate', [node.id])}>
+          <Icon name="copy" size={14} /> {tr('Дублировать…')} </ContextMenu.Item>
+        {node.type === 'folder' && (
+          <ContextMenu.Item className="pop-item" onSelect={() => useTreeSelection.getState().openDialog('move', [node.id])}>
+            <Icon name="folderMove" size={14} /> {tr('Переместить…')} </ContextMenu.Item>
+        )}
         <ContextMenu.Item className="pop-item" onSelect={() => void exportFolderJson(node)}>
           <Icon name="download" size={14} /> {node.type === 'collection' ? tr('Экспорт (Postman v2.1)') : tr('Экспорт')}
         </ContextMenu.Item>
@@ -330,6 +429,7 @@ function TreeNode({
             <Icon name="env" size={14} /> {tr('Переменные коллекции')}
           </ContextMenu.Item>
         )}
+        {selectItem}
         <ContextMenu.Separator className="pop-sep" />
         <ContextMenu.Item
           className="pop-item"
@@ -340,14 +440,33 @@ function TreeNode({
       </>
     )
 
+  const checkbox = tick && (
+    <span
+      className={`tree-check ${tick}`}
+      role="checkbox"
+      aria-checked={isTicked ? true : tick === 'some' ? 'mixed' : false}
+      aria-label={trf('Отметить «{name}»', { name: tr(name) })}
+      onClick={(e) => {
+        e.stopPropagation()
+        toggleTick()
+      }}
+    >
+      {isTicked && <Icon name="check" size={11} strokeWidth={2.4} />}
+    </span>
+  )
+
   const row =
     node.type === 'request' ? (
       <div
-        className={`tree-row${activeSavedId === node.request.id ? ' active' : ''}${dropClass}`}
+        className={`tree-row${activeSavedId === node.request.id ? ' active' : ''}${isTicked ? ' ticked' : ''}${dropClass}`}
         style={{ paddingLeft: 8 + depth * 14 }}
-        onClick={() => openSaved(node.request, node.request.id)}
+        onClick={(e) => {
+          if (ticks || e.ctrlKey || e.metaKey) toggleTick()
+          else openSaved(node.request, node.request.id)
+        }}
         {...dndProps}
       >
+        {checkbox}
         <span className="twirl" style={{ marginLeft: 14 }}>
           <Icon name="doc" size={14} style={{ opacity: 0.55 }} />
         </span>
@@ -360,12 +479,23 @@ function TreeNode({
       </div>
     ) : (
       <div
-        className={`tree-row${dropClass}`}
+        className={`tree-row${isTicked ? ' ticked' : ''}${dropClass}`}
         style={{ paddingLeft: 8 + depth * 14 }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) => {
+          if (ticks || e.ctrlKey || e.metaKey) toggleTick()
+          else setOpen((o) => !o)
+        }}
         {...dndProps}
       >
-        <span className="chev">
+        {checkbox}
+        <span
+          className="chev"
+          onClick={(e) => {
+            // The arrow always folds, also while rows are being ticked.
+            e.stopPropagation()
+            setOpen((o) => !o)
+          }}
+        >
           <Icon name={expanded ? 'chevD' : 'chevR'} size={12} />
         </span>
         <span className="twirl">
@@ -412,7 +542,7 @@ function TreeNode({
       {node.type !== 'request' && expanded && (
         <div className="tree-children">
           {node.children.map((c) => (
-            <TreeNode key={c.id} node={c} depth={depth + 1} query={query} rename={rename} setRename={setRename} />
+            <TreeNode key={c.id} node={c} depth={depth + 1} query={query} rename={rename} setRename={setRename} ticks={ticks} />
           ))}
         </div>
       )}

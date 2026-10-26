@@ -1,0 +1,203 @@
+{
+  "icons": [
+    {
+      "id": "orbit",
+      "name": "Орбита",
+      "shape": "circle",
+      "background": [
+        "#6d5dfc",
+        "#2e1f9e"
+      ],
+      "glyph": "globe",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "terminal",
+      "name": "Терминал",
+      "shape": "square",
+      "background": [
+        "#2b2f36",
+        "#111317"
+      ],
+      "glyph": "terminal",
+      "glyphColor": "#5cf08a"
+    },
+    {
+      "id": "braces",
+      "name": "Скобки",
+      "shape": "squircle",
+      "background": [
+        "#ffb648",
+        "#ff6a3d"
+      ],
+      "glyph": "braces",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "code",
+      "name": "Код",
+      "shape": "squircle",
+      "background": [
+        "#1fd1c1",
+        "#1c7fd6"
+      ],
+      "glyph": "code",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "pulse",
+      "name": "Пульс",
+      "shape": "circle",
+      "background": [
+        "#ff5a7a",
+        "#b0174a"
+      ],
+      "glyph": "pulse",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "rocket",
+      "name": "Ракета",
+      "shape": "squircle",
+      "background": [
+        "#4c4f7a",
+        "#1b1d3a"
+      ],
+      "glyph": "rocket",
+      "glyphColor": "#ffb648"
+    },
+    {
+      "id": "plug",
+      "name": "Разъём",
+      "shape": "hexagon",
+      "background": [
+        "#9be15d",
+        "#38a169"
+      ],
+      "glyph": "plug",
+      "glyphColor": "#0f2e1a"
+    },
+    {
+      "id": "cube",
+      "name": "Куб",
+      "shape": "hexagon",
+      "background": [
+        "#ffd86b",
+        "#f59e0b"
+      ],
+      "glyph": "cube",
+      "glyphColor": "#3b2608"
+    },
+    {
+      "id": "flask",
+      "name": "Колба",
+      "shape": "circle",
+      "background": [
+        "#d16bff",
+        "#7a2bd1"
+      ],
+      "glyph": "flask",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "link",
+      "name": "Цепочка",
+      "shape": "squircle",
+      "background": [
+        "#eef2f8",
+        "#c9d3e3"
+      ],
+      "glyph": "link",
+      "glyphColor": "#2a4a8a"
+    },
+    {
+      "id": "arrows",
+      "name": "Обмен",
+      "shape": "squircle",
+      "background": [
+        "#42e0a8",
+        "#0f8a8a"
+      ],
+      "glyph": "arrows",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "send",
+      "name": "Отправка",
+      "shape": "circle",
+      "background": [
+        "#4facfe",
+        "#2563eb"
+      ],
+      "glyph": "send",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "star",
+      "name": "Звезда",
+      "shape": "squircle",
+      "background": [
+        "#ffe259",
+        "#ffa751"
+      ],
+      "glyph": "star",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "neon",
+      "name": "Неон",
+      "shape": "square",
+      "background": [
+        "#1a0638",
+        "#0d0221"
+      ],
+      "glyph": "bolt",
+      "glyphColor": "#ff2a6d"
+    },
+    {
+      "id": "mint",
+      "name": "Мята",
+      "shape": "circle",
+      "background": [
+        "#d4fc79",
+        "#96e6a1"
+      ],
+      "glyph": "bolt",
+      "glyphColor": "#1d4d36"
+    },
+    {
+      "id": "letter-r",
+      "name": "Буква R",
+      "shape": "squircle",
+      "background": [
+        "#5a8dff",
+        "#3e70e6"
+      ],
+      "glyph": "letter",
+      "glyphColor": "#ffffff",
+      "letter": "R"
+    },
+    {
+      "id": "mono",
+      "name": "Монохром",
+      "shape": "squircle",
+      "background": [
+        "#202020",
+        "#000000"
+      ],
+      "glyph": "bolt",
+      "glyphColor": "#ffffff"
+    },
+    {
+      "id": "paper",
+      "name": "Бумага",
+      "shape": "square",
+      "background": [
+        "#fdfbf7",
+        "#e9e2d3"
+      ],
+      "glyph": "braces",
+      "glyphColor": "#3a3a3a"
+    }
+  ]
+}

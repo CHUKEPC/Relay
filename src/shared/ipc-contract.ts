@@ -53,6 +53,7 @@ import type {
 } from './types'
 import type { FeaturePluginInfo } from './features'
 import type { PackSnippet, PackTheme, UserThemesDoc } from './pack-data'
+import type { AppIconDef, UserIconsDoc } from './app-icon'
 import type { TerminalOs, TerminalTool } from './terminal-command'
 
 /** Persisted enable/disable state of the bundled feature plugins (app-level). */
@@ -174,6 +175,8 @@ export const IPC = {
     snippets: 'features:snippets',
     /** colour themes merged from every enabled `themes.extra` pack */
     themes: 'features:themes',
+    /** app icons merged from every enabled `icons.extra` pack */
+    icons: 'features:icons',
     /** broadcast: the enabled set changed (sent to every window) */
     changed: 'features:changed'
   },
@@ -210,12 +213,17 @@ export const IPC = {
     minimize: 'app:minimize',
     maximize: 'app:maximize',
     close: 'app:close',
-    openExternal: 'app:openExternal'
+    openExternal: 'app:openExternal',
+    /** the app icon picked in Settings → Appearance (a PNG data URL, or null = the original) */
+    setIcon: 'app:setIcon'
   },
   update: {
     check: 'update:check'
   }
 } as const
+
+/** What applying an app icon did: `shortcuts` = Windows shortcuts re-pointed. */
+export type AppIconResult = { ok: true; shortcuts: number } | { ok: false; error: string }
 
 /**
  * Result of asking GitHub Releases for the latest version. Never a rejected
@@ -258,6 +266,7 @@ export interface StorageMap {
   plugins: PluginsStateDoc
   features: FeaturePluginsDoc
   userThemes: UserThemesDoc
+  userIcons: UserIconsDoc
   trash: TrashDoc
 }
 
@@ -399,6 +408,8 @@ export interface RelayApi {
   featuresSnippets(): Promise<PackSnippet[]>
   /** Colour themes from the enabled theme packs (empty without one). */
   featuresThemes(): Promise<PackTheme[]>
+  /** App icons from the enabled icon packs (empty without one). */
+  featuresIcons(): Promise<AppIconDef[]>
   /** Reveal the bundled plugins folder; false when it is missing. */
   featuresOpenFolder(): Promise<boolean>
   /**
@@ -481,6 +492,12 @@ export interface RelayApi {
 
   /* ---- misc ---- */
   openExternal(url: string): Promise<void>
+  /**
+   * Show `png` (a 256×256 PNG data URL) as the app icon on every window, the
+   * Dock and — with `shortcuts`, on Windows — the app's shortcuts; null puts
+   * the original icon back. Kept for the next start.
+   */
+  setAppIcon(png: string | null, shortcuts: boolean): Promise<AppIconResult>
   onNativeThemeChange(cb: (theme: 'light' | 'dark') => void): () => void
   /** Window maximized/restored — the titlebar button mirrors the real state. */
   onWindowMaximized(cb: (maximized: boolean) => void): () => void

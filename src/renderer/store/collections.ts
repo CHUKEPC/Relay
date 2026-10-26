@@ -86,6 +86,15 @@ function insertAt(nodes: CollectionNode[], parentId: string, child: CollectionNo
   })
 }
 
+/** Every node of the tree, depth-first in document order. */
+function treeOrder(nodes: CollectionNode[], out: CollectionNode[] = []): CollectionNode[] {
+  for (const n of nodes) {
+    out.push(n)
+    if (n.type !== 'request') treeOrder(n.children, out)
+  }
+  return out
+}
+
 /** True if `targetId` is `rootId` itself or a descendant of `rootId` (cycle guard). */
 function isSelfOrDescendant(node: CollectionNode, targetId: string): boolean {
   if (node.id === targetId) return true
@@ -110,7 +119,20 @@ interface CollectionsState {
    */
   insertNode: (node: CollectionNode, parentId: string | null, index: number) => boolean
   moveNode: (id: string, newParentId: string | null, newIndex: number) => void
-  duplicateNode: (id: string) => void
+  /**
+   * Move several nodes at once (a sidebar selection), kept in tree order, to
+   * `newParentId` (null = top level): before/after `anchor` among its children,
+   * or at the end. Nodes the target cannot take — a collection into a folder,
+   * a folder into itself — stay where they are. Returns how many moved.
+   */
+  moveNodes: (ids: string[], newParentId: string | null, anchor?: { id: string; side: 'before' | 'after' }) => number
+  /**
+   * Copy a node with fresh ids. The copy is named `name` (default «… (копия)»)
+   * and lands right after the original, or at the end of `parentId` when another
+   * container is given. A collection always stays at the top level. Returns the
+   * copy's id, or null when nothing was copied.
+   */
+  duplicateNode: (id: string, opts?: { name?: string; parentId?: string | null }) => string | null
   updateFolderMeta: (id: string, patch: Partial<Pick<CollectionFolderNode, 'auth' | 'variables' | 'preRequestScript' | 'testScript' | 'description'>>) => void
   getRequest: (requestId: string) => RequestModel | null
   collectionScopeFor: (requestId: string | null) => Record<string, string>
@@ -238,17 +260,73 @@ export const useCollections = create<CollectionsState>((set, get) => {
       commit(next as CollectionFolderNode[])
     },
 
-    duplicateNode: (id) => {
-      const found = locate(topLevel(), id)
-      if (!found) return
-      const clone = cloneNodeWithNewIds(found.node)
-      if (found.ancestors.length === 0) {
-        // top-level collection
-        commit([...get().doc.collections, clone as CollectionFolderNode])
-      } else {
-        const parent = found.ancestors[found.ancestors.length - 1]
-        commit(insertInto(topLevel(), parent.id, clone) as CollectionFolderNode[])
+    moveNodes: (ids, newParentId, anchor) => {
+      const roots = topLevel()
+      if (newParentId !== null) {
+        const target = locate(roots, newParentId)
+        if (!target || target.node.type === 'request') return 0
       }
+      // Tree order, so the moved nodes keep the order they had.
+      const order = treeOrder(roots)
+      const wanted = new Set(ids)
+      const moving = order.filter((n) => {
+        if (!wanted.has(n.id)) return false
+        if (newParentId === null ? n.type !== 'collection' : n.type === 'collection') return false
+        if (newParentId !== null && isSelfOrDescendant(n, newParentId)) return false
+        // Inside another moving node: it travels with that one.
+        return !order.some((o) => o !== n && wanted.has(o.id) && o.type !== 'request' && isSelfOrDescendant(o, n.id))
+      })
+      if (!moving.length || (anchor && moving.some((n) => n.id === anchor.id))) return 0
+      let tree = roots
+      const removed: CollectionNode[] = []
+      for (const n of moving) {
+        const r = removeNode(tree, n.id)
+        tree = r.tree
+        if (r.removed) removed.push(r.removed)
+      }
+      const siblings = newParentId === null ? tree : (locate(tree, newParentId)?.node as CollectionFolderNode).children
+      let index = siblings.length
+      if (anchor) {
+        const at = siblings.findIndex((n) => n.id === anchor.id)
+        if (at >= 0) index = anchor.side === 'after' ? at + 1 : at
+      }
+      let next: CollectionNode[]
+      if (newParentId === null) {
+        next = [...tree]
+        next.splice(index, 0, ...removed)
+      } else {
+        next = tree
+        removed.forEach((n, i) => (next = insertAt(next, newParentId, n, index + i)))
+      }
+      commit(next as CollectionFolderNode[])
+      return removed.length
+    },
+
+    duplicateNode: (id, opts = {}) => {
+      const roots = topLevel()
+      const found = locate(roots, id)
+      if (!found) return null
+      let clone = cloneNodeWithNewIds(found.node)
+      const name = opts.name?.trim()
+      if (name) clone = clone.type === 'request' ? { ...clone, request: { ...clone.request, name } } : { ...clone, name }
+      const parent = found.ancestors[found.ancestors.length - 1] ?? null
+      if (!parent) {
+        // A collection: right after the original in the list of collections.
+        const next = [...roots]
+        next.splice(roots.findIndex((n) => n.id === id) + 1, 0, clone)
+        commit(next as CollectionFolderNode[])
+        return clone.id
+      }
+      const targetId = opts.parentId ?? parent.id
+      if (targetId === parent.id) {
+        commit(insertAt(roots, parent.id, clone, parent.children.findIndex((n) => n.id === id) + 1) as CollectionFolderNode[])
+        return clone.id
+      }
+      const target = locate(roots, targetId)
+      // Into a container, never into the copied folder itself (or below it).
+      if (!target || target.node.type === 'request' || isSelfOrDescendant(found.node, targetId)) return null
+      commit(insertInto(roots, targetId, clone) as CollectionFolderNode[])
+      return clone.id
     },
 
     updateFolderMeta: (id, patch) => {
@@ -339,16 +417,28 @@ function applyVarDefUpdates(existing: VariableDef[], updates: Record<string, str
   return out
 }
 
-function cloneNodeWithNewIds(node: CollectionNode): CollectionNode {
+/** The name a copy gets unless the user types another: «Name (копия)». */
+export function copyName(name: string): string {
+  return trf('{name} (копия)', { name })
+}
+
+/**
+ * Deep copy with fresh ids. Only the copied node itself is renamed «… (копия)»;
+ * what is inside a copied folder keeps its names, like a copied folder on disk.
+ */
+function cloneNodeWithNewIds(node: CollectionNode, top = true): CollectionNode {
   if (node.type === 'request') {
     const id = makeId('req')
-    return { id, type: 'request', request: { ...node.request, id, name: trf('{name} (копия)', { name: node.request.name }) } }
+    const request = structuredClone(node.request)
+    request.examples = request.examples?.map((ex) => ({ ...ex, id: makeId('ex') }))
+    request.messageTemplates = request.messageTemplates?.map((t) => ({ ...t, id: makeId('mt') }))
+    return { id, type: 'request', request: { ...request, id, name: top ? copyName(node.request.name) : node.request.name } }
   }
   return {
-    ...node,
+    ...structuredClone({ ...node, children: [] }),
     id: makeId(node.type === 'collection' ? 'col' : 'fld'),
-    name: trf('{name} (копия)', { name: node.name }),
-    children: node.children.map(cloneNodeWithNewIds)
+    name: top ? copyName(node.name) : node.name,
+    children: node.children.map((c) => cloneNodeWithNewIds(c, false))
   }
 }
 

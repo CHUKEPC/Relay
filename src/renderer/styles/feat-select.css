@@ -1,0 +1,144 @@
+/* ---------- Ticking rows in the collections tree ----------
+   Selection mode: a checkbox in front of every row, a click ticks it, and a
+   bar under the tree holds what can be done with everything ticked. */
+
+.tree-check {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-right: 1px;
+  border-radius: 4px;
+  border: 1.5px solid var(--line-2);
+  background: var(--bg-0);
+  display: grid;
+  place-items: center;
+  color: var(--bg-0);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.tree-check:hover {
+  border-color: var(--accent);
+}
+.tree-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+/* ticked through its folder: the same tick, a step quieter */
+.tree-check.implied {
+  background: color-mix(in oklch, var(--accent) 55%, var(--bg-0));
+  border-color: transparent;
+  color: #fff;
+}
+/* something inside is ticked: a bar, like an indeterminate checkbox */
+.tree-check.some::before {
+  content: '';
+  width: 7px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.tree-row.ticked {
+  background: color-mix(in oklch, var(--accent) 12%, transparent);
+  color: var(--tx-0);
+}
+.tree-row.ticked:hover {
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+}
+/* the hover export button would crowd a row that also carries a checkbox */
+.tree.selecting .tree-row .row-action {
+  display: none;
+}
+
+/* The bar under the tree. Two rows so it fits a 200px sidebar: the count with
+   select all / none on top, the actions below. */
+.tree-selbar {
+  container-type: inline-size;
+  flex: none;
+  margin: 0 8px 8px;
+  padding: 6px 6px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tsb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 4px;
+  font-size: 12px;
+}
+.tsb-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--tx-0);
+}
+.tsb-sub {
+  font-weight: 400;
+  color: var(--tx-2);
+}
+/* A narrow sidebar keeps the count and drops the request count beside it
+   (it stays in the tooltip). */
+@container (max-width: 300px) {
+  .tsb-sub {
+    display: none;
+  }
+}
+.tsb-head .link-btn {
+  flex: none;
+  font-size: 12px;
+}
+.tsb-head .link-btn:disabled {
+  color: var(--tx-3);
+  cursor: default;
+  text-decoration: none;
+}
+.tsb-done {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.tsb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.tsb-act {
+  width: 28px;
+  height: 28px;
+}
+.tsb-act:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.tsb-act.danger:hover {
+  color: var(--s-5xx);
+}
+
+/* A caption at the top of a context menu («Выбрано: 3»). */
+.pop-caption {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--tx-3);
+}
+
+[data-low-power] .tree-selbar {
+  box-shadow: none;
+}
+[data-low-power] .tree-check {
+  transition: none;
+}

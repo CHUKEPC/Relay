@@ -32,9 +32,10 @@ never executes code, which is what separates it from a user plugin
 | `backup.extra` | ZIP and SQLite backups |
 | `snippets` | the snippets panel on the Scripts tab, filled from the pack's `snippets.json` |
 | `themes.extra` | colour themes in Settings → Appearance, from the pack's `themes.json` |
+| `icons.extra` | app icons in Settings → Appearance → App icon, from the pack's `icons.json` ([icon guide](../docs/ICONS.md)) |
 | `codegen.extra` | twelve more languages in the «Code» window (Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie, wget) |
 
-Snippet and theme packs carry their data next to the manifest; the formats, the
+Snippet, theme and icon packs carry their data next to the manifest; the formats, the
 full token list and ready-to-copy examples are in
 [`docs/plugin-guide`](../docs/plugin-guide/README.md).
 

@@ -97,7 +97,7 @@ Local-first, **no native modules**:
 
 - The in-house **`JsonStore`** (`src/main/storage/json-store.ts`) writes one JSON document per key
   under `app.getPath('userData')/relay-data`:
-  - app-level: `settings`, `providers`, `plugins`, `features`, `userThemes`;
+  - app-level: `settings`, `providers`, `plugins`, `features`, `userThemes`, `userIcons`;
   - per workspace (`ws/<id>/`): `collections`, `environments`, `globals`, `history`, `tabs` (with the
     tab groups), `cookies`, `trash` (deleted items, kept for `settings.trashRetentionDays` — 30 by default, 0 = until emptied).
   - In-memory model + **debounced** atomic writes (write to temp, rename). A document that fails to
@@ -126,7 +126,16 @@ Suggested slices: `requestStore` (open tabs + active request draft), `collection
   the tabs of a collapsed one. `moveTab` decides membership from the slot a tab is dropped into, or takes
   the group the strip found under the pointer (`groupUnder`, whose stretch edges belong to no group);
   `setActive`/`openSaved` unfold the group of a tab being shown, and folding a group hands the active
-  tab only to a tab still on view.
+  tab only to a tab still on view. A request may be open in several tabs: opening a folder as a group
+  creates tabs of its own (`openSaved(..., { fresh: true })`, the group remembers its `sourceId`), a
+  sidebar click reuses the tab nearest to the active one (`pickOpenTab`), and `markSaved` copies the
+  saved request into the other clean tabs of it. `dirty` is recomputed on every edit: a tab is dirty
+  while its request differs from the saved one (`requestsDiffer`).
+- **Sidebar selection** (`store/tree-selection.ts`, `lib/tree-select.ts`, `lib/bulk-actions.ts`): the
+  ticked ids, where a ticked container covers its subtree; actions work on the top-most ticks.
+  `collections.moveNodes` and `collections.duplicateNode(id, { name, parentId })` do the tree edits;
+  `lib/copy-target.ts` decides the name and folder a copy is offered (also for a duplicated tab,
+  `TabModel.copyOf`).
 - **Trash**: user-facing deletes go through `lib/trash.ts`, which removes the item from its store and
   records a `TrashEntry` (the item plus its parent, index and readable place) in `store/trash.ts`
   (`trash` document). `restoreFromTrash` puts it back where it was, falling back to a «Restored»
@@ -175,6 +184,12 @@ Pre-request/test scripts run in an **isolated child process** in a Node `vm` con
 allow-listed `pm` object — no `require`, no `process`, no fs. Expose `pm.environment`, `pm.globals`,
 `pm.variables`, `pm.request`, `pm.response`, `pm.test`, `pm.expect`. Capture `console.log` and test
 results and return them to the renderer.
+
+The local scope (`pm.variables.set`) belongs to one send, as in Postman: each script gets the locals
+of the scripts before it (`ScriptRunRequest.local`) and returns its own (`localVariables`); the
+renderer — a tab send (`lib/request-runner.ts`) and the runner (`store/runner.ts`) — chains them
+through the folder and request pre-request scripts and the tests, and resolves the request with them
+as the highest-precedence scope. A script with a top-level `await` runs as an async function.
 
 The children (both the script sandbox and the plugin sandbox) run **their own bundle**,
 `out/main/sandbox.js` from `src/main/sandbox-entry.ts`, resolved at runtime by
@@ -257,6 +272,16 @@ Monaco chunk and its workers are never loaded.
 CSS variables in `:root` and `.dark`, seeded from `design/tokens`. Tailwind reads them via
 `theme.extend.colors` referencing the variables. Theme choice persisted in settings; `system` mode
 follows `nativeTheme`.
+
+## App icon
+
+The icon is a description (`src/shared/app-icon.ts`: shape, gradient, glyph or letters, or a PNG the
+user picked), never an executable or a remote file. The renderer draws it on a canvas
+(`lib/app-icon-render.ts`) and sends a 256×256 PNG over `app:setIcon`; `src/main/app-icon.ts` sets it
+on every window (`BrowserWindow.setIcon`) and the Dock, keeps it as `userData/app-icon.png` for the next
+start (`createAppWindow` passes it as `icon`), and — on Windows, when asked — writes a multi-size `.ico`
+and re-points only the shortcuts whose target is this executable. Picking the original deletes the
+file and restores the shipped `icon.png` (an `extraResources` copy of `build/icon.png`).
 
 ## Packaging
 

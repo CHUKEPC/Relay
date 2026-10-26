@@ -28,6 +28,7 @@
   position: relative;
 }
 .brand-mark::after { content:''; position:absolute; inset:0; border-radius:7px; border:1px solid oklch(1 0 0 / 0.12); }
+.brand-icon { display: block; flex: none; width: 22px; height: 22px; }
 .titlebar .grow { flex: 1; }
 .titlebar .nodrag { -webkit-app-region: no-drag; }
 

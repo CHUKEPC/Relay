@@ -535,6 +535,9 @@ plugins/
 ├── theme-pack/
 │   ├── plugin.json                → themes.extra
 │   └── themes.json
+├── icon-pack/
+│   ├── plugin.json                → icons.extra
+│   └── icons.json
 └── extra-languages/
     ├── plugin.json                → i18n.extra
     └── locales/{de,es}.json
@@ -564,6 +567,7 @@ reinstalling.
 | settings UI | `src/renderer/features/settings/FeaturePacks.tsx` |
 | translation engine | `src/renderer/lib/i18n.ts`, `src/renderer/locales/en.json` |
 | snippet / theme data files: parsing, colour allowlist, variants | `src/shared/pack-data.ts` (unit-tested with the bundled packs) |
+| app icon data files (`icons.json`), presets, icon files | `src/shared/app-icon.ts` (unit-tested with the bundled pack); drawing in `src/renderer/lib/app-icon-render.ts`, applying in `src/main/app-icon.ts` |
 | theme application, Monaco palette | `src/renderer/store/settings.ts`, `src/renderer/lib/monaco.ts` |
 
 Packs are **opt-in**: a pack that has never been switched on stays off, so a fresh install is

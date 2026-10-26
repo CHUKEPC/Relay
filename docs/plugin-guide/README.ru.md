@@ -28,7 +28,7 @@
 | Подходит для | Цветовых тем, сниппетов, языков интерфейса, включения встроенных функций | Кнопок, вкладок ответа, команд палитры, изменения запроса перед отправкой, реакции на ответ |
 | Разрешения | Не нужны | Запрашиваются у пользователя при включении |
 | Главное поле | `"capabilities": [...]` | `"main": "main.js"` и `"contributes": {...}` |
-| Примеры | [`my-theme-pack`](examples/my-theme-pack), [`my-snippets`](examples/my-snippets) | [`hello-toast`](examples/hello-toast), [`response-inspector`](examples/response-inspector), [`request-id`](examples/request-id) |
+| Примеры | [`my-theme-pack`](examples/my-theme-pack), [`my-icon-pack`](examples/my-icon-pack), [`my-snippets`](examples/my-snippets) | [`hello-toast`](examples/hello-toast), [`response-inspector`](examples/response-inspector), [`request-id`](examples/request-id) |
 
 Если нужны только данные (тема, сниппеты) — делайте комплект. Если нужно поведение — плагин с кодом.
 
@@ -112,6 +112,7 @@ relay.on('button:hello', () => {
 | Возможность | Файл данных | Что добавляет |
 |---|---|---|
 | `themes.extra` | `themes.json` | Цветовые темы в Настройках → Внешний вид |
+| `icons.extra` | `icons.json` | Иконки приложения в Настройках → Внешний вид → Иконка приложения |
 | `snippets` | `snippets.json` | Панель сниппетов на вкладке Scripts |
 | `i18n.extra` | `locales/<код>.json` + `"locales": [...]` | Языки интерфейса |
 | `protocol.websocket`, `protocol.sse`, `protocol.socketio`, `protocol.mqtt`, `protocol.grpc` | — | Включают встроенные протоколы |
@@ -165,6 +166,22 @@ relay.on('button:hello', () => {
 на `<html>` и затем перенести в `themes.json`. 15 тем встроенного `plugins/theme-pack` — хороший
 образец.
 
+### 3.2a Пак иконок — `icons.json`
+
+```json
+{
+  "icons": [
+    { "id": "lagoon", "name": "Lagoon", "shape": "circle", "background": ["#38c6e8", "#1d5fd6"], "glyph": "send", "glyphColor": "#ffffff" },
+    { "id": "initials", "name": "Initials", "shape": "squircle", "background": ["#ff9a4d", "#e8467c"], "glyph": "letter", "letter": "AB" }
+  ]
+}
+```
+
+- `shape`: `squircle`, `circle`, `square` или `hexagon`; `background`: один цвет или градиент до трёх;
+  `glyph`: один из 15 встроенных значков или `letter` с одной-двумя буквами в `letter`.
+- Цвета проходят тот же белый список, что и значения тем; не больше 60 иконок в паке.
+- Полный список полей — в [руководстве по иконкам](../ICONS.ru.md); во встроенном `plugins/icon-pack` 18 иконок.
+
 ### 3.3 Комплект сниппетов — `snippets.json`
 
 ```json
@@ -193,7 +210,7 @@ relay.on('button:hello', () => {
 `pm.expect`, `pm.response` (`code`, `status`, `json()`, `text()`, `headers.get()`,
 `responseTime`, `to.have.status()`, `to.have.header()`), `pm.request` (`url`, `method`,
 `headers`), `pm.environment`, `pm.globals`, `pm.collectionVariables`, `pm.variables`,
-`pm.cookies`, `pm.sendRequest`.
+`pm.cookies`, `pm.sendRequest`, `pm.variables.replaceIn`, `atob`/`btoa`. Работает и `await` на верхнем уровне скрипта.
 
 ### 3.4 Комплект языка
 

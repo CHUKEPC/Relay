@@ -3,6 +3,7 @@
  * Must have NO Node or DOM dependencies.
  */
 import type { PackTheme } from './pack-data'
+import type { AppIconDef } from './app-icon'
 
 /* ============================================================
  * HTTP request engine
@@ -499,6 +500,12 @@ export interface TabModel {
   dirty: boolean
   /** the tab group this tab belongs to (see {@link TabGroup}) */
   groupId?: string | null
+  /**
+   * Set on a duplicate not saved yet: the saved request it was copied from, or
+   * null when the original was not saved either. Saving it asks for a name
+   * («… (копия)» or one's own) and offers the original's folder.
+   */
+  copyOf?: string | null
 }
 
 /** Colours a tab group can take; drawn from the theme's `--tg-*` tokens. */
@@ -515,6 +522,8 @@ export interface TabGroup {
   name: string
   color: TabGroupColor
   collapsed: boolean
+  /** the collection/folder (or a sidebar selection) the group was opened from */
+  sourceId?: string
 }
 
 export interface TabsDoc extends DocEnvelope {
@@ -553,6 +562,17 @@ export interface SettingsDoc extends DocEnvelope {
    * refreshed whenever the pack is read again.
    */
   packThemeData?: PackTheme | null
+  /**
+   * The app icon: 'relay' (the original), a built-in preset, 'custom' (built in
+   * the icon editor) or `<packId>/<id>` / `user/<id>`. Missing = 'relay'.
+   */
+  appIcon?: string
+  /** the icon editor's design (appIcon 'custom') */
+  customAppIcon?: AppIconDef | null
+  /** copy of the chosen pack/file icon, so it can be redrawn before the packs are read */
+  appIconData?: AppIconDef | null
+  /** Windows: the chosen icon also goes onto the app's shortcuts (desktop, Start, taskbar pin) */
+  appIconShortcuts?: boolean
   /** appearance stashed before a plugin theme was applied (for revert) */
   appearanceSnapshot?: { themePreset: ThemePreset; customTheme: CustomTheme | null } | null
   /** actionId -> combo like 'mod+shift+k' */
@@ -722,6 +742,11 @@ export interface ScriptRunRequest {
   collection?: Record<string, string>
   /** data-file row for the current runner iteration (pm.iterationData) */
   iterationData?: Record<string, string>
+  /**
+   * pm.variables set by the scripts that ran before this one for the same send
+   * (a folder's pre-request, then the request's own, then the tests).
+   */
+  local?: Record<string, string>
   /** cookie snapshot for the request URL's domain, for pm.cookies (read) */
   cookies?: StoredCookie[]
   /** the request URL (for pm.cookies.jar() defaults) */
@@ -752,6 +777,12 @@ export interface ScriptRunResult {
   cookieUpdates?: { set?: StoredCookie[]; remove?: Array<Pick<StoredCookie, 'domain' | 'path' | 'key'>> }
   /** request mutations from pre-request scripts */
   requestPatch?: Partial<Pick<RequestModel, 'url' | 'headers' | 'method'>>
+  /**
+   * The local scope after the script (pm.variables.set / unset): handed to the
+   * next script of the same send and used to resolve {{variables}} in the
+   * request itself. Never persisted.
+   */
+  localVariables?: Record<string, string>
   /** captured Postman-style visualizer template + data (test phase) */
   visualizer?: VisualizerPayload | null
   error?: string

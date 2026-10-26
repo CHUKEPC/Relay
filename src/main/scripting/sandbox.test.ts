@@ -743,3 +743,36 @@ describe('pm.sendRequest end to end — the token script', () => {
     expect(res.logs[0].message).toBe('TypeError: boom')
   })
 })
+
+describe('the local scope across the scripts of one send', () => {
+  it('returns pm.variables set by a script and takes those of the scripts before it', async () => {
+    const pre = await runSandbox(base({ phase: 'pre-request', response: undefined, code: "pm.variables.set('dyn', 'made'); pm.variables.set('gone', 'x')" }))
+    expect(pre.localVariables).toEqual({ dyn: 'made', gone: 'x' })
+    const next = await runSandbox(base({ phase: 'pre-request', response: undefined, local: pre.localVariables, code: "pm.variables.unset('gone'); pm.variables.set('dyn2', pm.variables.get('dyn') + '-2')" }))
+    expect(next.localVariables).toEqual({ dyn: 'made', dyn2: 'made-2' })
+    expect(await passes("pm.expect(pm.variables.get('dyn2')).to.eql('made-2')", { local: next.localVariables })).toBe(true)
+  })
+
+  it('pm.variables.replaceIn resolves every scope, locals first', async () => {
+    expect(
+      await passes("pm.expect(pm.variables.replaceIn('{{a}}/{{b}}/{{c}}/{{missing}}')).to.eql('L/E/G/{{missing}}')", {
+        local: { a: 'L' },
+        environment: { a: 'env', b: 'E' },
+        globals: { c: 'G' }
+      })
+    ).toBe(true)
+    expect(await passes("pm.expect(pm.variables.replaceIn('{{$guid}}')).to.match(/^[0-9a-f-]{36}$/)")).toBe(true)
+  })
+
+  it('has atob and btoa like Postman', async () => {
+    expect(await passes("pm.expect(btoa('relay:qa')).to.eql('cmVsYXk6cWE='); pm.expect(atob('cmVsYXk6cWE=')).to.eql('relay:qa')")).toBe(true)
+  })
+
+  it('runs a script with a top-level await to the end', async () => {
+    const res = await runSandbox(
+      base({ phase: 'pre-request', response: undefined, code: "const v = await Promise.resolve('late'); pm.variables.set('v', v)" })
+    )
+    expect(res.error).toBeUndefined()
+    expect(res.localVariables).toEqual({ v: 'late' })
+  })
+})

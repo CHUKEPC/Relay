@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Icon } from '@renderer/components/Icon'
-import { useCap } from '@renderer/store/features'
+import { useCap, useFeatures } from '@renderer/store/features'
+import { AppIconImage } from '@renderer/components/AppIconImage'
+import { isDefaultIcon, resolveAppIcon } from '@renderer/lib/app-icon'
 import { useUi } from '@renderer/store/ui'
 import { useSettings } from '@renderer/store/settings'
 import { useEnvironments } from '@renderer/store/environments'
@@ -54,9 +56,7 @@ export function Titlebar() {
         <Icon name="sidebar" size={15} />
       </button>
       <div className="brand" style={{ marginLeft: 2 }}>
-        <div className="brand-mark">
-          <Icon name="bolt" size={13} style={{ color: '#fff' }} />
-        </div>
+        <BrandMark />
         Relay
       </div>
       <WorkspaceSwitcher />
@@ -202,4 +202,24 @@ export function Titlebar() {
       )}
     </div>
   )
+}
+
+/**
+ * The mark beside the app name: the original one follows the accent colour; an
+ * icon picked in Settings → Appearance is shown as it is.
+ */
+function BrandMark(): JSX.Element {
+  const settings = useSettings((s) => s.settings)
+  // Pack icons arrive after the first paint; redraw when they do.
+  useFeatures((s) => s.icons)
+  const custom = !isDefaultIcon(settings)
+  const def = custom ? resolveAppIcon(settings) : null
+  if (!def) {
+    return (
+      <div className="brand-mark">
+        <Icon name="bolt" size={13} style={{ color: '#fff' }} />
+      </div>
+    )
+  }
+  return <AppIconImage def={def} size={22} className="brand-icon" />
 }

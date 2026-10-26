@@ -13,6 +13,7 @@ import type {
 } from './types'
 import type { FeaturePluginsDoc } from './ipc-contract'
 import type { UserThemesDoc } from './pack-data'
+import type { UserIconsDoc } from './app-icon'
 
 /**
  * Default documents: the main process seeds them on first run, the renderer
@@ -98,4 +99,8 @@ export function defaultFeatures(): FeaturePluginsDoc {
 
 export function defaultUserThemes(): UserThemesDoc {
   return { version: STORAGE_VERSION, themes: [] }
+}
+
+export function defaultUserIcons(): UserIconsDoc {
+  return { version: STORAGE_VERSION, icons: [] }
 }

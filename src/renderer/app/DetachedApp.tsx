@@ -162,7 +162,6 @@ export function DetachedApp({ tabId }: { tabId: string }) {
 
       <SaveDialog
         open={saveOpen}
-        initialName={tr(tab?.request.name ?? 'Без названия')}
         onOpenChange={(v) => useUi.getState().setSaveDialogOpen(v)}
         onSave={saveActiveAs}
       />

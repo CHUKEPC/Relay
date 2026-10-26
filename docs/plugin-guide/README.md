@@ -28,7 +28,7 @@ Every plugin is a folder with a `plugin.json`. What else is in the folder decide
 | Good for | Colour themes, script snippets, UI languages, switching built-in features on | Buttons, response tabs, palette commands, changing requests before send, reacting to responses |
 | Permissions | None needed | Asked from the user when the plugin is enabled |
 | Key field | `"capabilities": [...]` | `"main": "main.js"` and `"contributes": {...}` |
-| Examples | [`my-theme-pack`](examples/my-theme-pack), [`my-snippets`](examples/my-snippets) | [`hello-toast`](examples/hello-toast), [`response-inspector`](examples/response-inspector), [`request-id`](examples/request-id) |
+| Examples | [`my-theme-pack`](examples/my-theme-pack), [`my-icon-pack`](examples/my-icon-pack), [`my-snippets`](examples/my-snippets) | [`hello-toast`](examples/hello-toast), [`response-inspector`](examples/response-inspector), [`request-id`](examples/request-id) |
 
 Start with a feature pack if you only need data (a theme, snippets). Write a code plugin when you need behaviour.
 
@@ -112,12 +112,13 @@ declare at least one capability; unknown capabilities are ignored.
 | Capability | Data file | What it adds |
 |---|---|---|
 | `themes.extra` | `themes.json` | Colour themes in Settings → Appearance |
+| `icons.extra` | `icons.json` | App icons in Settings → Appearance → App icon |
 | `snippets` | `snippets.json` | The snippets panel on the Scripts tab |
 | `i18n.extra` | `locales/<code>.json` + `"locales": [...]` | UI languages |
 | `protocol.websocket`, `protocol.sse`, `protocol.socketio`, `protocol.mqtt`, `protocol.grpc` | — | Switch on built-in protocols |
 | `ai`, `auth.advanced`, `panes.extra`, `backup.extra`, `codegen.extra` | — | Switch on built-in features |
 
-Several packs can carry the same capability: snippets and themes of all enabled packs are merged.
+Several packs can carry the same capability: snippets, themes and icons of all enabled packs are merged.
 
 ### 3.2 Theme pack — `themes.json`
 
@@ -164,6 +165,22 @@ Tip: in a development build (`npm run dev`, DevTools with Ctrl+Shift+I) you can 
 on `<html>` live and copy the result into `themes.json`. The 15 themes of the bundled `plugins/theme-pack` are a
 good reference.
 
+### 3.2a Icon pack — `icons.json`
+
+```json
+{
+  "icons": [
+    { "id": "lagoon", "name": "Lagoon", "shape": "circle", "background": ["#38c6e8", "#1d5fd6"], "glyph": "send", "glyphColor": "#ffffff" },
+    { "id": "initials", "name": "Initials", "shape": "squircle", "background": ["#ff9a4d", "#e8467c"], "glyph": "letter", "letter": "AB" }
+  ]
+}
+```
+
+- `shape`: `squircle`, `circle`, `square` or `hexagon`; `background`: one colour or a gradient of up to
+  three; `glyph`: one of 15 built-in glyphs or `letter` with one or two letters in `letter`.
+- Colours go through the same allowlist as theme values; up to 60 icons per pack.
+- The full field list is in the [icon guide](../ICONS.md); the bundled `plugins/icon-pack` has 18 icons.
+
 ### 3.3 Snippet pack — `snippets.json`
 
 ```json
@@ -192,7 +209,7 @@ Snippets run in Relay's script sandbox, which provides the `pm.*` scripting API:
 `pm.expect`, `pm.response` (`code`, `status`, `json()`, `text()`, `headers.get()`,
 `responseTime`, `to.have.status()`, `to.have.header()`), `pm.request` (`url`, `method`,
 `headers`), `pm.environment`, `pm.globals`, `pm.collectionVariables`, `pm.variables`,
-`pm.cookies`, `pm.sendRequest`.
+`pm.cookies`, `pm.sendRequest`, `pm.variables.replaceIn`, `atob`/`btoa`. A top-level `await` works too.
 
 ### 3.4 Language pack
 

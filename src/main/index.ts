@@ -10,6 +10,7 @@ import { abortAllAiStreams } from './ai'
 import { abortAllRealtime, abortRealtimeFor } from './realtime'
 import { abortAllGrpc, abortGrpcFor } from './grpc'
 import { closeAllPaneWindows, createAppWindow, registerPaneHandlers } from './windows'
+import { applySavedAppIcon, registerAppIconHandlers } from './app-icon'
 import { startSandboxHost, stopScriptSandbox } from './scripting'
 import { startPluginSandboxHost, stopPluginSandbox } from './plugins/host'
 
@@ -151,6 +152,8 @@ if (process.env.RELAY_SCRIPT_SANDBOX === '1') {
   const storage = new StorageManager()
   await storage.init()
   registerIpc({ storage, getWindow: () => mainWindow })
+  registerAppIconHandlers()
+  applySavedAppIcon()
   registerPaneHandlers({
     isDev,
     getMainWindow: () => mainWindow,

@@ -48,7 +48,15 @@ are encrypted with the OS keychain.
   see the [plugin guide](docs/plugin-guide/README.md) ([по-русски](docs/plugin-guide/README.ru.md)).
 - **Find & replace across the workspace**: search collections, environments and variables by field
   group, then replace exactly the matches you confirm.
-- **Tab groups**: named, coloured groups of tabs that collapse to a label; a folder opens as a group.
+- **Tab groups**: named, coloured groups of tabs that collapse to a label; a folder opens as a group
+  with tabs of its own, so closing it never takes tabs of another group along. When the tabs do not
+  fit, the strip scrolls with arrows and a slider.
+- **Select several items** in the collections tree with checkboxes (or Ctrl/⌘+click) and open, group,
+  duplicate, move, export, run or delete them at once.
+- **Copies that ask**: duplicating a request, a folder or a tab offers «Name (copy)» or your own name
+  and the original's folder.
+- **Your own app icon**: nine ready-made ones, an editor, your own picture, or a pack of 18 more
+  ([icon guide](docs/ICONS.md) · [по-русски](docs/ICONS.ru.md)).
 - **Trash**: deleted requests, folders, collections, environments, variables and examples stay
   restorable for the period you choose (30 days by default) and go back where they were.
 - **Local storage**: everything persists as JSON in `userData`; API keys are encrypted via Electron
@@ -64,6 +72,7 @@ are encrypted with the OS keychain.
 | Plugin system | [docs/PLUGINS.md](docs/PLUGINS.md) | [docs/PLUGINS.ru.md](docs/PLUGINS.ru.md) |
 | Writing plugins | [docs/plugin-guide/README.md](docs/plugin-guide/README.md) | [docs/plugin-guide/README.ru.md](docs/plugin-guide/README.ru.md) |
 | Writing themes | [docs/THEMES.md](docs/THEMES.md) | [docs/THEMES.ru.md](docs/THEMES.ru.md) |
+| App icons | [docs/ICONS.md](docs/ICONS.md) | [docs/ICONS.ru.md](docs/ICONS.ru.md) |
 | AI assistant | [docs/AI_ASSISTANT.md](docs/AI_ASSISTANT.md) | [docs/AI_ASSISTANT.ru.md](docs/AI_ASSISTANT.ru.md) |
 | Bundled feature packs | [plugins/README.md](plugins/README.md) | [plugins/README.ru.md](plugins/README.ru.md) |
 
@@ -138,5 +147,9 @@ For local models (Ollama/LM Studio), add a custom provider with base URL e.g.
 - Design source of truth: [`design/`](design)
 
 See the [Documentation](#documentation) table above for every guide in English and Russian.
+
+## License
+
+Relay is released under the [MIT License](LICENSE).
 
 [gdrive]: https://drive.google.com/drive/folders/1p9DhgqohWKuRfj-_BfzINBKZbihDD0Zu?usp=sharing

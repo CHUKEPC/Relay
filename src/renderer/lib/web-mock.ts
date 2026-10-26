@@ -218,6 +218,7 @@ if (!window.api) {
     terminalTools: async () => ({ os: 'win32' as const, tools: [] }),
     terminalRun: async () => ({ ok: false as const, error: 'not available in the browser preview' }),
     featuresThemes: async () => [],
+    featuresIcons: async () => [],
     featuresOpenFolder: async () => false,
     featuresInstall: async () => null,
     featuresRemove: async () => MOCK_FEATURES,
@@ -250,6 +251,7 @@ if (!window.api) {
     closeWindow: async () => {},
     checkUpdates: async () => ({ ok: false, error: 'web-mode' }),
     openExternal: async () => {},
+    setAppIcon: async () => ({ ok: true as const, shortcuts: 0 }),
     onNativeThemeChange: () => () => {},
     onWindowMaximized: () => () => {}
   }

@@ -19,6 +19,7 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
   'backup.extra': 'Резервные копии в ZIP и SQLite',
   snippets: 'Панель готовых сниппетов на вкладке Scripts',
   'themes.extra': 'Дополнительные темы в Настройках → Внешний вид',
+  'icons.extra': 'Дополнительные иконки приложения в Настройках → Внешний вид',
   'codegen.extra': 'Ещё 12 языков в «Код»: Node, Go, Java, C#, PHP, Ruby, Swift, Kotlin, Rust, PowerShell, HTTPie, wget'
 }
 

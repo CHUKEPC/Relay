@@ -1,51 +1,51 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { CollectionNode } from '@shared/types'
 import { Modal } from '@renderer/components/primitives'
-import { useCollections } from '@renderer/store/collections'
+import { copyName, useCollections } from '@renderer/store/collections'
+import { useTabs } from '@renderer/store/tabs'
+import { folderTargets, saveDefaults, type SaveDefaults } from '@renderer/lib/copy-target'
+import { FolderSelect, NameChoice, type NameMode } from './NameChoice'
 
 import { tr } from '@renderer/lib/i18n'
-interface Target {
-  id: string
-  label: string
-}
 
-function flattenFolders(nodes: CollectionNode[], depth: number, out: Target[]) {
-  for (const n of nodes) {
-    if (n.type === 'request') continue
-    out.push({ id: n.id, label: `${'  '.repeat(depth)}${depth > 0 ? '└ ' : ''}${n.name}` })
-    flattenFolders(n.children, depth + 1, out)
-  }
-}
-
+/**
+ * Save the active tab as a request in a collection. A duplicated tab is saved
+ * as a copy: the dialog offers «Name (копия)» or one's own name, and the folder
+ * of the request it was copied from. Save As on a saved request offers its own
+ * folder.
+ */
 export function SaveDialog({
   open,
-  initialName,
   onOpenChange,
   onSave
 }: {
   open: boolean
-  initialName: string
   onOpenChange: (o: boolean) => void
   onSave: (parentId: string, name: string) => void
 }) {
   const collections = useCollections((s) => s.doc.collections)
   const addCollection = useCollections((s) => s.addCollection)
-  const targets = useMemo(() => {
-    const out: Target[] = []
-    flattenFolders(collections, 0, out)
-    return out
-  }, [collections])
+  const targets = useMemo(() => folderTargets(collections), [collections])
 
-  const [name, setName] = useState(initialName)
-  const [parentId, setParentId] = useState(targets[0]?.id ?? '')
+  const [defaults, setDefaults] = useState<SaveDefaults>({ copy: false, suggested: '', parentId: null })
+  const [name, setName] = useState('')
+  const [mode, setMode] = useState<NameMode>('copy')
+  const [own, setOwn] = useState('')
+  const [parentId, setParentId] = useState('')
 
-  // Reset the name when the dialog (re)opens.
+  // Start over every time the dialog opens, from the tab it saves.
   useEffect(() => {
-    if (open) setName(initialName)
-  }, [open, initialName])
+    if (!open) return
+    const tab = useTabs.getState().activeTab()
+    const d = saveDefaults(tab, useCollections.getState().doc.collections, tr(tab?.request.name || 'Без названия'), copyName)
+    setDefaults(d)
+    setName(d.suggested)
+    setMode('copy')
+    setOwn('')
+    setParentId(d.parentId ?? '')
+  }, [open])
 
   // Keep the selected parent valid — re-seed if it no longer exists (e.g. the
-  // folder was deleted while the dialog was closed), so confirm() can't save
+  // folder was deleted while the dialog was open), so confirm() can't save
   // into a non-existent parent.
   useEffect(() => {
     setParentId((cur) => (cur && targets.some((t) => t.id === cur) ? cur : targets[0]?.id ?? ''))
@@ -54,28 +54,33 @@ export function SaveDialog({
   const confirm = () => {
     let target = parentId
     if (!target) target = addCollection(tr('Моя коллекция'))
-    onSave(target, name.trim() || tr('Без названия'))
+    const final = defaults.copy ? (mode === 'own' && own.trim()) || defaults.suggested : name.trim() || tr('Без названия')
+    onSave(target, final)
     onOpenChange(false)
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title={tr('Сохранить запрос')} width={460}>
-      <div className="field">
-        <label>{tr('Название')}</label>
-        <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirm()} />
-      </div>
+    <Modal open={open} onOpenChange={onOpenChange} title={defaults.copy ? tr('Сохранить копию запроса') : tr('Сохранить запрос')} width={460}>
+      {defaults.copy ? (
+        <div className="field">
+          <label>{tr('Название')}</label>
+          <NameChoice suggested={defaults.suggested} mode={mode} onMode={setMode} own={own} onOwn={setOwn} onEnter={confirm} />
+        </div>
+      ) : (
+        <div className="field">
+          <label>{tr('Название')}</label>
+          <input className="input" value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && confirm()} />
+        </div>
+      )}
       <div className="field">
         <label>{tr('Куда сохранить')}</label>
         {targets.length ? (
-          <select className="input" value={parentId} onChange={(e) => setParentId(e.target.value)} style={{ fontFamily: 'var(--font-ui)' }}>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          <FolderSelect targets={targets} value={parentId} onChange={setParentId} />
         ) : (
           <div style={{ fontSize: 12.5, color: 'var(--tx-2)' }}>{tr('Коллекций нет — будет создана новая «Моя коллекция».')}</div>
+        )}
+        {defaults.copy && defaults.parentId && parentId === defaults.parentId && (
+          <div className="hint">{tr('По умолчанию — рядом с исходным запросом.')}</div>
         )}
       </div>
       <div className="modal-foot">

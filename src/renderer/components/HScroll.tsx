@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type MouseEvent as ReactMouseEvent, type MutableRefObject } from 'react'
 import { Icon } from './Icon'
 import { trackDrag } from '@renderer/lib/drag'
 import { sliderOf, type ScrollState } from '@renderer/lib/hscroll'
@@ -21,6 +21,10 @@ export interface HScrollProps extends HTMLAttributes<HTMLDivElement> {
   className: string
   /** When this changes, the row's `.on` item is scrolled into view (the selected tab). */
   revealKey?: unknown
+  /** Extra class of the wrapper, for rows that fill their parent (the tab strip). */
+  wrapClassName?: string
+  /** Gives the owner the scrolling row itself (drag auto-scroll, slot maths). */
+  rowRef?: MutableRefObject<HTMLDivElement | null>
 }
 
 /**
@@ -30,8 +34,8 @@ export interface HScrollProps extends HTMLAttributes<HTMLDivElement> {
  * drags it. Without these a hidden tab or button could only be reached with
  * Shift+wheel or a touchpad.
  */
-export function HScroll({ className, revealKey, children, ...rest }: HScrollProps): JSX.Element {
-  const rowRef = useRef<HTMLDivElement>(null)
+export function HScroll({ className, revealKey, wrapClassName, rowRef: outerRef, children, ...rest }: HScrollProps): JSX.Element {
+  const rowRef = useRef<HTMLDivElement | null>(null)
   const [m, setM] = useState<ScrollState>({ left: 0, width: 0, view: 0 })
 
   useLayoutEffect(() => {
@@ -93,8 +97,15 @@ export function HScroll({ className, revealKey, children, ...rest }: HScrollProp
   }
 
   return (
-    <div className={`hscroll${overflow ? ' overflowing' : ''}`}>
-      <div ref={rowRef} className={`${className} hscroll-row`} {...rest}>
+    <div className={`hscroll${overflow ? ' overflowing' : ''}${wrapClassName ? ` ${wrapClassName}` : ''}`}>
+      <div
+        ref={(el) => {
+          rowRef.current = el
+          if (outerRef) outerRef.current = el
+        }}
+        className={`${className} hscroll-row`}
+        {...rest}
+      >
         {children}
       </div>
       {canStart && (

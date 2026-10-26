@@ -12,7 +12,7 @@ import {
 import { useCollections } from './collections'
 import { useEnvironments } from './environments'
 import { useUi } from './ui'
-import { tr } from '../lib/i18n'
+import { tr, trf } from '../lib/i18n'
 
 export interface RequestRunResult {
   id: string
@@ -68,6 +68,11 @@ interface RunnerState {
   openFor: (node: CollectionNode) => void
   /** Open with every request of the workspace listed, nothing ticked. */
   openPicker: () => void
+  /**
+   * Open for a sidebar selection: every request of the workspace listed, the
+   * ones under `nodes` ticked (in tree order), so the run can still be widened.
+   */
+  openForNodes: (nodes: CollectionNode[]) => void
   setTarget: (nodeId: string | null) => void
   targets: () => RunTarget[]
   toggleItem: (id: string) => void
@@ -156,6 +161,19 @@ export const useRunner = create<RunnerState>((set, get) => ({
       current: null,
       dataError: null
     }),
+
+  openForNodes: (nodes) => {
+    const picked = new Set(nodes.flatMap((n) => flattenRequests(n).map((r) => r.id)))
+    set({
+      open: true,
+      targetId: null,
+      targetName: trf('Выбранное ({n})', { n: picked.size }),
+      items: itemsOf(null, false).map((i) => (picked.has(i.id) ? { ...i, enabled: true } : i)),
+      results: [],
+      current: null,
+      dataError: null
+    })
+  },
 
   setTarget: (nodeId) => {
     if (!nodeId) {
@@ -347,7 +365,6 @@ async function runOneRequest(
   }
 
   const envStore = useEnvironments.getState()
-  const collectionScope = collections.collectionScopeFor(savedRequestId)
   const ancestors = collections.ancestorScriptsFor(savedRequestId)
 
   // 1) pre-request scripts: collection/folder scripts top-down, then own. Data
@@ -356,6 +373,8 @@ async function runOneRequest(
     ...ancestors.map((a) => a.preRequestScript).filter((s): s is string => !!s?.trim()),
     ...(workingReq.preRequestScript?.trim() ? [workingReq.preRequestScript] : [])
   ]
+  // pm.variables set by this request's scripts (Postman's local scope).
+  let locals: Record<string, string> = {}
   for (const code of prePhases) {
     try {
       const pre = await window.api.runScript({
@@ -364,14 +383,17 @@ async function runOneRequest(
         request: workingReq,
         environment: envStore.envScope(),
         globals: envStore.globalScope(),
-        collection: collectionScope,
+        // Fresh each time: an earlier script may have set a collection variable.
+        collection: useCollections.getState().collectionScopeFor(savedRequestId),
         iterationData: dataRow,
+        local: locals,
         cookies: await cookieSnapshotFor(workingReq.url),
         url: workingReq.url,
         settings
       })
       persistVarUpdates(pre.environmentUpdates, pre.globalUpdates)
       applyScriptSideEffects(savedRequestId, pre)
+      if (pre.localVariables) locals = pre.localVariables
       if (pre.requestPatch) {
         workingReq = {
           ...workingReq,
@@ -387,8 +409,9 @@ async function runOneRequest(
 
   // 2) build spec — data row bound as the highest-precedence (local) scope
   const scope: VariableScope = {
-    local: dataRow,
-    collection: collectionScope,
+    // script-set locals win over the data row, as in Postman
+    local: { ...dataRow, ...locals },
+    collection: useCollections.getState().collectionScopeFor(savedRequestId),
     environment: envStore.envScope(),
     global: envStore.globalScope()
   }
@@ -426,14 +449,16 @@ async function runOneRequest(
           response: result,
           environment: envStore.envScope(),
           globals: envStore.globalScope(),
-          collection: collectionScope,
+          collection: useCollections.getState().collectionScopeFor(savedRequestId),
           iterationData: dataRow,
+          local: locals,
           cookies,
           url: workingReq.url,
           settings
         })
         persistVarUpdates(testRes.environmentUpdates, testRes.globalUpdates)
         applyScriptSideEffects(savedRequestId, testRes)
+        if (testRes.localVariables) locals = testRes.localVariables
         base.tests.push(...testRes.tests)
       } catch {
         /* test failure is captured per-test; ignore runner-level throw */

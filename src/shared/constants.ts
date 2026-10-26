@@ -4,7 +4,7 @@
  */
 export const APP_NAME = 'Relay'
 /** Keep in sync with package.json `version`. */
-export const APP_VERSION = '1.4.2'
+export const APP_VERSION = '1.5.0'
 export const FEEDBACK_EMAIL = 'semend2005@mail.ru'
 /** Author contacts shown next to the feedback address in About. */
 export const FEEDBACK_GITHUB = 'https://github.com/Laki-man3'
@@ -25,6 +25,12 @@ export const PLUGIN_GUIDE_URL = {
 export const THEME_GUIDE_URL = {
   ru: `https://github.com/${UPDATE_REPO}/blob/main/docs/THEMES.ru.md`,
   en: `https://github.com/${UPDATE_REPO}/blob/main/docs/THEMES.md`
+}
+
+/** How to make an app icon file or an icon pack (Settings → Appearance → My icons). */
+export const ICON_GUIDE_URL = {
+  ru: `https://github.com/${UPDATE_REPO}/blob/main/docs/ICONS.ru.md`,
+  en: `https://github.com/${UPDATE_REPO}/blob/main/docs/ICONS.md`
 }
 
 export const STORAGE_VERSION = 1

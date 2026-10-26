@@ -17,6 +17,10 @@ extraResources:
     to: plugins
     filter:
       - "**/*"
+  # The original app icon as a plain PNG: putting it back after a custom icon
+  # (Settings > Appearance) needs a picture the running app can load.
+  - from: build/icon.png
+    to: icon.png
 
 # Keep the sql.js WebAssembly binary as a real on-disk file so emscripten can
 # read it at runtime (it's pure-WASM, not a native Node addon).

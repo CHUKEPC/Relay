@@ -3,7 +3,7 @@ import type { RequestModel, TabGroup, TabGroupColor, TabModel, TabsDoc } from '@
 import { STORAGE_VERSION } from '@shared/constants'
 import { makeId } from '@shared/id'
 import { defaultTabs } from '@shared/defaults'
-import { emptyRequest } from './collections'
+import { emptyRequest, useCollections } from './collections'
 import { useRealtime } from './realtime'
 import { useGrpc } from './grpc'
 import { useResponse } from './response'
@@ -19,7 +19,12 @@ interface TabsState {
   activeRequest: () => RequestModel | null
   /** null = the focused pane is empty */
   setActive: (id: string | null) => void
-  openSaved: (request: RequestModel, savedRequestId: string) => string
+  /**
+   * Show a saved request. An open tab of it is reused — the one beside the
+   * active tab (same group, or outside groups) first; `fresh` always opens a
+   * tab of its own, so a group never takes over a tab that belongs elsewhere.
+   */
+  openSaved: (request: RequestModel, savedRequestId: string, opts?: { fresh?: boolean }) => string
   openNew: (request?: RequestModel) => string
   closeTab: (id: string) => void
   closeOthers: (id: string) => void
@@ -35,13 +40,16 @@ interface TabsState {
   moveTab: (id: string, toIndex: number, groupId?: string | null) => void
   patchActive: (patch: Partial<RequestModel>) => void
   patchTab: (tabId: string, patch: Partial<RequestModel>) => void
+  /** The tab now matches its saved request; other clean tabs of that request take the saved state too. */
   markSaved: (tabId: string, savedRequestId: string) => void
+  /** A saved request was renamed in the sidebar: its tabs show the new name. */
+  renameSaved: (savedRequestId: string, name: string) => void
   /** Re-read tabs from their saved requests after a bulk edit (find & replace). */
   refreshSaved: (updated: Record<string, RequestModel>) => void
 
   /* ---- tab groups ---- */
   /** Put the tabs into a new group (gathered where the first of them is); returns its id. */
-  createGroup: (tabIds: string[], opts?: { name?: string; color?: TabGroupColor }) => string
+  createGroup: (tabIds: string[], opts?: { name?: string; color?: TabGroupColor; sourceId?: string }) => string
   /** Move a tab to the end of a group. */
   addToGroup: (tabId: string, groupId: string) => void
   /** Take a tab out of its group; it lands right after the group. */
@@ -119,6 +127,80 @@ export function groupRange(tabs: TabModel[], groupId: string): [number, number] 
   return [first, last]
 }
 
+/**
+ * Which open tab of a saved request to reuse. A request may be open in several
+ * tabs — in two groups, or in a group and outside of it — and the tab nearest
+ * to the user wins: the active one, then one in the active tab's group (or
+ * outside groups, when the active tab is), then one outside groups, then one in
+ * an unfolded group, then any.
+ */
+export function pickOpenTab(tabs: TabModel[], groups: TabGroup[], savedRequestId: string, activeTabId: string | null): TabModel | null {
+  const open = tabs.filter((t) => t.savedRequestId === savedRequestId)
+  if (!open.length) return null
+  const active = tabs.find((t) => t.id === activeTabId)
+  if (active && open.includes(active)) return active
+  const context = active?.groupId ?? null
+  const folded = new Set(groups.filter((g) => g.collapsed).map((g) => g.id))
+  return (
+    open.find((t) => (t.groupId ?? null) === context) ??
+    open.find((t) => !t.groupId) ??
+    open.find((t) => !folded.has(t.groupId!)) ??
+    open[0]
+  )
+}
+
+/**
+ * JSON with sorted keys, leaving out what carries nothing — undefined, null,
+ * '', [] and {} — so key order, an emptied field or a field that was never set
+ * do not count as a change.
+ */
+function stable(v: unknown): string {
+  // Wrapped, so an empty value on its own counts as absent too.
+  return JSON.stringify((prune({ v }) as { v?: unknown }).v ?? null)
+}
+
+function prune(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(prune)
+  if (!v || typeof v !== 'object') return v
+  const out: Record<string, unknown> = {}
+  for (const k of Object.keys(v).sort()) {
+    const p = prune((v as Record<string, unknown>)[k])
+    if (p === undefined || p === null || p === '' || (Array.isArray(p) && !p.length)) continue
+    if (typeof p === 'object' && !Array.isArray(p) && !Object.keys(p as object).length) continue
+    out[k] = p
+  }
+  return out
+}
+
+/** True when `a` holds anything `b` does not — what the unsaved-changes dot on a tab means. */
+export function requestsDiffer(a: RequestModel, b: RequestModel): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  for (const k of keys) {
+    if (stable((a as unknown as Record<string, unknown>)[k]) !== stable((b as unknown as Record<string, unknown>)[k])) return true
+  }
+  return false
+}
+
+/**
+ * What a blank tab started as, so typing in it and erasing it again leaves it
+ * clean. Kept for this session only; saved tabs compare with their request.
+ */
+const blankBaselines = new Map<string, RequestModel>()
+
+/**
+ * Whether a tab holding `request` has unsaved changes: it differs from the
+ * saved request it is bound to (or from the blank it started as). Edits taken
+ * back by hand or by undo clear the dot again.
+ */
+function isDirty(tab: TabModel, request: RequestModel): boolean {
+  if (tab.savedRequestId) {
+    const saved = useCollections.getState().getRequest(tab.savedRequestId)
+    return !saved || requestsDiffer(request, saved)
+  }
+  const blank = blankBaselines.get(tab.id)
+  return blank ? requestsDiffer(request, blank) : true
+}
+
 type ActiveTabFallback = (remaining: TabModel[], closedIndex: number) => string | null
 let activeTabFallback: ActiveTabFallback | null = null
 
@@ -151,6 +233,7 @@ export const useTabs = create<TabsState>((set, get) => {
   // EVERY closed tab, including bulk closes (close others/right/left/all).
   const teardownTab = (id: string) => {
     forgetTab(id)
+    blankBaselines.delete(id)
     useRequestUi.getState().forgetTab(id)
     forgetViews(id)
     useRealtime.getState().disconnect(id)
@@ -192,8 +275,9 @@ export const useTabs = create<TabsState>((set, get) => {
 
     setActive: (id) => commit({ activeTabId: id, ...revealed(id) }),
 
-    openSaved: (request, savedRequestId) => {
-      const existing = get().doc.tabs.find((t) => t.savedRequestId === savedRequestId)
+    openSaved: (request, savedRequestId, opts = {}) => {
+      const { tabs, activeTabId } = get().doc
+      const existing = opts.fresh ? null : pickOpenTab(tabs, groups(), savedRequestId, activeTabId)
       if (existing) {
         commit({ activeTabId: existing.id, ...revealed(existing.id) })
         return existing.id
@@ -210,6 +294,7 @@ export const useTabs = create<TabsState>((set, get) => {
         savedRequestId: null,
         dirty: !!request
       }
+      if (!request) blankBaselines.set(tab.id, structuredClone(tab.request))
       commit({ tabs: [...get().doc.tabs, tab], activeTabId: tab.id })
       return tab.id
     },
@@ -262,8 +347,16 @@ export const useTabs = create<TabsState>((set, get) => {
       request.examples = request.examples?.map((ex) => ({ ...ex, id: makeId('ex') }))
       request.messageTemplates = request.messageTemplates?.map((t) => ({ ...t, id: makeId('mt') }))
       // The copy is an unsaved draft: not bound to a collection request, dirty.
-      // It stays in the original's group, right beside it.
-      const tab: TabModel = { id: makeId('tab'), request, savedRequestId: null, dirty: true, groupId: prev[idx].groupId ?? null }
+      // It stays in the original's group, right beside it, and remembers what
+      // it was copied from so saving it can offer the original's folder.
+      const tab: TabModel = {
+        id: makeId('tab'),
+        request,
+        savedRequestId: null,
+        dirty: true,
+        groupId: prev[idx].groupId ?? null,
+        copyOf: prev[idx].savedRequestId ?? prev[idx].copyOf ?? null
+      }
       commit({ tabs: [...prev.slice(0, idx + 1), tab, ...prev.slice(idx + 1)], activeTabId: tab.id })
     },
 
@@ -309,14 +402,34 @@ export const useTabs = create<TabsState>((set, get) => {
     patchTab: (tabId, patch) => {
       const before = get().doc.tabs.find((t) => t.id === tabId)
       if (before) recordPatch(tabId, before.request, patch)
-      const tabs = get().doc.tabs.map((t) =>
-        t.id === tabId ? { ...t, request: { ...t.request, ...patch }, dirty: true } : t
-      )
+      const tabs = get().doc.tabs.map((t) => {
+        if (t.id !== tabId) return t
+        const request = { ...t.request, ...patch }
+        return { ...t, request, dirty: isDirty(t, request) }
+      })
       commit({ tabs })
     },
 
     markSaved: (tabId, savedRequestId) => {
-      const tabs = get().doc.tabs.map((t) => (t.id === tabId ? { ...t, savedRequestId, dirty: false } : t))
+      const saved = get().doc.tabs.find((t) => t.id === tabId)
+      if (!saved) return
+      const tabs = get().doc.tabs.map((t) => {
+        if (t.id === tabId) {
+          const { copyOf: _was, ...rest } = t
+          return { ...rest, savedRequestId, dirty: false }
+        }
+        // The same request open elsewhere (another group) follows the save,
+        // unless it holds edits of its own.
+        if (t.savedRequestId === savedRequestId && !t.dirty) return { ...t, request: structuredClone(saved.request) }
+        return t
+      })
+      commit({ tabs })
+    },
+
+    renameSaved: (savedRequestId, name) => {
+      if (!get().doc.tabs.some((t) => t.savedRequestId === savedRequestId)) return
+      // The name is the saved request's, not an edit: dirty flags stay as they are.
+      const tabs = get().doc.tabs.map((t) => (t.savedRequestId === savedRequestId ? { ...t, request: { ...t.request, name } } : t))
       commit({ tabs })
     },
 
@@ -336,6 +449,7 @@ export const useTabs = create<TabsState>((set, get) => {
       const ids = new Set(tabIds)
       const id = makeId('tg')
       const group: TabGroup = { id, name: opts.name ?? '', color: opts.color ?? nextGroupColor(groups()), collapsed: false }
+      if (opts.sourceId) group.sourceId = opts.sourceId
       const tabs = get().doc.tabs.map((t) => (ids.has(t.id) ? { ...t, groupId: id } : t))
       commit({ tabs, groups: [...groups(), group] })
       return id

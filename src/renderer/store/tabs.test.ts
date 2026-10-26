@@ -204,3 +204,146 @@ describe('tab groups', () => {
     expect(groups.map((g) => g.id)).toEqual(['g'])
   })
 })
+
+describe('the same request in several groups', () => {
+  const T = () => tabs.useTabs.getState()
+  const req = (id: string, name = id) => ({ id, name, method: 'GET' as const, url: '', query: [], headers: [], pathVariables: [], body: { type: 'none' as const }, auth: { type: 'inherit' as const } })
+  const ofRequest = (id: string) => T().doc.tabs.filter((t) => t.savedRequestId === id)
+  let groupsLib: typeof import('../lib/tab-groups')
+
+  beforeAll(async () => {
+    groupsLib = await import('../lib/tab-groups')
+  })
+
+  it('opening a collection as a group gives it tabs of its own; the other group keeps its tabs', () => {
+    T().closeAll()
+    const a = T().openSaved(req('r1'), 'r1')
+    const b = T().openSaved(req('r2'), 'r2')
+    const loose = T().openSaved(req('r3'), 'r3')
+    const g1 = T().createGroup([a, b], { name: 'Orders' })
+    const node = { id: 'col', type: 'collection' as const, name: 'Shop', children: ['r1', 'r2', 'r3', 'r4'].map((id) => ({ id, type: 'request' as const, request: req(id) })) }
+    groupsLib.openNodeAsGroup(node)
+    const g2 = T().doc.groups!.find((g) => g.sourceId === 'col')!
+    expect(T().doc.tabs.filter((t) => t.groupId === g2.id).map((t) => t.savedRequestId)).toEqual(['r1', 'r2', 'r3', 'r4'])
+    // Orders still has its two tabs, the loose tab stays loose.
+    expect(T().doc.tabs.filter((t) => t.groupId === g1).map((t) => t.id)).toEqual([a, b])
+    expect(T().doc.tabs.find((t) => t.id === loose)?.groupId ?? null).toBeNull()
+    // Closing the new group takes none of them along.
+    T().closeGroup(g2.id)
+    expect(T().doc.tabs.map((t) => t.id).sort()).toEqual([a, b, loose].sort())
+    expect(T().doc.groups!.map((g) => g.id)).toEqual([g1])
+  })
+
+  it('opening the same folder again goes back to its group and adds only what it lacks', () => {
+    T().closeAll()
+    const folder = { id: 'fld', type: 'folder' as const, name: 'F', children: [{ id: 'r1', type: 'request' as const, request: req('r1') }] }
+    groupsLib.openNodeAsGroup(folder)
+    folder.children.push({ id: 'r2', type: 'request' as const, request: req('r2') })
+    groupsLib.openNodeAsGroup(folder)
+    expect(T().doc.groups).toHaveLength(1)
+    expect(T().doc.tabs.map((t) => t.savedRequestId)).toEqual(['r1', 'r2'])
+  })
+
+  it('a sidebar click reuses the tab beside the active one', () => {
+    T().closeAll()
+    const inA = T().openSaved(req('r1'), 'r1')
+    const other = T().openNew()
+    const gA = T().createGroup([inA, other])
+    const inB = T().openSaved(req('r1'), 'r1', { fresh: true })
+    const mate = T().openNew()
+    T().createGroup([inB, mate])
+    T().setActive(mate)
+    expect(T().openSaved(req('r1'), 'r1')).toBe(inB)
+    T().setActive(other)
+    expect(T().openSaved(req('r1'), 'r1')).toBe(inA)
+    expect(T().doc.groups!.find((g) => g.id === gA)).toBeDefined()
+  })
+
+  it('saving one tab updates the clean tabs of the same request, not the edited ones', () => {
+    T().closeAll()
+    const one = T().openSaved(req('r1', 'Old'), 'r1')
+    const two = T().openSaved(req('r1', 'Old'), 'r1', { fresh: true })
+    const three = T().openSaved(req('r1', 'Old'), 'r1', { fresh: true })
+    T().patchTab(three, { url: 'https://draft' })
+    T().patchTab(one, { name: 'New', url: 'https://saved' })
+    T().markSaved(one, 'r1')
+    const byId = (id: string) => T().doc.tabs.find((t) => t.id === id)!
+    expect(byId(two).request).toMatchObject({ name: 'New', url: 'https://saved' })
+    expect(byId(two).dirty).toBe(false)
+    expect(byId(three).request.url).toBe('https://draft')
+    expect(ofRequest('r1')).toHaveLength(3)
+  })
+
+  it('a rename in the sidebar reaches every tab of the request without dirtying it', () => {
+    T().closeAll()
+    const one = T().openSaved(req('r1', 'Old'), 'r1')
+    T().openSaved(req('r1', 'Old'), 'r1', { fresh: true })
+    T().renameSaved('r1', 'Renamed')
+    expect(ofRequest('r1').map((t) => [t.request.name, t.dirty])).toEqual([
+      ['Renamed', false],
+      ['Renamed', false]
+    ])
+    expect(T().doc.tabs.find((t) => t.id === one)?.dirty).toBe(false)
+  })
+
+  it('a duplicated tab remembers its original until it is saved', () => {
+    T().closeAll()
+    const one = T().openSaved(req('r1'), 'r1')
+    T().duplicateTab(one)
+    const copy = T().activeTab()!
+    expect(copy.copyOf).toBe('r1')
+    expect(copy.savedRequestId).toBeNull()
+    // A copy of the copy still points at the saved original.
+    T().duplicateTab(copy.id)
+    expect(T().activeTab()!.copyOf).toBe('r1')
+    T().markSaved(copy.id, 'r9')
+    expect(T().doc.tabs.find((t) => t.id === copy.id)?.copyOf).toBeUndefined()
+  })
+})
+
+describe('the unsaved-changes dot', () => {
+  const T = () => tabs.useTabs.getState()
+  let collections: typeof import('./collections')
+
+  beforeAll(async () => {
+    collections = await import('./collections')
+  })
+
+  it('goes away when the edits are taken back to the saved request', () => {
+    T().closeAll()
+    const saved = { ...collections.emptyRequest('Saved'), id: 'r_saved', url: 'https://a' }
+    collections.useCollections.getState().setAll([{ id: 'c', type: 'collection', name: 'C', children: [{ id: saved.id, type: 'request', request: saved }] }])
+    const id = T().openSaved(saved, saved.id)
+    const dirty = () => T().doc.tabs.find((t) => t.id === id)!.dirty
+    T().patchTab(id, { url: 'https://ab' })
+    expect(dirty()).toBe(true)
+    T().patchTab(id, { url: 'https://a' })
+    expect(dirty()).toBe(false)
+    // An emptied field that the saved request never had is no change either.
+    T().patchTab(id, { description: 'x' })
+    expect(dirty()).toBe(true)
+    T().patchTab(id, { description: '' })
+    expect(dirty()).toBe(false)
+  })
+
+  it('a blank tab typed in and erased again is clean; a request whose saved copy is gone stays dirty', () => {
+    T().closeAll()
+    const id = T().openNew()
+    const dirty = () => T().doc.tabs.find((t) => t.id === id)!.dirty
+    T().patchTab(id, { url: 'h' })
+    expect(dirty()).toBe(true)
+    T().patchTab(id, { url: '' })
+    expect(dirty()).toBe(false)
+    const orphan = T().openSaved({ ...collections.emptyRequest('Gone'), id: 'r_gone' }, 'r_gone')
+    T().patchTab(orphan, { url: '' })
+    expect(T().doc.tabs.find((t) => t.id === orphan)!.dirty).toBe(true)
+  })
+
+  it('compares content, not key order', () => {
+    const a = collections.emptyRequest('A')
+    // The same fields in another order.
+    const b = JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(a).reverse())))
+    expect(tabs.requestsDiffer(a, b)).toBe(false)
+    expect(tabs.requestsDiffer(a, { ...a, headers: [{ key: 'X', value: '1', enabled: true }] })).toBe(true)
+  })
+})
