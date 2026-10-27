@@ -138,7 +138,9 @@ export function setAppIcon(png: string | null, shortcuts: boolean): AppIconResul
   try {
     if (png === null) {
       rmSync(pngPath(), { force: true })
-      const updated = updateShortcuts(null)
+      // Shortcuts are put back only when Relay changed them (the .ico it pointed
+      // them at exists); ones it never touched stay exactly as they are.
+      const updated = existsSync(icoPath()) ? updateShortcuts(null) : 0
       rmSync(icoPath(), { force: true })
       applyToWindows(defaultImage())
       return { ok: true, shortcuts: updated }
